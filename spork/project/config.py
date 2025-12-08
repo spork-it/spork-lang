@@ -12,7 +12,7 @@ The spork.it file uses Spork map syntax:
      :dependencies ["requests" "numpy>=1.20"]
      :source-paths ["src"]
      :test-paths ["tests"]
-     :main "my-project.core/main"}
+     :main "my-project.core:main"}
 """
 
 import os
@@ -96,7 +96,7 @@ class ProjectConfig:
         dependencies: List of dependency specifications (pip-style)
         source_paths: List of source directories (default: ["src"])
         test_paths: List of test directories (default: ["tests"])
-        main: Entry point function (e.g., "my-app.core/main")
+        main: Entry point function (e.g., "my-app.core:main")
 
     Computed fields:
         project_root: Absolute path to the directory containing spork.it

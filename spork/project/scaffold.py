@@ -113,7 +113,7 @@ def generate_spork_it(name: str, version: str = "0.1.0", description: str = "") 
  :source-paths ["src"]
 
  ;; Entry point for 'spork run'
- :main "{ns_name}.core/main"}}
+ :main "{ns_name}.core:main"}}
 """
 
 

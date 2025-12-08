@@ -11,4 +11,4 @@
  :source-paths ["src"]
 
  ;; Entry point for 'spork run'
- :main "stars.core/main"}
+ :main "stars.core:main"}

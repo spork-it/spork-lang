@@ -148,9 +148,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # Parse main entry (format: namespace/function)
-    if "/" in main_entry:
-        ns_name, fn_name = main_entry.rsplit("/", 1)
+    # Parse main entry (format: namespace:function)
+    if ":" in main_entry:
+        ns_name, fn_name = main_entry.rsplit(":", 1)
     else:
         # Assume it's just a namespace, call main function
         ns_name = main_entry
@@ -591,7 +591,7 @@ examples:
     run_parser.add_argument(
         "--main",
         "-m",
-        help="Main entry point (namespace/function), overrides spork.it",
+        help="Main entry point (namespace:function), overrides spork.it",
     )
     run_parser.add_argument(
         "args",

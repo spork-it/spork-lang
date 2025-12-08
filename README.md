@@ -28,17 +28,7 @@ The recommended way to install Spork is via `pipx`, which isolates the tool envi
 
 **Prerequisites:** Python 3.10+ and a C compiler (for the persistent data structures extension).
 
-From the source directory:
-
-```bash
-$ git clone https://github.com/spork-it/spork-lang.git
-
-$ cd spork-lang
-
-$ make pipx-install
-```
-
-Or directly from PyPi (using pipx or pip):
+Directly from PyPi (using pipx or pip):
 
 ```bash
 $ pipx install spork-lang
@@ -56,6 +46,16 @@ $ make pipx-uninstall
 ### For Development
 
 If you wish to contribute to Spork or modify the compiler:
+
+You'll first need to clone the repository and setup the virtual environment.
+
+```bash
+$ git clone https://github.com/spork-it/spork-lang.git
+
+$ cd spork-lang
+
+```
+
 
 ```bash
 # Sets up virtual environment and builds C extensions

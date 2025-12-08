@@ -1,11 +1,31 @@
-
 # Spork
 
 [![Tests](https://github.com/spork-it/spork-lang/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/spork-it/spork-lang/actions/workflows/test.yml)
 
-Spork is a language designed to bring structural integrity to the Python ecosystem. It combines the massive ecosystem of Python with a modern, expression-oriented Lisp syntax.
+Spork is a Lisp that runs on Python. It gives you the expressive power of macros, immutable data structures, and a modern REPL driven development experience.
 
-While Spork compiles to Python AST, it introduces a new engine for your data: Persistent Data Structures implemented in a C extension under the hood. These immutable collections prevent a whole class of bugs related to unintended mutation, while still allowing efficient updates via structural sharing. Spork is built for developers who want the productivity of Python with the safety and expressiveness of a modern Lisp.
+Spork compiles directly to Python AST and executes on CPython, giving you seamless interoperability with existing Python libraries and tools. No wrappers (unless you want a lispy one) or FFI layers are needed, just continue using your favorite Python libraries.
+
+Spork adds features that Python natively lacks, such as:
+
+*  **Persistent Data Structures** implemented in native C for performance
+*  **Expression oriented syntax** that reduces boilerplate and enables powerful macros
+*  **Predictable data flow** with immutability and structural sharing by default
+
+
+## **Alpha Warning**
+
+Spork is currently in alpha. The language, standard library, and tooling are all under active development. Breaking changes may occur between releases. We welcome feedback, issues, and contributions!
+
+
+## What Spork Isn't
+
+To avoid any confusions, here's what Spork is not:
+
+*  **Not a Python Replacement:** The runtime of Spork _is_ Python.
+*  **Not a new VM or JIT:** Spork compiles to Python AST and runs on CPython.
+*  **Not an abstraction over Python:** Spork embraces Python rather than hiding it.
+*  **Not a strict clone of Clojure:** Sporks ideas rhyme but we still try our best to be "Pythonic".
 
 ## Philosophy
 
@@ -16,34 +36,44 @@ Spork is built on a few core opinions:
 3.  **Unified Tooling:** Spork includes a unified toolchain to manage compilation, REPL, and testing, similar to `cargo` or `go`. It handles the bridge between Spork source and the Python environment so you don't have to configure build hooks manually.
 4.  **Pragmatism:** We believe a hosted language should not fight its host. Spork compiles directly to Python AST. When you need raw performance or side effects, the escape hatch to Python's native mutability and types is always open.
 
-## **Alpha Warning**
-
-Spork is currently in alpha. The language, standard library, and tooling are all under active development. Breaking changes may occur between releases. We welcome feedback, issues, and contributions!
 
 ## Installation
 
 ### As a User
 
-The recommended way to install Spork is via the `install.sh` script or `pipx`, both isolates the tool environment while making the CLI globally available.
+The recommended way to install Spork is via the `install.sh` script or `pipx`. Both options isolate the tool environment while making the CLI globally available.
 
 **Prerequisites:** Python 3.10+ and pip installed.
 
-Using the `install.sh` script:
+**Using the `install.sh` script (Linux/MacOS/WSL):**
+
+Recommended for most users. Spork will be installed to `~/.local/bin/spork` and a virtual environment will be created at `~/.spork/venv`. Upgrading is as simple as re-running the script.
 
 ```bash
 $ curl https://raw.githubusercontent.com/spork-it/spork-lang/refs/heads/main/install.sh | sh
 ```
 
-**Using Pipx:**
+**Using Pipx (Linux/MacOS/Windows/WSL):**
+
+Recommended for most users to avoid dependency conflicts.
 
 ```bash
 $ pipx install spork-lang
-
-# or to a local environment/project env
-# pip install spork-lang 
 ```
 
-### For Development
+Continue to the [Quick Start](#quick-start) section for details.
+
+**Using Pip (Linux/MacOS/Windows/WSL):**
+
+Recommended when you are embedding Spork in an existing Python project.
+
+```bash
+$ pip install spork-lang
+```
+
+Continue to the [Using Spork in an existing Python project](#using-spork-in-an-existing-python-project) section for details.
+
+### For Developing Spork
 
 If you wish to contribute to Spork or modify the compiler:
 
@@ -54,15 +84,14 @@ $ git clone https://github.com/spork-it/spork-lang.git
 
 $ cd spork-lang
 
-```
-
-
-```bash
 # Sets up virtual environment and builds C extensions
-make venv
+$ make venv
 
 # Run the test suite
-make test
+$ make test
+
+# Enter the Spork REPL using the development environment
+$ bin/spork 
 ```
 
 ## Quick Start
@@ -80,13 +109,30 @@ user> (map inc [1 2 3])
 [2 3 4]
 ```
 
-## Language Overview
+### Hello world
+
+Create a file named `hello.spork`:
+
+```clojure
+;; hello.spork
+(defn greet [name]
+  (print (fmt "Hello, {}!" name)))
+
+(greet "Spork")
+```
+
+Run it with:
+
+```bash
+$ spork hello.spork
+Hello, Spork!
+```
+
+## Core Language Features
 
 ### Examples
 
-#### [GitHub Stars](examples/stars/src/stars/core.spork)
-
-Example program that fetches and ranks GitHub repositories by star count. 
+> Below is a complete Spork program that demonstrates macros, Python interop, pattern matching, type annotations, and persistent data structures while fetching data from the GitHub API. [GitHub Stars Project](examples/stars)
 
 ```clojure
 (ns stars.core
@@ -191,6 +237,8 @@ Spork compiles to Python, so interop is seamless.
 (def data {:name "Spork" :version 1.0}) ; Immutable Spork Map
 (print (j.dumps data)) ; '{"name": "Spork", "version": 1.0}'
 ```
+
+> Python objects and Spork objects interoperate freely, no wrappers or FFI layers.
 
 ### Pattern Matching
 
@@ -386,7 +434,7 @@ import spork
 ```python
 from my_module import add
 print(add(1, 2))  # 3
-  ```
+```
 > If you forget step 2 (`import spork`), Python will just say `ModuleNotFoundError: No module named 'my_module'` because the .spork import hook hasn’t been installed yet.
 
 ### Using Spork Persistent Data Structures from Python
@@ -401,6 +449,7 @@ print(v)   # Vector([1, 2, 3])
 print(v2)  # Vector([1, 2, 3, 4])
 ```
 
+
 ## Why Lisp?
 
 Spork is a Lisp because we believe in **Homoiconicity**: the code is represented by the language's own data structures.
@@ -408,6 +457,7 @@ Spork is a Lisp because we believe in **Homoiconicity**: the code is represented
 1.  **Metaprogramming:** Because code is data, you can write code that writes code (Macros). This allows you to add features that look like language primitives (like the `match` or `unless` examples above) without waiting for the compiler developers to implement them.
 2.  **Structural Editing:** Tools like Parinfer or Paredit make editing code structurally (moving entire blocks, expressions, or function bodies) significantly faster and less error-prone than editing line-based languages like Python.
 3.  **Expression Oriented:** In Spork, almost everything is an expression that returns a value. `if`, `let`, and `do` blocks all return values, reducing the need for temporary variables and side effects.
+
 
 ## Under the Hood
 
@@ -419,14 +469,18 @@ Spork is not just a syntax skin; it is a runtime system optimized for the Python
 *   **Transient Internals:** The runtime utilizes mutable "Transients" internally to construct immutable results. This ensures that Spork remains performant at the boundary between mutation and persistence, giving you safety without the typical "copy-everything" penalty.
 *   **Source Mapping:** We track every AST node back to its origin. When an error happens, Spork points to *your* code, not the generated Python.
 
+
 ## Roots
 
 *   **Clojure:** The primary inspiration for our syntax and the sequence abstraction. We admire Clojure's discipline, but Spork is native to Python, not a JVM port.
 *   **Rust/Cargo:** The inspiration for our unified tooling and project structure (`spork.it`).
 *   **Python:** The host we love to live in. Spork is designed to be a good citizen of the Python ecosystem.
 
+
 ## Documentation
+
 Checkout the [docs](docs) folder for more detailed documentation on language features, the standard library, and some benchmarks of the persistent data structures.
+
 
 ## License
 

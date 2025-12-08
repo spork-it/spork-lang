@@ -1,6 +1,8 @@
 
 # Spork
 
+[![Tests](https://github.com/spork-it/spork-lang/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/spork-it/spork-lang/actions/workflows/test.yml)
+
 Spork is a language designed to bring structural integrity to the Python ecosystem. It combines the massive ecosystem of Python with a modern, expression-oriented Lisp syntax.
 
 While Spork compiles to Python AST, it introduces a new engine for your data: Persistent Data Structures implemented in a C extension under the hood. These immutable collections prevent a whole class of bugs related to unintended mutation, while still allowing efficient updates via structural sharing. Spork is built for developers who want the productivity of Python with the safety and expressiveness of a modern Lisp.
@@ -10,7 +12,7 @@ While Spork compiles to Python AST, it introduces a new engine for your data: Pe
 Spork is built on a few core opinions:
 
 1.  **The Python Ecosystem is Great:** We want access to NumPy, PyTorch, Django, and the massive repository of PyPI packages. We do not want to rewrite the world.
-2.  **Data Integrity:** Python's mutable defaults are convenient for scripts but dangerous for systems. Spork fixes this at the foundation. [1 2 3] isn't a Python list; it is a persistent vector. Your data is immutable by default, ensuring that state management remains predictable as complexity grows.
+2.  **Data Integrity:** Python's mutable defaults are convenient for scripts but dangerous for systems. Spork fixes this at the foundation. `[1 2 3]` isn't a Python list; it is a persistent vector. Your data is immutable by default, ensuring that state management remains predictable as complexity grows.
 3.  **Unified Tooling:** Spork includes a unified toolchain to manage compilation, REPL, and testing, similar to `cargo` or `go`. It handles the bridge between Spork source and the Python environment so you don't have to configure build hooks manually.
 4.  **Pragmatism:** We believe a hosted language should not fight its host. Spork compiles directly to Python AST. When you need raw performance or side effects, the escape hatch to Python's native mutability and types is always open.
 
@@ -24,7 +26,7 @@ Spork is currently in alpha. The language, standard library, and tooling are all
 
 The recommended way to install Spork is via `pipx`, which isolates the tool environment while making the CLI globally available.
 
-**Prerequisites:** Python 3.9+ and a C compiler (for the persistent data structures extension).
+**Prerequisites:** Python 3.10+ and a C compiler (for the persistent data structures extension).
 
 From the source directory:
 

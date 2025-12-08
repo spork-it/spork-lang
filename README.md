@@ -38,6 +38,15 @@ $ cd spork-lang
 $ make pipx-install
 ```
 
+Or directly from PyPi (using pipx or pip):
+
+```bash
+$ pipx install spork-lang
+
+# or to a local environment
+# pip install spork-lang 
+```
+
 To uninstall:
 
 ```bash
@@ -295,12 +304,10 @@ Commands:
 
 ## Using Spork in an existing Python project
 
-**Note:** Not currently on PyPI, so you must install from source.
-
 1. Install Spork:
 
 ```bash
-$ pip install /path/to/spork
+$ pip install spork-lang
 ```
 
 2. Import `spork` **once** at startup to register the import hooks:

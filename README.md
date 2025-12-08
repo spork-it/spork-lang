@@ -24,9 +24,9 @@ Spork is currently in alpha. The language, standard library, and tooling are all
 
 ### As a User
 
-The recommended way to install Spork is via `pipx`, which isolates the tool environment while making the CLI globally available.
+The recommended way to install Spork is via the `install.sh` script or `pipx`, both isolates the tool environment while making the CLI globally available.
 
-**Prerequisites:** Python 3.10+
+**Prerequisites:** Python 3.10+ and pip installed.
 
 Using the `install.sh` script:
 
@@ -34,7 +34,7 @@ Using the `install.sh` script:
 $ curl https://raw.githubusercontent.com/spork-it/spork-lang/refs/heads/main/install.sh | sh
 ```
 
-Directly from PyPi (using pipx or pip):
+**Using Pipx:**
 
 ```bash
 $ pipx install spork-lang

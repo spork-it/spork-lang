@@ -1,0 +1,141 @@
+; Test type predicates
+(ns tests.test_type_predicates
+  (:import [builtins :refer [dict]]))
+
+(print "=== Testing Type Predicates ===\n")
+
+; === nil? and some? ===
+(print "--- nil? and some? ---")
+(assert (nil? nil) "nil? should return true for nil")
+(assert (not (nil? 1)) "nil? should return false for non-nil")
+(assert (some? 1) "some? should return true for non-nil")
+(assert (some? "hello") "some? should return true for strings")
+(assert (not (some? nil)) "some? should return false for nil")
+(print "PASS: nil? and some?")
+
+; === string? ===
+(print "--- string? ---")
+(assert (string? "hello") "string? should return true for string")
+(assert (string? "") "string? should return true for empty string")
+(assert (not (string? 42)) "string? should return false for int")
+(assert (not (string? nil)) "string? should return false for nil")
+(assert (not (string? [1 2 3])) "string? should return false for vector")
+(print "PASS: string?")
+
+; === number? ===
+(print "--- number? ---")
+(assert (number? 42) "number? should return true for int")
+(assert (number? 3.14) "number? should return true for float")
+(assert (number? -10) "number? should return true for negative int")
+(assert (number? 0) "number? should return true for zero")
+(assert (not (number? "42")) "number? should return false for string")
+(assert (not (number? nil)) "number? should return false for nil")
+(print "PASS: number?")
+
+; === int? ===
+(print "--- int? ---")
+(assert (int? 42) "int? should return true for int")
+(assert (int? 0) "int? should return true for zero")
+(assert (int? -100) "int? should return true for negative int")
+(assert (not (int? 3.14)) "int? should return false for float")
+(assert (not (int? "42")) "int? should return false for string")
+(print "PASS: int?")
+
+; === float? ===
+(print "--- float? ---")
+(assert (float? 3.14) "float? should return true for float")
+(assert (float? 0.0) "float? should return true for 0.0")
+(assert (float? -2.5) "float? should return true for negative float")
+(assert (not (float? 42)) "float? should return false for int")
+(assert (not (float? "3.14")) "float? should return false for string")
+(print "PASS: float?")
+
+; === bool? ===
+(print "--- bool? ---")
+(assert (bool? true) "bool? should return true for true")
+(assert (bool? false) "bool? should return true for false")
+(assert (not (bool? 1)) "bool? should return false for int 1")
+(assert (not (bool? nil)) "bool? should return false for nil")
+(assert (not (bool? "true")) "bool? should return false for string")
+(print "PASS: bool?")
+
+; === fn? ===
+(print "--- fn? ---")
+(defn my-fn [] 42)
+(assert (fn? my-fn) "fn? should return true for defn function")
+(assert (fn? (fn [x] x)) "fn? should return true for anonymous fn")
+(assert (fn? inc) "fn? should return true for builtin inc")
+(assert (fn? +) "fn? should return true for + operator")
+(assert (not (fn? 42)) "fn? should return false for int")
+(assert (not (fn? "hello")) "fn? should return false for string")
+(print "PASS: fn?")
+
+; === symbol? ===
+(print "--- symbol? ---")
+(assert (symbol? 'foo) "symbol? should return true for quoted symbol")
+(assert (symbol? 'hello-world) "symbol? should return true for symbol with dash")
+(assert (not (symbol? :foo)) "symbol? should return false for keyword")
+(assert (not (symbol? "foo")) "symbol? should return false for string")
+(print "PASS: symbol?")
+
+; === keyword? ===
+(print "--- keyword? ---")
+(assert (keyword? :foo) "keyword? should return true for keyword")
+(assert (keyword? :hello-world) "keyword? should return true for keyword with dash")
+(assert (not (keyword? 'foo)) "keyword? should return false for symbol")
+(assert (not (keyword? "foo")) "keyword? should return false for string")
+(print "PASS: keyword?")
+
+; === vector? ===
+(print "--- vector? ---")
+(assert (vector? [1 2 3]) "vector? should return true for vector")
+(assert (vector? []) "vector? should return true for empty vector")
+(assert (vector? (vec 1 2 3)) "vector? should return true for vec-created vector")
+(assert (not (vector? '(1 2 3))) "vector? should return false for list")
+(assert (not (vector? {:a 1})) "vector? should return false for map")
+(print "PASS: vector?")
+
+; === map? ===
+(print "--- map? ---")
+(assert (map? {:a 1 :b 2}) "map? should return true for map")
+(assert (map? {}) "map? should return true for empty map")
+(assert (not (map? [1 2 3])) "map? should return false for vector")
+(assert (not (map? '(1 2 3))) "map? should return false for list")
+(print "PASS: map?")
+
+; === list? ===
+(print "--- list? ---")
+(assert (list? '(1 2 3)) "list? should return true for quoted list")
+(assert (list? (cons 1 nil)) "list? should return true for cons")
+(assert (not (list? [1 2 3])) "list? should return false for vector")
+(assert (not (list? {:a 1})) "list? should return false for map")
+(print "PASS: list?")
+
+; === seq? ===
+(print "--- seq? ---")
+(assert (seq? (cons 1 nil)) "seq? should return true for cons")
+(assert (seq? '(1 2 3)) "seq? should return true for list")
+(assert (not (seq? [1 2 3])) "seq? should return false for vector")
+(assert (not (seq? {:a 1})) "seq? should return false for map")
+(print "PASS: seq?")
+
+; === coll? ===
+(print "--- coll? ---")
+(assert (coll? [1 2 3]) "coll? should return true for vector")
+(assert (coll? {:a 1}) "coll? should return true for map")
+(assert (coll? '(1 2 3)) "coll? should return true for list")
+(assert (coll? (cons 1 nil)) "coll? should return true for cons")
+(assert (not (coll? 42)) "coll? should return false for int")
+(assert (not (coll? "hello")) "coll? should return false for string")
+(print "PASS: coll?")
+
+; === dict? ===
+(print "--- dict? ---")
+; Note: spork maps are Map, not dict. Use Python interop to get a dict
+(def py-dict (dict [[:a 1] [:b 2]]))
+(assert (dict? py-dict) "dict? should return true for Python dict")
+(assert (not (dict? {:a 1})) "dict? should return false for Map")
+(assert (not (dict? [1 2 3])) "dict? should return false for vector")
+(print "PASS: dict?")
+
+(print "\n=== All Type Predicate Tests Passed! ===")

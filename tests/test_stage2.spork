@@ -1,0 +1,187 @@
+; Stage 2 Demo - Macro System + Quasiquote
+; This file demonstrates all the Stage 2 features
+
+(print "=== Stage 2: Macro System + Quasiquote Demo ===\n")
+
+; ============================================================================
+; 1. Quote and Quasiquote
+; ============================================================================
+
+(print "--- 1. Quote and Quasiquote ---")
+
+; Basic quote - returns data, not evaluated
+(def quoted '(+ 1 2 3))
+(print "Quoted:" quoted)  ; prints list structure, not 6
+
+; Quasiquote with unquote
+(def x 10)
+(def y 20)
+(def expr `(+ ~x ~y))
+(print "Quasiquoted:" expr)  ; [Symbol('+'), 10, 20]
+
+; Unquote-splicing
+(def nums [1 2 3])
+(def spliced `(+ ~@nums 4 5))
+(print "Spliced:" spliced)  ; [Symbol('+'), 1, 2, 3, 4, 5]
+
+(print "")
+
+; ============================================================================
+; 2. Basic Macros - when, unless
+; ============================================================================
+
+(print "--- 2. Basic Macros ---")
+
+; when - execute body only if test is true
+(def result1 (when (> 5 3)
+  (print "5 is greater than 3")
+  42))
+(print "when result:" result1)
+
+; unless - execute body only if test is false
+(def result2 (unless (< 5 3)
+  (print "5 is not less than 3")
+  99))
+(print "unless result:" result2)
+
+(print "")
+
+; ============================================================================
+; 3. cond - Multi-way Conditional
+; ============================================================================
+
+(print "--- 3. cond Macro ---")
+
+(def classify (fn [n]
+  (cond
+    (< n 0) "negative"
+    (= n 0) "zero"
+    (> n 0) "positive")))
+
+(print "classify(-5):" (classify -5))
+(print "classify(0):" (classify 0))
+(print "classify(10):" (classify 10))
+
+(print "")
+
+; ============================================================================
+; 4. Threading Macros - -> and ->>
+; ============================================================================
+
+(print "--- 4. Threading Macros ---")
+
+; Thread-first (->) - insert value as first argument
+(def result3 (-> 5
+  (+ 3)      ; (+ 5 3) => 8
+  (* 2)      ; (* 8 2) => 16
+  (- 4)))    ; (- 16 4) => 12
+(print "Thread-first result:" result3)
+
+; Thread-last (->>) - insert value as last argument
+(def result4 (->> 5
+  (- 10)     ; (- 10 5) => 5
+  (* 2)      ; (* 2 5) => 10
+  (+ 3)))    ; (+ 3 10) => 13
+(print "Thread-last result:" result4)
+
+(print "")
+
+; ============================================================================
+; 5. inc and dec Macros
+; ============================================================================
+
+(print "--- 5. inc/dec Macros ---")
+
+(def counter 0)
+(set! counter (inc counter))
+(set! counter (inc counter))
+(set! counter (inc counter))
+(print "Counter after 3 incs:" counter)
+
+(set! counter (dec counter))
+(print "Counter after 1 dec:" counter)
+
+(print "")
+
+; ============================================================================
+; 6. Custom User Macros
+; ============================================================================
+
+(print "--- 6. Custom User Macros ---")
+
+; Define a simple macro to time execution
+(defmacro time [expr]
+  `(do
+     (print "Evaluating:" '~expr)
+     ~expr))
+
+(def result5 (time (+ 100 200 300)))
+(print "Result:" result5)
+
+; Define a macro for list comprehension-style syntax
+(defmacro for-each [var lst & body]
+  `(for [~var ~lst]
+     ~@body))
+
+(print "Squares of 1-5:")
+(for-each n [1 2 3 4 5]
+  (print (* n n)))
+
+(print "")
+
+; ============================================================================
+; 7. Multi-arity Operators
+; ============================================================================
+
+(print "--- 7. Multi-arity Operators ---")
+
+(print "(+ 1 2 3 4 5) =" (+ 1 2 3 4 5))
+(print "(* 2 3 4) =" (* 2 3 4))
+(print "(- 100 10 5) =" (- 100 10 5))
+(print "(/ 100 5 2) =" (/ 100 5 2))
+
+(print "")
+
+; ============================================================================
+; 8. Macros with Varargs
+; ============================================================================
+
+(print "--- 8. Macros with Varargs ---")
+
+; Define a logging macro that accepts multiple arguments
+(defmacro log [level & messages]
+  `(print ~level ":" ~@messages))
+
+(log "INFO" "Server" "started" "on" "port" 8080)
+(log "ERROR" "Connection" "failed")
+
+(print "")
+
+; ============================================================================
+; 9. Nested Macros and Hygiene
+; ============================================================================
+
+(print "--- 9. Nested Macro Expansion ---")
+
+; Macros can call other macros
+(def result6 (when (> 10 5)
+  (unless (= 10 5)
+    (cond
+      (= 10 10) "ten"
+      true "other"))))
+
+(print "Nested macro result:" result6)
+
+(print "")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== Stage 2 Complete! ===")
+(print "✓ Quote and quasiquote with unquote/unquote-splicing")
+(print "✓ defmacro for defining compile-time transformations")
+(print "✓ Standard library macros: when, unless, cond, ->, ->>, inc, dec")
+(print "✓ Varargs support with & in macro parameters")
+(print "✓ Multi-arity operators: +, -, *, /, etc.")
+(print "✓ Full homoiconicity - code as data!")

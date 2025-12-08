@@ -1,0 +1,301 @@
+; Spork Prelude - Essential Macros
+;
+; This file contains macros that are automatically available in every
+; Spork namespace without requiring imports.
+
+; =============================================================================
+; Control Flow Macros
+; =============================================================================
+
+; when - execute body only if test is true
+(defmacro when [test & body]
+  `(if ~test (do ~@body) nil))
+
+; unless - execute body only if test is false
+(defmacro unless [test & body]
+  `(if ~test nil (do ~@body)))
+
+; cond - multi-way conditional
+(defmacro cond [& clauses]
+  (if (= (len clauses) 0)
+    nil
+    (if (= (len clauses) 1)
+      (. clauses 0)
+      `(if ~(. clauses 0)
+         ~(. clauses 1)
+         (cond ~@(. clauses (slice 2 nil)))))))
+
+; =============================================================================
+; Threading Macros
+; =============================================================================
+
+; -> threading macro (thread-first)
+; (-> x (f a) (g b)) => (g (f x a) b)
+(defmacro -> [x & forms]
+  (if (= (len forms) 0)
+    x
+    (let [form (. forms 0)
+          rest (. forms (slice 1 nil))]
+      (if (isinstance form list)
+        `(-> (~(. form 0) ~x ~@(. form (slice 1 nil))) ~@rest)
+        `(-> (~form ~x) ~@rest)))))
+
+; ->> threading macro (thread-last)
+; (->> x (f a) (g b)) => (g b (f a x))
+(defmacro ->> [x & forms]
+  (if (= (len forms) 0)
+    x
+    (let [form (. forms 0)
+          rest (. forms (slice 1 nil))]
+      (if (isinstance form list)
+        `(->> (~@form ~x) ~@rest)
+        `(->> (~form ~x) ~@rest)))))
+
+; =============================================================================
+; Utility Macros
+; =============================================================================
+
+; comment - ignore body, useful for commenting out code
+(defmacro comment [& body]
+  nil)
+
+; fmt - Python-style string formatting with {} placeholders
+(defmacro fmt [format-str & args]
+  `(.format ~format-str ~@args))
+
+; assert - check condition and throw error if false
+(defmacro assert [test & msg]
+  (if (= (len msg) 0)
+    `(if (not ~test)
+       (throw (AssertionError "Assertion failed"))
+       nil)
+    `(if (not ~test)
+       (throw (AssertionError ~(. msg 0)))
+       nil)))
+
+; =============================================================================
+; Lazy Sequence Convenience Macros
+; =============================================================================
+
+; mapv - like map but returns a vector (eager)
+(defmacro mapv [f coll]
+  `(vec (map ~f ~coll)))
+
+; filterv - like filter but returns a vector (eager)
+(defmacro filterv [pred coll]
+  `(vec (filter ~pred ~coll)))
+
+; doseq - execute body for each element (for side effects)
+(defmacro doseq [bindings & body]
+  (let [items (. bindings items)
+        var (. items 0)
+        coll (. items 1)]
+    `(do
+       (for [~var ~coll]
+         (do ~@body))
+       nil)))
+
+; for-all - list comprehension style, returns vector
+(defmacro for-all [bindings expr]
+  (let [items (. bindings items)
+        var (. items 0)
+        coll (. items 1)]
+    `(vec (map (fn [~var] ~expr) ~coll))))
+
+; =============================================================================
+; Function Composition Macros
+; =============================================================================
+
+; comp - function composition
+(defmacro comp [& fns]
+  (if (= (len fns) 0)
+    `(fn [x] x)
+    (if (= (len fns) 1)
+      (. fns 0)
+      (let [f (. fns 0)
+            rest-fns (. fns (slice 1 nil))]
+        `(fn [x] (~f ((comp ~@rest-fns) x)))))))
+
+; partial - partial function application
+(defmacro partial [f & args]
+  `(fn [& more] (apply ~f ~@args more)))
+
+; identity - returns its argument
+(defmacro identity [x]
+  x)
+
+; constantly - returns a function that always returns x
+(defmacro constantly [x]
+  `(fn [& args] ~x))
+
+; complement - returns a function that returns the opposite
+(defmacro complement [f]
+  `(fn [& args] (not (apply ~f args))))
+
+; =============================================================================
+; Nil Predicates
+; =============================================================================
+
+(defmacro nil? [x]
+  `(= ~x nil))
+
+(defmacro some? [x]
+  `(not (= ~x nil)))
+
+; =============================================================================
+; Type Predicates
+; =============================================================================
+
+(defmacro string? [x]
+  `(isinstance ~x str))
+
+(defmacro number? [x]
+  `(or (isinstance ~x int) (isinstance ~x float)))
+
+(defmacro int? [x]
+  `(isinstance ~x int))
+
+(defmacro float? [x]
+  `(isinstance ~x float))
+
+(defmacro bool? [x]
+  `(isinstance ~x bool))
+
+(defmacro fn? [x]
+  `(callable ~x))
+
+(defmacro symbol? [x]
+  `(isinstance ~x Symbol))
+
+(defmacro keyword? [x]
+  `(isinstance ~x Keyword))
+
+(defmacro vector? [x]
+  `(isinstance ~x Vector))
+
+(defmacro map? [x]
+  `(isinstance ~x Map))
+
+(defmacro list? [x]
+  `(or (isinstance ~x Cons) (isinstance ~x list)))
+
+(defmacro seq? [x]
+  `(isinstance ~x Cons))
+
+(defmacro coll? [x]
+  `(or (isinstance ~x Vector) (isinstance ~x Map) (isinstance ~x Cons) (isinstance ~x list) (isinstance ~x dict)))
+
+(defmacro dict? [x]
+  `(isinstance ~x dict))
+
+; =============================================================================
+; Collection Predicates and Accessors
+; =============================================================================
+
+(defmacro empty? [coll]
+  `(= (count ~coll) 0))
+
+(defmacro not-empty [coll]
+  `(if (empty? ~coll) nil ~coll))
+
+(defmacro second [coll]
+  `(first (rest ~coll)))
+
+(defmacro ffirst [coll]
+  `(first (first ~coll)))
+
+(defmacro last [coll]
+  `(nth ~coll (dec (count ~coll))))
+
+(defmacro butlast [coll]
+  `(take (dec (count ~coll)) ~coll))
+
+; =============================================================================
+; Numeric Predicates
+; =============================================================================
+
+(defmacro even? [n]
+  `(= (% ~n 2) 0))
+
+(defmacro odd? [n]
+  `(= (% ~n 2) 1))
+
+(defmacro pos? [n]
+  `(> ~n 0))
+
+(defmacro neg? [n]
+  `(< ~n 0))
+
+(defmacro zero? [n]
+  `(= ~n 0))
+
+; =============================================================================
+; Protocol Definition
+; =============================================================================
+
+(defmacro defprotocol [& args]
+  (let [has-structural (and (isinstance (. args 0) Decorated)
+                            (= (. (. (. args 0) expr) name) "structural"))
+        rest-args (if has-structural (. args (slice 1 nil)) args)
+        name-sym (. rest-args 0)
+        body (. rest-args (slice 1 nil))
+        has-doc (isinstance (. body 0) str)
+        docstring (if has-doc (. body 0) nil)
+        method-forms (if has-doc (. body (slice 1 nil)) body)
+        method-names (list (map (fn [m] (. (. m 0) name)) method-forms))]
+    `(do
+       (def ~name-sym (runtime_register_protocol
+                        ~(. name-sym name)
+                        ~docstring
+                        ~(vec method-names)
+                        ~has-structural))
+       ~@(map (fn [m]
+                (let [mname (. m 0)
+                      params (. m 1)
+                      param-names (. params items)]
+                  `(defn ~mname ~params
+                     (protocol_dispatch ~(. name-sym name) ~(. mname name) ~@param-names))))
+              method-forms))))
+
+; =============================================================================
+; Protocol Extension
+; =============================================================================
+
+(defmacro extend-type [type-expr & proto-impls]
+  (let [groups (extend-type-parse-groups proto-impls)]
+    `(do
+       ~@(mapcat (fn [group]
+                   (let [proto-name (. group 0)
+                         methods (. group (slice 1 nil))]
+                     (extend-type-for-proto type-expr proto-name methods)))
+                 groups))))
+
+(defmacro extend-protocol [proto-name & type-impls]
+  (let [groups (extend-protocol-parse-groups type-impls)]
+    `(do
+       ~@(map (fn [group]
+                (let [type-expr (. group 0)
+                      methods (. group (slice 1 nil))]
+                  `(extend-type ~type-expr
+                     ~proto-name
+                     ~@methods)))
+              groups))))
+
+; =============================================================================
+; Transient/Mutable Operations
+; =============================================================================
+
+; with-mutable - execute body with a transient collection, then persist
+; The transient supports Python's MutableMapping/MutableSequence/MutableSet protocols
+; so it can be passed to Python libraries that expect mutable collections.
+;
+; Usage:
+;   (with-mutable [t my-map]
+;     (set! t["key"] value)
+;     (some-python-lib.modify t))
+;   ; => returns persistent version of modified collection
+;
+(defmacro with-mutable [[sym coll] & body]
+  `(let [~sym (transient ~coll)]
+     (do ~@body)
+     (persistent! ~sym)))

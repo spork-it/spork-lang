@@ -1,0 +1,43 @@
+;; Test set! as expression with various targets
+
+(ns test-set-expr
+  (:import [types]))
+
+(print "Testing set! as expression:\n")
+
+;; Simple variable assignment as expression
+(def x 0)
+(def result (set! x 42))
+(print "Simple assignment: x =" x ", result =" result)
+
+;; Using set! in let binding
+(def a 0)
+(def y (let [z (set! a 100)] (+ z 50)))
+(print "In let binding: a =" a ", y =" y)
+
+;; Attribute assignment as expression with objects
+(def obj (types.SimpleNamespace))
+(set! (. obj x) 10)
+(set! (. obj y) 20)
+(print "Object created with x =" (. obj x) "y =" (. obj y))
+
+;; Using attribute set! as expression
+(def new-x (set! (. obj x) 99))
+(print "After (set! (. obj x) 99): x =" (. obj x) ", new-x =" new-x)
+
+;; Chaining set! expressions
+(def chain-result (+ (set! (. obj y) 88) 12))
+(print "Chained: y =" (. obj y) ", chain-result =" chain-result)
+
+;; In conditional
+(def conditional-result
+  (if true
+    (set! (. obj x) 777)
+    0))
+(print "In conditional: x =" (. obj x) ", conditional-result =" conditional-result)
+
+;; Nested in expression
+(def doubled (* 2 (set! (. obj y) 50)))
+(print "Nested: y =" (. obj y) ", doubled =" doubled)
+
+(print "\nAll set! expression tests passed!")

@@ -1,0 +1,161 @@
+; std.map - Map Utilities
+;
+; Usage: (ns my.app (:require [std.map :as m]))
+
+(ns std.map)
+
+; keys - get all keys from a map as a vector
+(defn keys [m]
+  (vec (.keys m)))
+
+; vals - get all values from a map as a vector
+(defn vals [m]
+  (vec (.values m)))
+
+; entries - get all key-value pairs as a vector of vectors
+(defn entries [m]
+  (vec (map (fn [kv] [(first kv) (second kv)]) (.items m))))
+
+; update - update a value in a map by applying f to the current value
+; (m.update {:a 1} :a inc) => {:a 2}
+(defn update [m k f]
+  (assoc m k (f (get m k))))
+
+; update-with - update with a default if key missing
+; (m.update-with {:a 1} :b inc 0) => {:b 1}
+(defn update-with [m k f default]
+  (assoc m k (f (get m k default))))
+
+; get-in - get a value from a nested map using a path of keys
+; (m.get-in {:a {:b 1}} [:a :b]) => 1
+(defn get-in [m ks]
+  (reduce (fn [acc k] (get acc k)) m ks))
+
+; get-in-or - get-in with a default value if path not found
+(defn get-in-or [m ks default]
+  (let [result (get-in m ks)]
+    (if (= result nil) default result)))
+
+; assoc-in - associate a value in a nested map
+; (m.assoc-in {:a {}} [:a :b] 1) => {:a {:b 1}}
+(defn assoc-in [m ks v]
+  (if (= (count ks) 1)
+    (assoc m (first ks) v)
+    (assoc m (first ks) (assoc-in (get m (first ks) {}) (rest ks) v))))
+
+; update-in - update a value in a nested map by applying f
+; (m.update-in {:a {:b 1}} [:a :b] inc) => {:a {:b 2}}
+(defn update-in [m ks f]
+  (if (= (count ks) 1)
+    (update m (first ks) f)
+    (assoc m (first ks) (update-in (get m (first ks) {}) (rest ks) f))))
+
+; select-keys - select only specified keys from a map
+; (m.select-keys {:a 1 :b 2 :c 3} [:a :c]) => {:a 1 :c 3}
+(defn select-keys [m ks]
+  (reduce (fn [acc k]
+            (if (contains? m k)
+              (assoc acc k (get m k))
+              acc))
+          {}
+          ks))
+
+; dissoc-in - remove a key from a nested map
+; (m.dissoc-in {:a {:b 1 :c 2}} [:a :b]) => {:a {:c 2}}
+(defn dissoc-in [m ks]
+  (if (= (count ks) 1)
+    (dissoc m (first ks))
+    (assoc m (first ks) (dissoc-in (get m (first ks)) (rest ks)))))
+
+; merge - merge two or more maps (later values override)
+; (m.merge {:a 1} {:b 2} {:a 3}) => {:a 3 :b 2}
+(defn merge [& maps]
+  (reduce (fn [acc m]
+            (reduce (fn [a kv] (assoc a (first kv) (second kv)))
+                    acc
+                    (if m (.items m) [])))
+          {}
+          maps))
+
+; merge-with - merge maps using f to combine values for duplicate keys
+; (m.merge-with + {:a 1} {:a 2}) => {:a 3}
+(defn merge-with [f & maps]
+  (reduce (fn [acc m]
+            (reduce (fn [a kv]
+                      (let [k (first kv)
+                            v (second kv)]
+                        (if (contains? a k)
+                          (assoc a k (f (get a k) v))
+                          (assoc a k v))))
+                    acc
+                    (if m (.items m) [])))
+          {}
+          maps))
+
+; rename-keys - rename keys in a map according to a mapping
+; (m.rename-keys {:a 1 :b 2} {:a :x}) => {:x 1 :b 2}
+(defn rename-keys [m kmap]
+  (reduce (fn [acc kv]
+            (let [k (first kv)
+                  v (second kv)
+                  new-k (get kmap k k)]
+              (assoc acc new-k v)))
+          {}
+          (.items m)))
+
+; invert - swap keys and values
+; (m.invert {:a 1 :b 2}) => {1 :a 2 :b}
+(defn invert [m]
+  (reduce (fn [acc kv]
+            (assoc acc (second kv) (first kv)))
+          {}
+          (.items m)))
+
+; map-keys - apply f to all keys
+; (m.map-keys name {:a 1 :b 2}) => {"a" 1 "b" 2}
+(defn map-keys [f m]
+  (reduce (fn [acc kv]
+            (assoc acc (f (first kv)) (second kv)))
+          {}
+          (.items m)))
+
+; map-vals - apply f to all values
+; (m.map-vals inc {:a 1 :b 2}) => {:a 2 :b 3}
+(defn map-vals [f m]
+  (reduce (fn [acc kv]
+            (assoc acc (first kv) (f (second kv))))
+          {}
+          (.items m)))
+
+; filter-keys - keep only entries where (pred key) is truthy
+(defn filter-keys [pred m]
+  (reduce (fn [acc kv]
+            (if (pred (first kv))
+              (assoc acc (first kv) (second kv))
+              acc))
+          {}
+          (.items m)))
+
+; filter-vals - keep only entries where (pred val) is truthy
+(defn filter-vals [pred m]
+  (reduce (fn [acc kv]
+            (if (pred (second kv))
+              (assoc acc (first kv) (second kv))
+              acc))
+          {}
+          (.items m)))
+
+; deep-merge - recursively merge nested maps
+(defn deep-merge [& maps]
+  (reduce (fn [acc m]
+            (reduce (fn [a kv]
+                      (let [k (first kv)
+                            v (second kv)
+                            existing (get a k)]
+                        (if (and (map? existing) (map? v))
+                          (assoc a k (deep-merge existing v))
+                          (assoc a k v))))
+                    acc
+                    (if m (.items m) [])))
+          {}
+          maps))

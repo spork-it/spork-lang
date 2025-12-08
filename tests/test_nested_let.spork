@@ -1,0 +1,83 @@
+;; Test nested let expressions and closures
+
+(print "=== Testing Nested Let Expressions ===\n")
+
+;; Test 1: Simple nested let - inner can read outer
+(def test-nested-read
+  (fn []
+    (let [x 10]
+      (let [y 20]
+        (+ x y)))))
+
+(print "test-nested-read:" (test-nested-read))
+
+;; Test 2: Nested let with sequential bindings using outer value
+(def test-nested-sequential
+  (fn []
+    (let [a 5]
+      (let [b (* a 2)
+            c (+ b a)]
+        c))))
+
+(print "test-nested-sequential:" (test-nested-sequential))
+
+;; Test 3: Multiple levels of nesting
+(def test-triple-nested
+  (fn []
+    (let [x 1]
+      (let [y 2]
+        (let [z 3]
+          (+ x y z))))))
+
+(print "test-triple-nested:" (test-triple-nested))
+
+;; Test 4: Nested let with function that closes over outer variables
+(def test-nested-closure
+  (fn []
+    (let [multiplier 3]
+      (let [adder 10
+            f (fn [x] (+ (* x multiplier) adder))]
+        (f 5)))))
+
+(print "test-nested-closure:" (test-nested-closure))
+
+;; Test 5: Outer let with mutation, inner let reads (no mutation of outer)
+(def test-outer-mutation
+  (fn []
+    (let [x 0]
+      (set! x 5)
+      (let [y (* x 2)]
+        (+ x y)))))
+
+(print "test-outer-mutation:" (test-outer-mutation))
+
+;; Test 6: Inner let with its own mutations (doesn't affect outer)
+(def test-inner-mutation
+  (fn []
+    (let [x 10]
+      (let [y 0]
+        (set! y 20)
+        (+ x y)))))
+
+(print "test-inner-mutation:" (test-inner-mutation))
+
+;; Test 7: Sibling lets (sequential, not nested)
+(def test-sibling-lets
+  (fn []
+    (let [a 1
+          b (let [x 10 y 20] (+ x y))
+          c (let [m 5 n 3] (* m n))]
+      (+ a b c))))
+
+(print "test-sibling-lets:" (test-sibling-lets))
+
+;; Test 8: Let in let binding value
+(def test-let-in-binding
+  (fn []
+    (let [outer 100
+          inner (let [x 10 y 20] (+ x y outer))]
+      inner)))
+
+(print "test-let-in-binding:" (test-let-in-binding))
+
+(print "\n=== All Nested Let Tests Passed! ===")

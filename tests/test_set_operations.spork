@@ -1,0 +1,177 @@
+;; Test Set Operations (union, intersection, difference, symmetric difference)
+;; These operations use transient accumulators internally for better performance
+
+(ns test-set-operations
+  (:import [operator]
+           [builtins]))
+
+(print "=== Testing Set Operations ===\n")
+
+;; === Setup test sets ===
+(def a #{1 2 3 4 5})
+(def b #{4 5 6 7 8})
+(def empty-set #{})
+
+(print "Test sets:")
+(print "  a:" a)
+(print "  b:" b)
+(print "  empty-set:" empty-set)
+
+;; === Union (|) ===
+(print "\n--- Union (bit-or / |) ---")
+
+; Basic union
+(def union-ab (bit-or a b))
+(print "(bit-or a b):" union-ab)
+(assert (= (count union-ab) 8) "Union should have 8 elements")
+(assert (contains? union-ab 1) "Union should contain 1")
+(assert (contains? union-ab 6) "Union should contain 6")
+
+; Union with empty set
+(assert (= (bit-or a empty-set) a) "Union with empty set returns same set")
+(assert (= (bit-or empty-set a) a) "Union of empty set with a returns a")
+
+; Union with self
+(assert (= (bit-or a a) a) "Union with self returns same set")
+
+; Union with generic iterable (list)
+(def union-list (bit-or a [10 11 12]))
+(print "(bit-or a [10 11 12]):" union-list)
+(assert (= (count union-list) 8) "Union with list should have 8 elements")
+(assert (contains? union-list 10) "Union should contain 10")
+
+(print "Union tests passed!")
+
+;; === Intersection (&) ===
+(print "\n--- Intersection (bit-and / &) ---")
+
+; Basic intersection
+(def inter-ab (bit-and a b))
+(print "(bit-and a b):" inter-ab)
+(assert (= (count inter-ab) 2) "Intersection should have 2 elements")
+(assert (contains? inter-ab 4) "Intersection should contain 4")
+(assert (contains? inter-ab 5) "Intersection should contain 5")
+(assert (not (contains? inter-ab 1)) "Intersection should not contain 1")
+
+; Intersection with empty set
+(assert (= (count (bit-and a empty-set)) 0) "Intersection with empty set is empty")
+(assert (= (count (bit-and empty-set a)) 0) "Intersection of empty set is empty")
+
+; Intersection with self
+(assert (= (bit-and a a) a) "Intersection with self returns same set")
+
+; Intersection with generic iterable
+(def inter-list (bit-and a [2 3 100]))
+(print "(bit-and a [2 3 100]):" inter-list)
+(assert (= (count inter-list) 2) "Intersection with list should have 2 elements")
+
+; Disjoint sets
+(def c #{10 11 12})
+(assert (= (count (bit-and a c)) 0) "Intersection of disjoint sets is empty")
+
+(print "Intersection tests passed!")
+
+;; === Difference (-) ===
+(print "\n--- Difference (operator.sub / -) ---")
+
+; Basic difference
+(def diff-ab (operator.sub a b))
+(print "(operator.sub a b):" diff-ab)
+(assert (= (count diff-ab) 3) "Difference should have 3 elements")
+(assert (contains? diff-ab 1) "Difference should contain 1")
+(assert (contains? diff-ab 2) "Difference should contain 2")
+(assert (contains? diff-ab 3) "Difference should contain 3")
+(assert (not (contains? diff-ab 4)) "Difference should not contain 4")
+
+; Difference with empty set
+(assert (= (operator.sub a empty-set) a) "Difference with empty set returns same set")
+(assert (= (count (operator.sub empty-set a)) 0) "Difference of empty set is empty")
+
+; Difference with self
+(assert (= (count (operator.sub a a)) 0) "Difference with self is empty")
+
+; Difference with disjoint set
+(assert (= (operator.sub a c) a) "Difference with disjoint set returns same set")
+
+(print "Difference tests passed!")
+
+;; === Symmetric Difference (^) ===
+(print "\n--- Symmetric Difference (bit-xor / ^) ---")
+
+; Basic symmetric difference
+(def xor-ab (bit-xor a b))
+(print "(bit-xor a b):" xor-ab)
+(assert (= (count xor-ab) 6) "Symmetric difference should have 6 elements")
+(assert (contains? xor-ab 1) "Symmetric difference should contain 1")
+(assert (contains? xor-ab 6) "Symmetric difference should contain 6")
+(assert (not (contains? xor-ab 4)) "Symmetric difference should not contain 4")
+(assert (not (contains? xor-ab 5)) "Symmetric difference should not contain 5")
+
+; Symmetric difference with empty set
+(assert (= (bit-xor a empty-set) a) "Symmetric difference with empty set returns same set")
+(assert (= (bit-xor empty-set a) a) "Symmetric difference of empty set returns other set")
+
+; Symmetric difference with self
+(assert (= (count (bit-xor a a)) 0) "Symmetric difference with self is empty")
+
+; Symmetric difference is commutative
+(assert (= (bit-xor a b) (bit-xor b a)) "Symmetric difference is commutative")
+
+(print "Symmetric difference tests passed!")
+
+;; === Large set operations ===
+(print "\n--- Large Set Operations ---")
+
+(def large-a (into #{} (range 1000)))
+(def large-b (into #{} (range 500 1500)))
+
+(print "large-a:" (count large-a) "elements (0-999)")
+(print "large-b:" (count large-b) "elements (500-1499)")
+
+(def large-union (bit-or large-a large-b))
+(print "Union:" (count large-union) "elements")
+(assert (= (count large-union) 1500) "Large union should have 1500 elements")
+
+(def large-inter (bit-and large-a large-b))
+(print "Intersection:" (count large-inter) "elements")
+(assert (= (count large-inter) 500) "Large intersection should have 500 elements")
+
+(def large-diff (operator.sub large-a large-b))
+(print "Difference (a-b):" (count large-diff) "elements")
+(assert (= (count large-diff) 500) "Large difference should have 500 elements")
+
+(def large-xor (bit-xor large-a large-b))
+(print "Symmetric difference:" (count large-xor) "elements")
+(assert (= (count large-xor) 1000) "Large symmetric difference should have 1000 elements")
+
+(print "Large set operation tests passed!")
+
+;; === Operations with Python sets ===
+(print "\n--- Interop with Python sets ---")
+
+(def py-set (builtins.set [4 5 6 7 8]))
+
+(print "py-set:" py-set)
+(print "(bit-or a py-set):" (bit-or a py-set))
+(assert (= (count (bit-or a py-set)) 8) "Union with Python set should work")
+
+(print "Python set interop tests passed!")
+
+;; === Verify immutability ===
+(print "\n--- Immutability ---")
+
+(def original #{1 2 3})
+(def after-union (bit-or original #{4 5}))
+(def after-inter (bit-and original #{2 3 4}))
+(def after-diff (operator.sub original #{2}))
+(def after-xor (bit-xor original #{3 4}))
+
+(assert (= (count original) 3) "Original set unchanged after union")
+(assert (= (count original) 3) "Original set unchanged after intersection")
+(assert (= (count original) 3) "Original set unchanged after difference")
+(assert (= (count original) 3) "Original set unchanged after symmetric difference")
+(assert (contains? original 2) "Original set still contains 2 after difference removed it")
+
+(print "Immutability tests passed!")
+
+(print "\n=== All Set Operation Tests Passed! ===")

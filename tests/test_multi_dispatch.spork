@@ -1,0 +1,231 @@
+; Test file for multi-dispatch pattern matching in defn
+; Tests type patterns, guards, and pattern-based dispatch
+
+(print "=== Testing Multi-Dispatch Pattern Matching ===\n")
+
+;; === Basic type-based dispatch ===
+
+(print "--- Type-Based Dispatch ---")
+
+; Dispatch on type
+(defn type-name
+  ([^int n] :int)
+  ([^str s] :str)
+  ([^list l] :list)
+  ([^Vector v] :vec)
+  ([^Map v] :map)
+  ([x] :other))
+
+(print "type-name 42:" (type-name 42))
+(assert (= (type-name 42) :int))
+
+(print "type-name \"hello\":" (type-name "hello"))
+(assert (= (type-name "hello") :str))
+
+(print "type-name [1 2 3] as list:" (type-name (list [1 2 3])))
+(assert (= (type-name (list [1 2 3])) :list))
+
+(print "type-name [1 2 3]:" (type-name [1 2 3]))
+(assert (= (type-name [1 2 3]) :vec))
+
+(print "type-name {:a 1 :b 2}:" (type-name {:a 1 :b 2}))
+(assert (= (type-name {:a 1 :b 2}) :map))
+
+(print "type-name nil:" (type-name nil))
+(assert (= (type-name nil) :other))
+
+;; === Guards in dispatch ===
+
+(print "\n--- Guards in Dispatch ---")
+
+; Dispatch with :when guards
+(defn classify-int
+  ([^int n :when (> n 0)] :positive)
+  ([^int n :when (< n 0)] :negative)
+  ([^int n] :zero)
+  ([x] :not-an-int))
+
+(print "classify-int 42:" (classify-int 42))
+(assert (= (classify-int 42) :positive))
+
+(print "classify-int -5:" (classify-int -5))
+(assert (= (classify-int -5) :negative))
+
+(print "classify-int 0:" (classify-int 0))
+(assert (= (classify-int 0) :zero))
+
+(print "classify-int \"hello\":" (classify-int "hello"))
+(assert (= (classify-int "hello") :not-an-int))
+
+;; === Multi-arity with patterns ===
+
+(print "\n--- Multi-Arity with Patterns ---")
+
+; Different arities with type dispatch
+(defn process
+  ([^int n] (+ "int: " (str n)))
+  ([^str s] (+ "str: " s))
+  ([^int a ^int b] (+ "sum: " (str (+ a b))))
+  ([^str a ^str b] (+ "concat: " a b))
+  ([a b] (+ "other pair: " (str a) ", " (str b))))
+
+(print "process 42:" (process 42))
+(assert (= (process 42) "int: 42"))
+
+(print "process \"hi\":" (process "hi"))
+(assert (= (process "hi") "str: hi"))
+
+(print "process 3 4:" (process 3 4))
+(assert (= (process 3 4) "sum: 7"))
+
+(print "process \"a\" \"b\":" (process "a" "b"))
+(assert (= (process "a" "b") "concat: ab"))
+
+(print "process 1 \"x\":" (process 1 "x"))
+(assert (= (process 1 "x") "other pair: 1, x"))
+
+;; === Destructuring with type patterns ===
+
+(print "\n--- Destructuring with Type Patterns ---")
+
+; Type pattern with vector destructuring
+(defn point-distance
+  ([^Vector [x y]]
+   (** (+ (* x x) (* y y)) 0.5))
+  ([^Vector [x y z]]
+   (** (+ (* x x) (* y y) (* z z)) 0.5)))
+
+(print "point-distance [3 4]:" (point-distance [3 4]))
+(assert (= (point-distance [3 4]) 5.0))
+
+(print "point-distance [1 2 2]:" (point-distance [1 2 2]))
+(assert (= (point-distance [1 2 2]) 3.0))
+
+;; === Classic example: safe division ===
+
+(print "\n--- Safe Division ---")
+
+(defn safe-div
+  ([a ^int b :when (= b 0)] nil)
+  ([a b] (/ a b)))
+
+(print "safe-div 10 2:" (safe-div 10 2))
+(assert (= (safe-div 10 2) 5.0))
+
+(print "safe-div 10 0:" (safe-div 10 0))
+(assert (= (safe-div 10 0) nil))
+
+;; === Fibonacci with guards ===
+
+(print "\n--- Fibonacci with Guards ---")
+
+(defn fib
+  ([^int n :when (<= n 0)] 0)
+  ([^int n :when (= n 1)] 1)
+  ([^int n] (+ (fib (- n 1)) (fib (- n 2)))))
+
+(print "fib 0:" (fib 0))
+(assert (= (fib 0) 0))
+
+(print "fib 1:" (fib 1))
+(assert (= (fib 1) 1))
+
+(print "fib 10:" (fib 10))
+(assert (= (fib 10) 55))
+
+;; === Pattern matching with map destructuring ===
+
+(print "\n--- Map Destructuring in Dispatch ---")
+
+(defn handle-request
+  ([{:keys [method path]} :when (= method :get)]
+   (+ "GET " path))
+  ([{:keys [method path body]} :when (= method :post)]
+   (+ "POST " path " with " body))
+  ([request]
+   "Unknown request"))
+
+(print "handle GET:" (handle-request {:method :get :path "/api"}))
+(assert (= (handle-request {:method :get :path "/api"}) "GET /api"))
+
+(print "handle POST:" (handle-request {:method :post :path "/api" :body "data"}))
+(assert (= (handle-request {:method :post :path "/api" :body "data"}) "POST /api with data"))
+
+(print "handle unknown:" (handle-request {:method :delete :path "/api"}))
+(assert (= (handle-request {:method :delete :path "/api"}) "Unknown request"))
+
+;; === Error handling ===
+
+(print "\n--- Error Handling ---")
+
+; No matching pattern should raise MatchError
+(defn strict-int
+  ([^int n] n))
+
+(try
+  (strict-int "not an int")
+  (print "ERROR: Should have raised MatchError!")
+  (assert false)
+  (catch MatchError e
+    (print "Correctly raised MatchError for non-int")))
+
+;; === Complex real-world example ===
+
+(print "\n--- Complex Example: Expression Evaluator ---")
+
+(defn eval-expr
+  ; Literal number
+  ([^int n] n)
+  ([^float n] n)
+  ; Binary operations as vectors
+  ([[:add a b]] (+ (eval-expr a) (eval-expr b)))
+  ([[:sub a b]] (- (eval-expr a) (eval-expr b)))
+  ([[:mul a b]] (* (eval-expr a) (eval-expr b)))
+  ([[:div a b]] (/ (eval-expr a) (eval-expr b)))
+  ; Unknown
+  ([x] (throw (ValueError (+ "Unknown expression: " (str x))))))
+
+(print "eval 5:" (eval-expr 5))
+(assert (= (eval-expr 5) 5))
+
+(print "eval [:add 2 3]:" (eval-expr [:add 2 3]))
+(assert (= (eval-expr [:add 2 3]) 5))
+
+(print "eval [:mul 3 [:add 1 2]]:" (eval-expr [:mul 3 [:add 1 2]]))
+(assert (= (eval-expr [:mul 3 [:add 1 2]]) 9))
+
+;; === Fallback patterns ===
+
+(print "\n--- Fallback Patterns ---")
+
+(defn describe
+  ([^int n :when (>= n 0)] "nonnegative int")
+  ([^int n] "negative int")
+  ([^str s :when (= s "")] "empty string")
+  ([^str s] "nonempty string")
+  ([^Vector v :when (= (len v) 0)] "empty vector")
+  ([^Vector v] "nonempty vector")
+  ([x] "something else"))
+
+(print "describe 5:" (describe 5))
+(assert (= (describe 5) "nonnegative int"))
+
+(print "describe -3:" (describe -3))
+(assert (= (describe -3) "negative int"))
+
+(print "describe \"\":" (describe ""))
+(assert (= (describe "") "empty string"))
+
+(print "describe \"hi\":" (describe "hi"))
+(assert (= (describe "hi") "nonempty string"))
+
+(print "describe []:" (describe []))
+(assert (= (describe []) "empty vector"))
+
+(print "describe [1 2]:" (describe [1 2]))
+(assert (= (describe [1 2]) "nonempty vector"))
+
+(print "describe nil:" (describe nil))
+(assert (= (describe nil) "something else"))
+
+(print "\n=== All Multi-Dispatch Tests Passed! ===")

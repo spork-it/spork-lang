@@ -1,0 +1,41 @@
+;; Test 1: Nested fn at top level
+(print "Test 1: Top-level nested fn")
+(def result1
+  (let [add-one (fn [x] (+ x 1))]
+    (add-one 41)))
+(print "  Expected: 42, Got:" result1)
+
+;; Test 2: Multiple nested fns
+(print "\nTest 2: Multiple nested fns")
+(def result2
+  (let [add (fn [x] (+ x 1))
+        mul (fn [x] (* x 2))]
+    (mul (add 10))))
+(print "  Expected: 22, Got:" result2)
+
+;; Test 3: Nested fn with closure
+(print "\nTest 3: Nested fn with closure")
+(def result3
+  (let [x 10]
+    (let [add-x (fn [y] (+ x y))]
+      (add-x 32))))
+(print "  Expected: 42, Got:" result3)
+
+;; Test 4: set! with hyphenated names
+(print "\nTest 4: set! with hyphenated names")
+(defn test-set-hyph []
+  (let [my-var 0]
+    (set! my-var 42)
+    my-var))
+(print "  Expected: 42, Got:" (test-set-hyph))
+
+;; Test 5: Complex nested structure
+(print "\nTest 5: Complex nested structure")
+(def result5
+  (let [make-adder (fn [n]
+                     (fn [x] (+ x n)))]
+    (let [add5 (make-adder 5)]
+      (add5 37))))
+(print "  Expected: 42, Got:" result5)
+
+(print "\nAll tests completed!")

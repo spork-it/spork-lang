@@ -1,0 +1,31 @@
+; Minimal test for lazy sequences
+
+(print "Testing basic lazy sequences...")
+
+; Test map
+(def m (map inc [1 2 3]))
+(print "map result type:" (type m))
+(print "map realized:" (vec m))
+
+; Test filter
+(def f (filter (fn [x] (> x 2)) [1 2 3 4 5]))
+(print "filter realized:" (vec f))
+
+; Test take
+(def t (take 3 [1 2 3 4 5]))
+(print "take realized:" (vec t))
+
+; Test drop
+(def d (drop 2 [1 2 3 4 5]))
+(print "drop realized:" (vec d))
+
+; Test concat
+(def c (concat [1 2] [3 4]))
+(print "concat realized:" (vec c))
+
+; Test pipeline
+(def result
+  (vec (take 3 (filter (fn [x] (> x 2)) (map inc [1 2 3 4 5 6])))))
+(print "pipeline result:" result)
+
+(print "Done!")

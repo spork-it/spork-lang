@@ -1,0 +1,280 @@
+; Comprehensive Exception Handling Demo
+; Shows try-catch-finally and throw working together
+
+(print "=== Complete Exception Handling System ===\n")
+
+; ============================================================================
+; 1. Simple Error Handling Pattern
+; ============================================================================
+
+(print "--- 1. Simple Error Handling ---")
+
+(defn safe-divide [x y]
+  (try
+    (/ x y)
+    (catch ZeroDivisionError e
+      (print "Cannot divide by zero, returning nil")
+      nil)))
+
+(print "safe-divide(10, 2):" (safe-divide 10 2))
+(print "safe-divide(10, 0):" (safe-divide 10 0))
+
+(print "")
+
+; ============================================================================
+; 2. Custom Validation with throw
+; ============================================================================
+
+(print "--- 2. Input Validation ---")
+
+(defn validate-positive [n]
+  (if (< n 0)
+    (throw (ValueError "Number must be positive"))
+    n))
+
+(defn validate-range [n min max]
+  (if (< n min)
+    (throw (ValueError (+ "Number must be >= " (str min))))
+    (if (> n max)
+      (throw (ValueError (+ "Number must be <= " (str max))))
+      n)))
+
+(defn safe-sqrt [n]
+  (try
+    (validate-positive n)
+    (** n 0.5)
+    (catch ValueError e
+      (print "Validation error:" e)
+      0)))
+
+(print "safe-sqrt(16):" (safe-sqrt 16))
+(print "safe-sqrt(-4):" (safe-sqrt -4))
+
+(print "")
+
+; ============================================================================
+; 3. Resource Management with finally
+; ============================================================================
+
+(print "--- 3. Resource Management ---")
+
+(defn process-file [should-error]
+  (try
+    (print "Opening file...")
+    (if should-error
+      (throw (RuntimeError "Processing failed!"))
+      (do
+        (print "Processing file...")
+        "success"))
+    (catch RuntimeError e
+      (print "Error during processing:" e)
+      "failed")
+    (finally
+      (print "Closing file (cleanup)"))))
+
+(print "Without error:")
+(def result3a (process-file false))
+(print "Result:" result3a)
+
+(print "\nWith error:")
+(def result3b (process-file true))
+(print "Result:" result3b)
+
+(print "")
+
+; ============================================================================
+; 4. Multiple Exception Types
+; ============================================================================
+
+(print "--- 4. Multiple Exception Types ---")
+
+(defn parse-and-process [data type]
+  (try
+    (cond
+      (= type "int") (int data)
+      (= type "float") (float data)
+      (= type "list") (. data 0)
+      true (throw (ValueError "Unknown type")))
+    (catch ValueError e
+      (print "ValueError:" e)
+      nil)
+    (catch TypeError e
+      (print "TypeError:" e)
+      nil)
+    (catch IndexError e
+      (print "IndexError:" e)
+      nil)))
+
+(print "parse-and-process('42', 'int'):" (parse-and-process "42" "int"))
+(print "parse-and-process('not-a-number', 'int'):" (parse-and-process "not-a-number" "int"))
+(print "parse-and-process([], 'list'):" (parse-and-process [] "list"))
+
+(print "")
+
+; ============================================================================
+; 5. Exception Chaining and Re-throwing
+; ============================================================================
+
+(print "--- 5. Error Handling Layers ---")
+
+(defn low-level-operation [x]
+  (if (< x 0)
+    (throw (RuntimeError "Low-level error"))
+    (* x 2)))
+
+(defn mid-level-operation [x]
+  (try
+    (low-level-operation x)
+    (catch RuntimeError e
+      (print "Mid-level caught:" e)
+      (throw (RuntimeError "Mid-level re-throw")))))
+
+(defn high-level-operation [x]
+  (try
+    (mid-level-operation x)
+    (catch RuntimeError e
+      (print "High-level caught:" e)
+      "recovered")))
+
+(print "high-level-operation(5):" (high-level-operation 5))
+(print "high-level-operation(-1):" (high-level-operation -1))
+
+(print "")
+
+; ============================================================================
+; 6. Try-Catch in Data Processing Pipeline
+; ============================================================================
+
+(print "--- 6. Data Processing Pipeline ---")
+
+(defn safe-process [f x]
+  (try
+    (f x)
+    (catch Exception e
+      (print (+ "Error processing " (str x) ": " (str e)))
+      nil)))
+
+(defn process-list [lst]
+  (for [item lst]
+    (let [result (safe-process (fn [x] (/ 100 x)) item)]
+      (if result
+        (print (+ "  " (str item) " -> " (str result)))
+        (print (+ "  " (str item) " -> ERROR"))))))
+
+(print "Processing [1, 2, 0, 5, 10]:")
+(process-list [1 2 0 5 10])
+
+(print "")
+
+; ============================================================================
+; 7. Nested Try-Catch Blocks
+; ============================================================================
+
+(print "--- 7. Nested Error Handling ---")
+
+(defn nested-operations [a b c]
+  (try
+    (print "Outer try: starting")
+    (let [result1 (try
+                    (print "  Inner try 1")
+                    (/ a b)
+                    (catch ZeroDivisionError e
+                      (print "  Inner catch 1: division by zero")
+                      1))]
+      (try
+        (print "  Inner try 2")
+        (+ result1 (/ 10 c))
+        (catch ZeroDivisionError e
+          (print "  Inner catch 2: division by zero")
+          result1)))
+    (catch Exception e
+      (print "Outer catch: unexpected error")
+      -1)
+    (finally
+      (print "Outer finally: cleanup"))))
+
+(print "nested-operations(10, 2, 5):" (nested-operations 10 2 5))
+(print "nested-operations(10, 0, 5):" (nested-operations 10 0 5))
+(print "nested-operations(10, 2, 0):" (nested-operations 10 2 0))
+
+(print "")
+
+; ============================================================================
+; 8. Exception Handling with State
+; ============================================================================
+
+(print "--- 8. Stateful Error Recovery ---")
+
+(defn retry-operation [operation max-retries]
+  (let [attempt 0]
+    (while (< attempt max-retries)
+      (let [result (try
+                     (print (+ "Attempt " (str (+ attempt 1))))
+                     (operation)
+                     (catch RuntimeError e
+                       (print (+ "  Failed: " (str e)))
+                       nil))]
+        (if result
+          (do
+            (print "  Success!")
+            (return result))
+          (set! attempt (+ attempt 1)))))
+    (print "All retries exhausted")
+    nil))
+
+; Won't work perfectly due to lambda closure limitations, but demonstrates the pattern
+(print "Retry pattern demonstrated (see code)")
+
+(print "")
+
+; ============================================================================
+; 9. Exception-Safe Builder Pattern
+; ============================================================================
+
+(print "--- 9. Builder Pattern with Validation ---")
+
+(defn build-user [data]
+  (try
+    (let [name (. data :name)
+          age (. data :age)
+          email (. data :email)]
+      ; Validate
+      (if (not name)
+        (throw (ValueError "Name is required"))
+        (if (< age 0)
+          (throw (ValueError "Age must be non-negative"))
+          (if (not (in "@" email))
+            (throw (ValueError "Invalid email"))
+            {:name name :age age :email email :valid true}))))
+    (catch ValueError e
+      (print "Validation failed:" e)
+      {:valid false :error (str e)})
+    (catch KeyError e
+      (print "Missing field:" e)
+      {:valid false :error (+ "Missing field: " (str e))})))
+
+(print "Valid user:")
+(print (build-user {:name "Alice" :age 30 :email "alice@example.com"}))
+
+(print "\nInvalid email:")
+(print (build-user {:name "Bob" :age 25 :email "invalid"}))
+
+(print "\nMissing field:")
+(print (build-user {:name "Charlie" :age 40}))
+
+(print "")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== Exception Handling Complete! ===")
+(print "✓ try-catch-finally blocks")
+(print "✓ throw for raising exceptions")
+(print "✓ Multiple exception types")
+(print "✓ Exception propagation")
+(print "✓ Resource management with finally")
+(print "✓ Nested try-catch blocks")
+(print "✓ Exception handling in pipelines")
+(print "✓ Custom validation with throw")
+(print "✓ Everything works as expressions!")

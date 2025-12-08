@@ -1,0 +1,9 @@
+;; Test macro with hyphenated name
+(defmacro my-when [test & body]
+  `(if ~test (do ~@body) nil))
+
+(my-when true
+  (print "This should print"))
+
+(my-when false
+  (print "This should not print"))

@@ -1,0 +1,332 @@
+; Test file for pattern matching
+; Tests the match form and pattern syntax
+
+(print "=== Testing Pattern Matching ===\n")
+
+;; === Literal patterns ===
+
+(print "--- Literal Patterns ---")
+
+; nil pattern
+(let [result (match nil
+               nil :nothing
+               _   :something)]
+  (print "match nil -> nil:" result)
+  (assert (= result :nothing)))
+
+; boolean patterns
+(let [result (match true
+               true  :yes
+               false :no)]
+  (print "match true -> true:" result)
+  (assert (= result :yes)))
+
+(let [result (match false
+               true  :yes
+               false :no)]
+  (print "match false -> false:" result)
+  (assert (= result :no)))
+
+; number patterns
+(let [result (match 42
+               0  :zero
+               42 :answer
+               _  :other)]
+  (print "match 42 -> 42:" result)
+  (assert (= result :answer)))
+
+; string patterns
+(let [result (match "hello"
+               "goodbye" :bye
+               "hello"   :hi
+               _         :other)]
+  (print "match \"hello\" -> \"hello\":" result)
+  (assert (= result :hi)))
+
+; keyword patterns
+(let [result (match :ok
+               :error :bad
+               :ok    :good
+               _      :other)]
+  (print "match :ok -> :ok:" result)
+  (assert (= result :good)))
+
+;; === Wildcard patterns ===
+
+(print "\n--- Wildcard Patterns ---")
+
+(let [result (match 999
+               _ :anything)]
+  (print "match 999 -> _:" result)
+  (assert (= result :anything)))
+
+;; === Variable binding patterns ===
+
+(print "\n--- Variable Binding Patterns ---")
+
+(let [result (match 42
+               x x)]
+  (print "match 42 -> x (returns x):" result)
+  (assert (= result 42)))
+
+(let [result (match "test"
+               0 :zero
+               s (+ "got: " s))]
+  (print "match \"test\" -> s:" result)
+  (assert (= result "got: test")))
+
+;; === Vector patterns ===
+
+(print "\n--- Vector Patterns ---")
+
+; empty vector
+(let [result (match []
+               [] :empty
+               _  :not-empty)]
+  (print "match [] -> []:" result)
+  (assert (= result :empty)))
+
+; fixed-length vector
+(let [result (match [1 2 3]
+               [a b c] (+ a b c)
+               _       :other)]
+  (print "match [1 2 3] -> [a b c]:" result)
+  (assert (= result 6)))
+
+; length mismatch (should fail to match)
+(let [result (match [1 2]
+               [a b c] :three
+               [a b]   :two
+               _       :other)]
+  (print "match [1 2] length mismatch:" result)
+  (assert (= result :two)))
+
+; vector with rest
+(let [result (match [1 2 3 4 5]
+               [a b & rest] [a b rest]
+               _            :other)]
+  (print "match [1 2 3 4 5] -> [a b & rest]:" result)
+  (assert (= (nth result 0) 1))
+  (assert (= (nth result 1) 2)))
+
+; nested vector
+(let [result (match [[1 2] [3 4]]
+               [[a b] [c d]] (+ a b c d)
+               _             :other)]
+  (print "match [[1 2] [3 4]] -> [[a b] [c d]]:" result)
+  (assert (= result 10)))
+
+;; === Map patterns ===
+
+(print "\n--- Map Patterns ---")
+
+; :keys syntax
+(let [result (match {:name "Alice" :age 30}
+               {:keys [name age]} (+ name " is " (str age))
+               _                  :other)]
+  (print "match {:name \"Alice\" :age 30} -> {:keys [name age]}:" result)
+  (assert (= result "Alice is 30")))
+
+; Clojure-style {binding :key}
+(let [result (match {:x 10 :y 20}
+               {a :x b :y} (+ a b)
+               _           :other)]
+  (print "match {:x 10 :y 20} -> {a :x b :y}:" result)
+  (assert (= result 30)))
+
+; Missing key should fail
+(let [result (match {:x 10}
+               {:keys [x y]} :has-both
+               {:keys [x]}   :has-x
+               _             :other)]
+  (print "match {:x 10} missing :y:" result)
+  (assert (= result :has-x)))
+
+;; === Type patterns ===
+
+(print "\n--- Type Patterns ---")
+
+; int type
+(let [result (match 42
+               (^int n)  [:int n]
+               (^str s)  [:str s]
+               _         :other)]
+  (print "match 42 -> (^int n):" result)
+  (assert (= (nth result 0) :int))
+  (assert (= (nth result 1) 42)))
+
+; str type
+(let [result (match "hello"
+               (^int n)  [:int n]
+               (^str s)  [:str s]
+               _         :other)]
+  (print "match \"hello\" -> (^str s):" result)
+  (assert (= (nth result 0) :str))
+  (assert (= (nth result 1) "hello")))
+
+; list type
+(let [result (match [1 2 3]
+               (^list lst)   [:list lst]
+               (^Vector pv) [:Vector pv]
+               _             :other)]
+  (print "match [1 2 3] -> (^Vector pv):" result)
+  (assert (= (nth result 0) :Vector)))
+
+; type pattern with nested vector pattern
+(let [result (match [10 20]
+               (^Vector [a b]) (+ a b)
+               _                :other)]
+  (print "match [10 20] -> (^Vector [a b]):" result)
+  (assert (= result 30)))
+
+;; === Guards (:when) ===
+
+(print "\n--- Guards (:when) ---")
+
+; simple guard
+(let [result (match 10
+               (n :when (> n 5)) :big
+               (n :when (<= n 5)) :small
+               _                  :other)]
+  (print "match 10 with guard (> n 5):" result)
+  (assert (= result :big)))
+
+(let [result (match 3
+               (n :when (> n 5)) :big
+               (n :when (<= n 5)) :small
+               _                  :other)]
+  (print "match 3 with guard (<= n 5):" result)
+  (assert (= result :small)))
+
+; type pattern with guard
+(let [result (match 42
+               ((^int n) :when (>= n 0)) :nonnegative
+               (^int n)                  :negative
+               _                         :not-int)]
+  (print "match 42 with type+guard:" result)
+  (assert (= result :nonnegative)))
+
+(let [result (match -5
+               ((^int n) :when (>= n 0)) :nonnegative
+               (^int n)                  :negative
+               _                         :not-int)]
+  (print "match -5 with type+guard:" result)
+  (assert (= result :negative)))
+
+; guard with destructuring
+(let [result (match [3 4]
+               ([a b] :when (> (+ a b) 10)) :big-sum
+               ([a b] :when (<= (+ a b) 10)) :small-sum
+               _                             :other)]
+  (print "match [3 4] with destructuring+guard:" result)
+  (assert (= result :small-sum)))
+
+;; === Complex patterns ===
+
+(print "\n--- Complex Patterns ---")
+
+; Multiple cases with fallthrough
+(defn classify [x]
+  (match x
+    nil           :nil
+    true          :true
+    false         :false
+    0             :zero
+    ""            :empty-string
+    []            :empty-vector
+    (^int n)      :int
+    (^str s)      :string
+    (^Vector v)  :vector
+    (^dict d)     :dict
+    _             :unknown))
+
+(print "classify nil:" (classify nil))
+(assert (= (classify nil) :nil))
+
+(print "classify true:" (classify true))
+(assert (= (classify true) :true))
+
+(print "classify 42:" (classify 42))
+(assert (= (classify 42) :int))
+
+(print "classify \"hi\":" (classify "hi"))
+(assert (= (classify "hi") :string))
+
+(print "classify [1 2]:" (classify [1 2]))
+(assert (= (classify [1 2]) :vector))
+
+; Nested complex pattern
+(let [data {:type :point :coords [3 4]}
+      result (match data
+               {:keys [type coords]}
+                 (match [type coords]
+                   [:point [x y]] (+ (* x x) (* y y))
+                   _              :unknown)
+               _                    :invalid)]
+  (print "nested match for point distance²:" result)
+  (assert (= result 25)))
+
+;; === Error handling ===
+
+(print "\n--- Error Handling ---")
+
+; MatchError when no pattern matches
+(try
+  (match 42
+    "not a number" :string
+    nil            :nil)
+  (print "ERROR: Should have raised MatchError!")
+  (assert false)
+  (catch MatchError e
+    (print "Correctly raised MatchError:" (str e))))
+
+;; === Real-world examples ===
+
+(print "\n--- Real-World Examples ---")
+
+; Option/Maybe pattern
+(defn safe-div [a b]
+  (if (= b 0)
+    nil
+    (/ a b)))
+
+(defn handle-result [result]
+  (match result
+    nil :division-by-zero
+    n   [:ok n]))
+
+(print "safe-div 10 2:" (handle-result (safe-div 10 2)))
+(assert (= (nth (handle-result (safe-div 10 2)) 1) 5.0))
+
+(print "safe-div 10 0:" (handle-result (safe-div 10 0)))
+(assert (= (handle-result (safe-div 10 0)) :division-by-zero))
+
+; Tree traversal
+(defn sum-tree [tree]
+  (match tree
+    nil         0
+    (^int n)    n
+    [left right] (+ (sum-tree left) (sum-tree right))
+    _           0))
+
+(let [tree [[1 2] [3 [4 5]]]]
+  (print "sum-tree [[1 2] [3 [4 5]]]:" (sum-tree tree))
+  (assert (= (sum-tree tree) 15)))
+
+; Command dispatch
+(defn handle-command [cmd]
+  (match cmd
+    {:keys [action target]}
+      (match action
+        :create (+ "Creating " target)
+        :delete (+ "Deleting " target)
+        :update (+ "Updating " target)
+        _       "Unknown action")
+    _
+      "Invalid command"))
+
+(print "handle-command {:action :create :target \"file\"}:"
+       (handle-command {:action :create :target "file"}))
+(assert (= (handle-command {:action :create :target "file"}) "Creating file"))
+
+(print "\n=== All Pattern Matching Tests Passed! ===")

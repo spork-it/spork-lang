@@ -1,0 +1,109 @@
+; Test file for async/await support
+
+(ns test-async
+  (:import [asyncio]))
+
+(print "=== Testing async/await support ===\n")
+
+; Test 1: Simple async function
+(defn ^async simple-async []
+  (print "In simple async function")
+  42)
+
+; Test 2: Async function with await
+(defn ^async with-await []
+  (print "Before await")
+  (await (asyncio.sleep 0.01))
+  (print "After await")
+  "completed")
+
+; Test 3: Async function that awaits another async function
+(defn ^async fetch-data [x]
+  (await (asyncio.sleep 0.01))
+  (* x 2))
+
+(defn ^async process-data []
+  (def a (await (fetch-data 5)))
+  (def b (await (fetch-data 10)))
+  (+ a b))
+
+; Test 4: Async function with multiple awaits in sequence
+(defn ^async multi-await []
+  (def results (list))
+  (.append results (await (fetch-data 1)))
+  (.append results (await (fetch-data 2)))
+  (.append results (await (fetch-data 3)))
+  results)
+
+; Test 5: Async generator (requires both ^async and ^generator)
+(defn ^async ^generator async-range [n]
+  "Create an async generator"
+  (for [i (range n)]
+    (await (asyncio.sleep 0.001))
+    (yield i)))
+
+(defn ^async test-async-for []
+  (def results (list))
+  (async-for [x (async-range 5)]
+    (.append results x))
+  results)
+
+; Test 6: Async anonymous function (fn ^async ...)
+(defn ^async test-async-fn []
+  (def async-lambda (fn ^async [x]
+                      (await (asyncio.sleep 0.01))
+                      (* x 3)))
+  (await (async-lambda 7)))
+
+; Test 7: Await in expression position
+(defn ^async await-in-expr []
+  (+ 10 (await (fetch-data 5))))
+
+; Run all tests
+(defn ^async run-tests []
+  (print "Test 1: Simple async function")
+  (def r1 (await (simple-async)))
+  (print "Result:" r1)
+  (assert (= r1 42))
+  (print "PASS\n")
+
+  (print "Test 2: Async with await")
+  (def r2 (await (with-await)))
+  (print "Result:" r2)
+  (assert (= r2 "completed"))
+  (print "PASS\n")
+
+  (print "Test 3: Nested async calls")
+  (def r3 (await (process-data)))
+  (print "Result:" r3)
+  (assert (= r3 30))  ; (5*2) + (10*2) = 10 + 20 = 30
+  (print "PASS\n")
+
+  (print "Test 4: Multiple awaits")
+  (def r4 (await (multi-await)))
+  (print "Result:" r4)
+  (assert (= (vec r4) [2 4 6]))  ; [1*2, 2*2, 3*2]
+  (print "PASS\n")
+
+  (print "Test 5: Async for loop")
+  (def r5 (await (test-async-for)))
+  (print "Result:" r5)
+  (assert (= (vec r5) [0 1 2 3 4]))
+  (print "PASS\n")
+
+  (print "Test 6: Async anonymous function")
+  (def r6 (await (test-async-fn)))
+  (print "Result:" r6)
+  (assert (= r6 21))  ; 7 * 3
+  (print "PASS\n")
+
+  (print "Test 7: Await in expression position")
+  (def r7 (await (await-in-expr)))
+  (print "Result:" r7)
+  (assert (= r7 20))  ; 10 + (5*2)
+  (print "PASS\n")
+
+  (print "=== All async tests passed! ==="))
+
+; Run the async tests
+(asyncio.run (run-tests))

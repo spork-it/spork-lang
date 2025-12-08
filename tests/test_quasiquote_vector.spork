@@ -1,0 +1,28 @@
+;; Test quasiquote with vectors
+
+(def x 42)
+(def y 99)
+
+;; Basic vector quasiquote
+(print "Basic vector quasiquote:")
+(print `[1 2 3])
+
+;; Vector with unquote
+(print "\nVector with unquote:")
+(print `[~x])
+(print `[1 ~x 3])
+
+;; Vector with multiple unquotes
+(print "\nVector with multiple unquotes:")
+(print `[~x ~y])
+
+;; Vector with unquote-splicing
+(print "\nVector with unquote-splicing:")
+(def items [10 20 30])
+(print `[~@items])
+(print `[1 ~@items 4])
+
+;; Nested vectors
+(print "\nNested vectors:")
+(print `[[~x]])
+(print `[1 [~x ~y] 3])

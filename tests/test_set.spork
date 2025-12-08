@@ -1,0 +1,184 @@
+(ns test-set
+  (:import [operator]
+           [builtins]
+           [spork.runtime.pds :as pds]))
+
+(print "=== Testing Persistent Set ===\n")
+
+; Test creating empty set
+(print "--- Empty Set ---")
+(def empty-set (hash-set))
+(print "empty-set:" empty-set)
+(print "(count empty-set):" (count empty-set))
+(print "(seq empty-set):" (seq empty-set))
+
+; Test creating set from iterable
+(print "\n--- Set from iterable ---")
+(def s (hash-set [1 2 3]))
+(print "s:" s)
+(print "(count s):" (count s))
+(print "(type s):" (type s))
+
+; Test contains
+(print "\n--- Contains ---")
+(print "(contains? s 1):" (contains? s 1))
+(print "(contains? s 2):" (contains? s 2))
+(print "(contains? s 99):" (contains? s 99))
+(print "(in 1 s):" (in 1 s))
+(print "(in 99 s):" (in 99 s))
+
+; Test conj
+(print "\n--- conj ---")
+(def s2 (conj s 4))
+(print "(conj s 4):" s2)
+(print "s unchanged:" s)
+(print "(count s2):" (count s2))
+
+; Test conj with existing element (should return same set)
+(def s3 (conj s 2))
+(print "(conj s 2) - already exists:" s3)
+(print "same object?:" (is s s3))
+
+; Test disj
+(print "\n--- disj ---")
+(def s4 (disj s 2))
+(print "(disj s 2):" s4)
+(print "s unchanged:" s)
+(print "(count s4):" (count s4))
+
+; Test disj with non-existent element (should return same set)
+(def s5 (disj s 99))
+(print "(disj s 99) - doesn't exist:" s5)
+(print "same object?:" (is s s5))
+
+; Test iteration
+(print "\n--- Iteration ---")
+(print "Iterating over s:")
+(for [x s]
+  (print "  -" x))
+
+; Test to-seq
+(print "\n--- to-seq ---")
+(print "(seq s):" (seq s))
+
+; Test set literal syntax
+(print "\n--- Set Literal ---")
+(def lit-set #{:a :b :c})
+(print "lit-set:" lit-set)
+(print "(count lit-set):" (count lit-set))
+(print "(contains? lit-set :a):" (contains? lit-set :a))
+(print "(contains? lit-set :z):" (contains? lit-set :z))
+
+; Test union
+(print "\n--- Union (bit-or) ---")
+(def a #{1 2 3})
+(def b #{3 4 5})
+(print "a:" a)
+(print "b:" b)
+(print "(bit-or a b):" (bit-or a b))
+(print "(count (bit-or a b)):" (count (bit-or a b)))
+
+; Test intersection
+(print "\n--- Intersection (bit-and) ---")
+(print "(bit-and a b):" (bit-and a b))
+(print "(count (bit-and a b)):" (count (bit-and a b)))
+
+; Test difference
+(print "\n--- Difference (set-difference) ---")
+; Use Python's operator module for set difference since - is arithmetic
+(print "(operator.sub a b):" (operator.sub a b))
+(print "(count (operator.sub a b)):" (count (operator.sub a b)))
+
+; Test symmetric difference
+(print "\n--- Symmetric Difference (bit-xor) ---")
+(print "(bit-xor a b):" (bit-xor a b))
+(print "(count (bit-xor a b)):" (count (bit-xor a b)))
+
+; Test equality
+(print "\n--- Equality ---")
+(def a2 #{3 2 1})  ; same elements, different order
+(print "a:" a)
+(print "a2:" a2)
+(print "(= a a2):" (= a a2))
+(print "(= a b):" (= a b))
+(print "(!= a b):" (!= a b))
+
+; Test subset/superset
+(print "\n--- Subset/Superset ---")
+(def c #{1 2})
+(print "a:" a)
+(print "c:" c)
+(print "(< c a) - proper subset:" (< c a))
+(print "(<= c a) - subset:" (<= c a))
+(print "(> a c) - proper superset:" (> a c))
+(print "(>= a c) - superset:" (>= a c))
+(print "(<= a a) - subset of self:" (<= a a))
+(print "(< a a) - proper subset of self:" (< a a))
+
+; Test hash
+(print "\n--- Hash ---")
+(print "(hash a):" (hash a))
+(print "(hash a2):" (hash a2))
+(print "(= (hash a) (hash a2)):" (= (hash a) (hash a2)))
+
+; Test with different types
+(print "\n--- Mixed Types ---")
+(def mixed #{1 "hello" :keyword 3.14})
+(print "mixed:" mixed)
+(print "(contains? mixed 1):" (contains? mixed 1))
+(print "(contains? mixed \"hello\"):" (contains? mixed "hello"))
+(print "(contains? mixed :keyword):" (contains? mixed :keyword))
+
+; Test transient operations
+(print "\n--- Transient ---")
+(def base #{1 2 3})
+(print "base:" base)
+(let [t (.transient base)
+      _ (.conj_mut t 4)
+      _ (.conj_mut t 5)
+      _ (.disj_mut t 2)
+      result (.persistent t)]
+  (print "after transient ops:" result)
+  (print "base unchanged:" base))
+
+; Test transient error after persistent
+(print "\n--- Transient Error After Persistent ---")
+(let [t (.transient base)
+      _ (.conj_mut t 10)
+      result (.persistent t)]
+  (try
+    (.conj_mut t 20)
+    (print "ERROR: should have raised exception!")
+  (catch RuntimeError e
+    (print "Caught expected error:" (str e)))))
+
+; Test union with Python set
+(print "\n--- Interop with Python set ---")
+(def py-set (builtins.set [4 5 6]))
+(print "py-set:" py-set)
+(print "(bit-or a py-set):" (bit-or a py-set))
+
+; Test building large set
+(print "\n--- Large Set ---")
+(def large (hash-set (range 100)))
+(print "(count large):" (count large))
+(print "(contains? large 50):" (contains? large 50))
+(print "(contains? large 100):" (contains? large 100))
+
+; Test EMPTY_SET constant
+(print "\n--- EMPTY_SET constant ---")
+(print "pds.EMPTY_SET:" pds.EMPTY_SET)
+(print "(count pds.EMPTY_SET):" (count pds.EMPTY_SET))
+(print "(= (hash-set) pds.EMPTY_SET):" (= (hash-set) pds.EMPTY_SET))
+
+; Test into with set
+(print "\n--- into with set ---")
+(print "(into #{} [1 2 3 2 1]):" (into #{} [1 2 3 2 1]))
+(print "(into #{1 2} [3 4]):" (into #{1 2} [3 4]))
+
+; Test empty on set
+(print "\n--- empty ---")
+(print "(empty #{1 2 3}):" (empty #{1 2 3}))
+(print "(count (empty #{1 2 3})):" (count (empty #{1 2 3})))
+
+(print "\n=== All Set tests passed! ===")

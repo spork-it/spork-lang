@@ -1,0 +1,146 @@
+;; Test protocols
+(ns tests.test_protocols)
+
+;; === Basic Protocol Definition ===
+
+(defprotocol IGreet
+  "A protocol for things that can greet"
+  (greet [x])
+  (farewell [x]))
+
+;; === Extend for a Python builtin ===
+
+(extend-type str
+  IGreet
+  (greet [s] (+ "Hello, " s "!"))
+  (farewell [s] (+ "Goodbye, " s "!")))
+
+;; Test basic extension
+(print "Testing str extension:")
+(print (greet "World"))
+(print (farewell "World"))
+
+;; === Define a Spork class and extend ===
+
+(defclass Person
+  (defn __init__ [self name]
+    (set! self.name name)))
+
+(extend-type Person
+  IGreet
+  (greet [p] (+ "Hello, " p.name "!"))
+  (farewell [p] (+ "See you later, " p.name "!")))
+
+(def alice (Person "Alice"))
+(print "\nTesting Person extension:")
+(print (greet alice))
+(print (farewell alice))
+
+;; === Test isinstance with protocol ABC ===
+
+(print "\nTesting isinstance:")
+(print (+ "Is 'Bob' an IGreet? " (str (isinstance "Bob" IGreet))))
+(print (+ "Is alice an IGreet? " (str (isinstance alice IGreet))))
+(print (+ "Is 42 an IGreet? " (str (isinstance 42 IGreet))))
+
+;; === Numeric protocol ===
+
+(defprotocol INumeric
+  "Protocol for numeric operations"
+  (add-one [x])
+  (double-val [x]))
+
+(extend-type int
+  INumeric
+  (add-one [n] (+ n 1))
+  (double-val [n] (* n 2)))
+
+(extend-type float
+  INumeric
+  (add-one [n] (+ n 1.0))
+  (double-val [n] (* n 2.0)))
+
+(print "\nTesting INumeric:")
+(print (+ "add-one 5: " (str (add-one 5))))
+(print (+ "double-val 5: " (str (double-val 5))))
+(print (+ "add-one 3.14: " (str (add-one 3.14))))
+(print (+ "double-val 3.14: " (str (double-val 3.14))))
+
+;; === Structural protocol ===
+
+(defprotocol ^structural ICloseable
+  "Protocol for things that can be closed (with duck-typing fallback)"
+  (close [x]))
+
+;; Define a class with a close method but don't extend the protocol
+(defclass Resource
+  (defn __init__ [self name]
+    (set! self.name name)
+    (set! self.closed false))
+  (defn close [self]
+    (set! self.closed true)
+    (print (+ "Closed " self.name))))
+
+(def res (Resource "my-resource"))
+(print "\nTesting structural protocol:")
+(print (+ "Resource closed before: " (str res.closed)))
+(close res)  ; Should work via structural dispatch
+(print (+ "Resource closed after: " (str res.closed)))
+
+;; === extend-protocol (sugar for multiple extend-type) ===
+
+(defprotocol IStringify
+  "Protocol for converting to string representation"
+  (stringify [x]))
+
+(extend-protocol IStringify
+  int
+  (stringify [n] (+ "Int<" (str n) ">"))
+
+  float
+  (stringify [n] (+ "Float<" (str n) ">"))
+
+  str
+  (stringify [s] (+ "Str<" s ">")))
+
+(print "\nTesting extend-protocol:")
+(print (stringify 42))
+(print (stringify 3.14))
+(print (stringify "hello"))
+
+;; === Protocol with multiple args ===
+
+(defprotocol ICollection
+  "Protocol for collection-like things"
+  (add-item [coll item])
+  (get-item [coll idx]))
+
+(extend-type list
+  ICollection
+  (add-item [coll item]
+    (let [result (list coll)]  ; copy the list
+      (.append result item)
+      result))
+  (get-item [coll idx] (nth coll idx)))
+
+(print "\nTesting multi-arg protocol:")
+(def my-list (list [1 2 3]))  ; Convert Vector to Python list
+(print (+ "Original: " (str my-list)))
+(def new-list (add-item my-list 4))
+(print (+ "After add-item: " (str new-list)))
+(print (+ "get-item at 0: " (str (get-item my-list 0))))
+
+;; === Pattern matching on protocols ===
+
+(print "\nTesting pattern matching on protocols:")
+(defn describe [x]
+  (match x
+    (^IGreet g) (+ "Greeter: " (greet g))
+    (^INumeric n) (+ "Number: " (str (double-val n)))
+    _ "Unknown"))
+
+(print (describe "Test"))
+(print (describe alice))
+(print (describe 10))
+
+(print "\n=== All protocol tests passed! ===")

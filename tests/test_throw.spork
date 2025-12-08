@@ -1,0 +1,237 @@
+; Test file for throw builtin
+
+(print "=== Testing throw ===\n")
+
+; ============================================================================
+; 1. Basic throw in try-catch
+; ============================================================================
+
+(print "--- 1. Basic throw ---")
+
+(defn test-throw-basic []
+  (try
+    (print "Before throw")
+    (throw (ValueError "Custom error message"))
+    (print "After throw - should not print")
+    (catch ValueError e
+      (print "Caught ValueError:" e)
+      "handled")))
+
+(print "Result:" (test-throw-basic))
+
+(print "")
+
+; ============================================================================
+; 2. Throw different exception types
+; ============================================================================
+
+(print "--- 2. Different exception types ---")
+
+(defn divide-with-check [x y]
+  (if (= y 0)
+    (throw (ZeroDivisionError "Cannot divide by zero!"))
+    (/ x y)))
+
+(def result2a
+  (try
+    (divide-with-check 10 2)
+    (catch ZeroDivisionError e
+      (print "Caught:" e)
+      -1)))
+
+(print "divide-with-check(10, 2):" result2a)
+
+(def result2b
+  (try
+    (divide-with-check 10 0)
+    (catch ZeroDivisionError e
+      (print "Caught:" e)
+      -1)))
+
+(print "divide-with-check(10, 0):" result2b)
+
+(print "")
+
+; ============================================================================
+; 3. Throw propagates up
+; ============================================================================
+
+(print "--- 3. Exception propagation ---")
+
+(defn inner []
+  (print "Inner function throwing")
+  (throw (RuntimeError "Error from inner")))
+
+(defn middle []
+  (print "Middle function calling inner")
+  (inner)
+  (print "This won't print"))
+
+(defn outer []
+  (try
+    (middle)
+    (catch RuntimeError e
+      (print "Caught in outer:" e)
+      "recovered")))
+
+(print "Propagation result:" (outer))
+
+(print "")
+
+; ============================================================================
+; 4. Throw with standard exceptions
+; ============================================================================
+
+(print "--- 4. Standard exceptions ---")
+
+(defn test-exceptions [type]
+  (try
+    (cond
+      (= type "value") (throw (ValueError "Bad value"))
+      (= type "type") (throw (TypeError "Bad type"))
+      (= type "key") (throw (KeyError "Bad key"))
+      (= type "index") (throw (IndexError "Bad index"))
+      true (throw (Exception "Unknown error")))
+    (catch ValueError e
+      (print "ValueError:" e)
+      "value-error")
+    (catch TypeError e
+      (print "TypeError:" e)
+      "type-error")
+    (catch KeyError e
+      (print "KeyError:" e)
+      "key-error")
+    (catch IndexError e
+      (print "IndexError:" e)
+      "index-error")
+    (catch Exception e
+      (print "General exception:" e)
+      "general-error")))
+
+(print "test-exceptions('value'):" (test-exceptions "value"))
+(print "test-exceptions('type'):" (test-exceptions "type"))
+(print "test-exceptions('key'):" (test-exceptions "key"))
+(print "test-exceptions('other'):" (test-exceptions "other"))
+
+(print "")
+
+; ============================================================================
+; 5. Throw in expression context
+; ============================================================================
+
+(print "--- 5. Throw as expression ---")
+
+(def result5
+  (try
+    (+ 10 (if true (throw (ValueError "Error in if")) 20))
+    (catch ValueError e
+      (print "Caught in expression context:" e)
+      -1)))
+
+(print "Expression context result:" result5)
+
+(print "")
+
+; ============================================================================
+; 6. Throw with finally
+; ============================================================================
+
+(print "--- 6. Throw with finally ---")
+
+(defn test-throw-finally []
+  (try
+    (print "About to throw")
+    (throw (RuntimeError "Error!"))
+    (catch RuntimeError e
+      (print "In catch block")
+      "caught")
+    (finally
+      (print "Finally block executed"))))
+
+(print "Result:" (test-throw-finally))
+
+(print "")
+
+; ============================================================================
+; 7. Throw without arguments (re-raise) - not supported
+; ============================================================================
+
+(print "--- 7. Validation ---")
+
+; throw requires exactly one argument
+; (throw) by itself would be a syntax error
+
+(print "throw requires an exception expression")
+
+(print "")
+
+; ============================================================================
+; 8. Throw in nested contexts
+; ============================================================================
+
+(print "--- 8. Nested contexts ---")
+
+(def result8
+  (try
+    (for [x [1 2 3]]
+      (print "Processing:" x)
+      (if (= x 2)
+        (throw (RuntimeError "Found 2!"))
+        x))
+    (catch RuntimeError e
+      (print "Caught in outer try:" e)
+      "stopped-at-2")))
+
+(print "Nested result:" result8)
+
+(print "")
+
+; ============================================================================
+; 9. Throw with custom exception instances
+; ============================================================================
+
+(print "--- 9. Custom exception instances ---")
+
+(defn validate-age [age]
+  (if (< age 0)
+    (throw (ValueError (+ "Invalid age: " (str age))))
+    (if (> age 150)
+      (throw (ValueError (+ "Age too large: " (str age))))
+      age)))
+
+(print "validate-age(25):"
+  (try
+    (validate-age 25)
+    (catch ValueError e
+      (print "Error:" e)
+      0)))
+
+(print "validate-age(-5):"
+  (try
+    (validate-age -5)
+    (catch ValueError e
+      (print "Error:" e)
+      0)))
+
+(print "validate-age(200):"
+  (try
+    (validate-age 200)
+    (catch ValueError e
+      (print "Error:" e)
+      0)))
+
+(print "")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== throw Complete! ===")
+(print "✓ Basic throw in try-catch")
+(print "✓ Different exception types")
+(print "✓ Exception propagation")
+(print "✓ Standard Python exceptions")
+(print "✓ Throw as expression")
+(print "✓ Throw with finally")
+(print "✓ Throw in nested contexts")
+(print "✓ Custom exception messages")

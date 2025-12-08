@@ -1,0 +1,120 @@
+;; Test file demonstrating statement-friendly features in let bodies
+;; This showcases why the wrapper function approach is superior
+
+;; Test 1: let with while loop in body (statement, not expression)
+(def test-let-with-while-statement
+  (fn []
+    (let [total 0
+          i 0]
+      (while (< i 5)
+        (set! total (+ total i))
+        (set! i (+ i 1)))
+      total)))
+
+;; Test 2: let with for loop in body
+(def test-let-with-for-statement
+  (fn []
+    (let [items [1 2 3 4 5]
+          sum 0]
+      (for [x items]
+        (set! sum (+ sum x)))
+      sum)))
+
+;; Test 3: let with multiple statements including set!
+(def test-let-with-multiple-statements
+  (fn []
+    (let [x 10
+          y 20]
+      (set! x (+ x 5))
+      (set! y (* y 2))
+      (+ x y))))
+
+;; Test 4: let with try/catch and statements
+(def test-let-with-try-statements
+  (fn []
+    (let [result 0]
+      (try
+        (set! result 42)
+        (set! result (/ result 2))
+        (catch Exception e
+          (set! result -1)))
+      result)))
+
+;; Test 5: let with nested control flow
+(def test-let-with-nested-control
+  (fn []
+    (let [x 0]
+      (while (< x 10)
+        (if (> x 5)
+          (set! x (+ x 2))
+          (set! x (+ x 1))))
+      x)))
+
+;; Test 6: let with nested fn in body
+(def test-let-with-inner-fn-def
+  (fn []
+    (let [multiplier 3
+          inner-fn (fn [x] (* x multiplier))]
+      (inner-fn 14))))
+
+;; Test 7: Complex let with multiple statement types
+(def test-let-complex-statements
+  (fn []
+    (let [data [1 2 3 4 5]
+          result (list)]
+      ;; Use for loop to process data
+      (for [x data]
+        (if (> x 2)
+          (.append result (* x 2))
+          nil))
+      result)))
+
+;; Test 8: let with print statements (side effects)
+(def test-let-with-prints
+  (fn []
+    (let [step 1]
+      (print "Step" step)
+      (set! step (+ step 1))
+      (print "Step" step)
+      (set! step (+ step 1))
+      (print "Step" step)
+      step)))
+
+;; Test 9: let in let, both with statements
+(def test-nested-lets-with-statements
+  (fn []
+    (let [a 10]
+      (let [b 20
+            result (+ a b)]
+        result))))
+
+;; Test 10: let with return-like behavior (early exit patterns)
+(def test-let-with-early-pattern
+  (fn []
+    (let [x 5]
+      (if (< x 10)
+        (do
+          (set! x (* x 2))
+          x)
+        (do
+          (set! x (/ x 2))
+          x)))))
+
+;; Run all tests
+(print "=== Testing Statement-Friendly Let Bodies ===\n")
+
+(print "test-let-with-while-statement:" (test-let-with-while-statement))
+(print "test-let-with-for-statement:" (test-let-with-for-statement))
+(print "test-let-with-multiple-statements:" (test-let-with-multiple-statements))
+(print "test-let-with-try-statements:" (test-let-with-try-statements))
+(print "test-let-with-nested-control:" (test-let-with-nested-control))
+(print "test-let-with-inner-fn-def:" (test-let-with-inner-fn-def))
+(print "test-let-complex-statements:" (test-let-complex-statements))
+
+(print "\ntest-let-with-prints:")
+(test-let-with-prints)
+
+(print "\ntest-nested-lets-with-statements:" (test-nested-lets-with-statements))
+(print "test-let-with-early-pattern:" (test-let-with-early-pattern))
+
+(print "\n=== All Statement Tests Passed! ===")

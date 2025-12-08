@@ -1,0 +1,125 @@
+;; Test file for let expression refactoring
+;; Tests various let forms to ensure wrapper-based approach works correctly
+
+;; Simple let with single binding
+(def test-simple-let
+  (fn []
+    (let [x 10]
+      x)))
+
+;; Let with multiple bindings
+(def test-multiple-bindings
+  (fn []
+    (let [x 1
+          y 2
+          z 3]
+      (+ x y z))))
+
+;; Let with sequential bindings (later bindings depend on earlier ones)
+(def test-sequential-bindings
+  (fn []
+    (let [x 5
+          y (+ x 1)
+          z (* y 2)]
+      z)))
+
+;; Let with nested function in binding
+(def test-nested-fn-in-binding
+  (fn []
+    (let [f (fn [x] (* x 2))]
+      (f 21))))
+
+;; Let with nested function in body
+(def test-nested-fn-in-body
+  (fn []
+    (let [x 10]
+      (let [f (fn [y] (+ x y))]
+        (f 32)))))
+
+;; Let with multiple forms in body
+(def test-multiple-body-forms
+  (fn []
+    (let [x 1
+          y 2]
+      (print "calculating...")
+      (+ x y))))
+
+;; Let with empty body
+(def test-empty-body
+  (fn []
+    (let [x 42])))
+
+;; Nested let expressions
+(def test-nested-lets
+  (fn []
+    (let [a 1]
+      (let [b 2]
+        (let [c 3]
+          (+ a b c))))))
+
+;; Let with complex expressions
+(def test-complex-expressions
+  (fn []
+    (let [nums [1 2 3 4 5]
+          doubled (map (fn [x] (* x 2)) nums)
+          total (reduce + 0 doubled)]
+      total)))
+
+;; Let in expression context (as argument)
+(def test-let-as-argument
+  (fn []
+    (+ 10 (let [x 5 y 3] (+ x y)))))
+
+;; Let with side effects
+(def test-let-with-side-effects
+  (fn []
+    (let [x (do (print "computing x") 42)
+          y (do (print "computing y") 8)]
+      (+ x y))))
+
+;; Let with control flow in body
+(def test-let-with-if
+  (fn []
+    (let [x 10
+          y 20]
+      (if (> x 5)
+        y
+        x))))
+
+;; Let with while loop in body
+(def test-let-with-while
+  (fn []
+    (let [x 0]
+      (while (< x 5)
+        (set! x (+ x 1)))
+      x)))
+
+;; Let with try/catch in body
+(def test-let-with-try
+  (fn []
+    (let [x 10]
+      (try
+        (/ x 2)
+        (catch Exception e
+          0)))))
+
+;; Run all tests
+(def run-tests
+  (fn []
+    (print "test-simple-let:" (test-simple-let))
+    (print "test-multiple-bindings:" (test-multiple-bindings))
+    (print "test-sequential-bindings:" (test-sequential-bindings))
+    (print "test-nested-fn-in-binding:" (test-nested-fn-in-binding))
+    (print "test-nested-fn-in-body:" (test-nested-fn-in-body))
+    (print "test-multiple-body-forms:" (test-multiple-body-forms))
+    (print "test-empty-body:" (test-empty-body))
+    (print "test-nested-lets:" (test-nested-lets))
+    (print "test-let-as-argument:" (test-let-as-argument))
+    (print "test-let-with-side-effects:" (test-let-with-side-effects))
+    (print "test-let-with-if:" (test-let-with-if))
+    (print "test-let-with-while:" (test-let-with-while))
+    (print "test-let-with-try:" (test-let-with-try))
+    (print "All tests completed!")))
+
+;; Run the tests
+(run-tests)

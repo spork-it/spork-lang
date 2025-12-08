@@ -1,0 +1,170 @@
+;; Test file for Spork Type System v1.0
+;; Tests type annotations on variables, function parameters, and return types
+
+(ns test-types)
+
+(print "\n=== Spork Type System v1.0 Tests ===\n")
+
+;; === Simple Variable Type Annotations ===
+(print "--- Variable Annotations ---")
+
+;; Simple typed variable
+(def ^int max-retries 3)
+(print "max-retries:" max-retries)
+(assert (= max-retries 3))
+
+;; String typed variable
+(def ^str greeting "Hello, Types!")
+(print "greeting:" greeting)
+(assert (= greeting "Hello, Types!"))
+
+;; Float typed variable
+(def ^float pi 3.14159)
+(print "pi:" pi)
+(assert (> pi 3.14))
+
+;; Boolean typed variable
+(def ^bool flag true)
+(print "flag:" flag)
+(assert flag)
+
+;; === Function Parameter Annotations ===
+(print "\n--- Parameter Annotations ---")
+
+;; Single annotated parameter
+(defn greet [^str name]
+  (+ "Hello, " name "!"))
+
+(print "greet 'World':" (greet "World"))
+(assert (= (greet "World") "Hello, World!"))
+
+;; Multiple annotated parameters
+(defn add [^int x ^int y]
+  (+ x y))
+
+(print "add 2 3:" (add 2 3))
+(assert (= (add 2 3) 5))
+
+;; Mixed annotated and unannotated parameters
+(defn describe-num [^int n suffix]
+  (+ "Number: " (str n) suffix))
+
+(print "describe-num 42 '!':" (describe-num 42 "!"))
+(assert (= (describe-num 42 "!") "Number: 42!"))
+
+;; === Phase 3: Return Type Annotations ===
+(print "\n--- Phase 3: Return Type Annotations ---")
+
+;; Function with return type
+(defn ^int double-it [^int x]
+  (* x 2))
+
+(print "double-it 21:" (double-it 21))
+(assert (= (double-it 21) 42))
+
+;; Return type with multiple params
+(defn ^str format-pair [^str a ^str b]
+  (+ a " and " b))
+
+(print "format-pair 'cats' 'dogs':" (format-pair "cats" "dogs"))
+(assert (= (format-pair "cats" "dogs") "cats and dogs"))
+
+;; === Phase 2: Generic Type Annotations ===
+(print "\n--- Phase 2: Generic Type Annotations ---")
+
+;; Generic list type annotation on variable
+(def ^(List int) numbers [1 2 3 4 5])
+(print "numbers:" numbers)
+(print "numbers type:" (type numbers))
+(assert (= (len numbers) 5))
+
+;; Generic dict type annotation
+(def ^(Dict str int) ages {"alice" 30 "bob" 25})
+(print "ages:" ages)
+
+;; Function with generic return type
+(defn ^(List int) get-evens [^int limit]
+  (doall (filter (fn [x] (= (% x 2) 0)) (range 1 (+ limit 1)))))
+
+(print "get-evens 10:" (get-evens 10))
+;; Just check first few elements
+(let [result (get-evens 10)]
+  (assert (= (first result) 2))
+  (assert (= (nth result 2) 6)))
+
+;; === Phase 4: Multi-Arity with Type Annotations ===
+(print "\n--- Phase 4: Multi-Arity Type Annotations ---")
+
+;; Multi-arity function with return type
+(defn ^int sum
+  ([^int x] x)
+  ([^int x ^int y] (+ x y))
+  ([^int x ^int y ^int z] (+ x y z)))
+
+(print "sum 5:" (sum 5))
+(print "sum 5 10:" (sum 5 10))
+(print "sum 5 10 15:" (sum 5 10 15))
+(assert (= (sum 5) 5))
+(assert (= (sum 5 10) 15))
+(assert (= (sum 5 10 15) 30))
+
+;; === Phase 3: Type Annotations with Defaults ===
+(print "\n--- Type Annotations with Defaults ---")
+
+(defn greet-with-title [^str name (title "Mr.")]
+  (+ "Hello, " title " " name "!"))
+
+(print "greet-with-title 'Smith':" (greet-with-title "Smith"))
+(print "greet-with-title 'Smith' 'Dr.':" (greet-with-title "Smith" "Dr."))
+(assert (= (greet-with-title "Smith") "Hello, Mr. Smith!"))
+(assert (= (greet-with-title "Smith" "Dr.") "Hello, Dr. Smith!"))
+
+;; === Verify __annotations__ at Runtime ===
+(print "\n--- Runtime Annotations Introspection ---")
+
+;; Check that annotations dict exists on functions
+(print "double-it.__annotations__:" (getattr double-it "__annotations__" {}))
+(print "add.__annotations__:" (getattr add "__annotations__" {}))
+
+;; Check module-level __annotations__
+; (print "Module annotations exist:" (hasattr (globals) "__annotations__"))
+
+;; === Complex Type Examples ===
+(print "\n--- Complex Type Examples ---")
+
+;; Optional type - available without import!
+(defn ^(Optional str) maybe-uppercase [^str s ^bool do-it]
+  (if do-it
+    (.upper s)
+    nil))
+
+(print "maybe-uppercase 'hello' true:" (maybe-uppercase "hello" true))
+(print "maybe-uppercase 'hello' false:" (maybe-uppercase "hello" false))
+(assert (= (maybe-uppercase "hello" true) "HELLO"))
+(assert (= (maybe-uppercase "hello" false) nil))
+
+(defn apply-twice [^(Callable int int) f ^int x]
+  (f (f x)))
+
+(print "apply-twice inc 5:" (apply-twice inc 5))
+(assert (= (apply-twice inc 5) 7))
+
+;; === Test with Decorators AND Type Annotations ===
+(print "\n--- Decorators with Type Annotations ---")
+
+(defclass MyClass []
+  (defn ^staticmethod ^int static-add [^int a ^int b]
+    (+ a b)))
+
+;;; Python ouptput
+; class MyClass:
+;     @staticmethod
+;     def static_add(a: int, b: int) -> int:
+;         return a + b
+
+(print "2 + 3 =" (MyClass.static-add 2 3))
+(assert (= 5 (MyClass.static-add 2 3)))
+(print "Static method called successfully")
+
+;; === Final Summary ===
+(print "\n=== All Type System Tests Passed! ===\n")

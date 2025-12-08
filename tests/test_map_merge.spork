@@ -1,0 +1,137 @@
+;; Test Map Merge Operations (|)
+;; Maps now support the | operator for efficient merging using transients internally
+
+(ns test-map-merge)
+
+(print "=== Testing Map Merge Operations ===\n")
+
+;; === Setup test maps ===
+(def m1 {:a 1 :b 2 :c 3})
+(def m2 {:b 20 :c 30 :d 4})
+(def empty-map {})
+
+(print "Test maps:")
+(print "  m1:" m1)
+(print "  m2:" m2)
+(print "  empty-map:" empty-map)
+
+;; === Basic Merge (|) ===
+(print "\n--- Basic Merge (bit-or / |) ---")
+
+; Merge two maps - right side wins on conflicts
+(def merged (bit-or m1 m2))
+(print "(bit-or m1 m2):" merged)
+(assert (= (get merged :a) 1) "Merged should have :a from m1")
+(assert (= (get merged :b) 20) "Merged should have :b from m2 (overwritten)")
+(assert (= (get merged :c) 30) "Merged should have :c from m2 (overwritten)")
+(assert (= (get merged :d) 4) "Merged should have :d from m2")
+(assert (= (count merged) 4) "Merged should have 4 keys")
+
+(print "Basic merge tests passed!")
+
+;; === Merge with Empty Map ===
+(print "\n--- Merge with Empty Map ---")
+
+(def m1-or-empty (bit-or m1 empty-map))
+(def empty-or-m1 (bit-or empty-map m1))
+
+(print "(bit-or m1 {}):" m1-or-empty)
+(print "(bit-or {} m1):" empty-or-m1)
+
+(assert (= (count m1-or-empty) 3) "m1 | {} should have 3 keys")
+(assert (= (count empty-or-m1) 3) "{} | m1 should have 3 keys")
+(assert (= (get m1-or-empty :a) 1) "m1 | {} should preserve :a")
+(assert (= (get empty-or-m1 :a) 1) "{} | m1 should have :a")
+
+(print "Empty map merge tests passed!")
+
+;; === Merge with Python dict ===
+(print "\n--- Merge with Python dict ---")
+
+(def py-dict {"x" 10 "y" 20})
+(def merged-with-dict (bit-or m1 py-dict))
+
+(print "py-dict:" py-dict)
+(print "(bit-or m1 py-dict):" merged-with-dict)
+
+(assert (= (get merged-with-dict :a) 1) "Should preserve :a from m1")
+(assert (= (get merged-with-dict "x") 10) "Should have 'x' from dict")
+(assert (= (get merged-with-dict "y") 20) "Should have 'y' from dict")
+
+(print "Python dict merge tests passed!")
+
+;; === Merge with list of pairs ===
+(print "\n--- Merge with list of pairs ---")
+
+(def pairs [[:x 100] [:y 200]])
+(def merged-with-pairs (bit-or m1 pairs))
+
+(print "pairs:" pairs)
+(print "(bit-or m1 pairs):" merged-with-pairs)
+
+(assert (= (get merged-with-pairs :a) 1) "Should preserve :a from m1")
+(assert (= (get merged-with-pairs :x) 100) "Should have :x from pairs")
+(assert (= (get merged-with-pairs :y) 200) "Should have :y from pairs")
+
+(print "List of pairs merge tests passed!")
+
+;; === Large map merge ===
+(print "\n--- Large Map Merge ---")
+
+; Use string keys for large map test
+(def large-m1 (into {} (map (fn [i] [(+ "k" (str i)) i]) (range 1000))))
+(def large-m2 (into {} (map (fn [i] [(+ "k" (str i)) (* i 10)]) (range 500 1500))))
+
+(print "large-m1:" (count large-m1) "entries (k0-k999)")
+(print "large-m2:" (count large-m2) "entries (k500-k1499)")
+
+(def large-merged (bit-or large-m1 large-m2))
+(print "Merged:" (count large-merged) "entries")
+
+(assert (= (count large-merged) 1500) "Large merge should have 1500 entries")
+(assert (= (get large-merged "k0") 0) "Should have original k0 from m1")
+(assert (= (get large-merged "k500") 5000) "k500 should be overwritten by m2")
+(assert (= (get large-merged "k1499") 14990) "Should have k1499 from m2")
+
+(print "Large map merge tests passed!")
+
+;; === Chained merges ===
+(print "\n--- Chained Merges ---")
+
+(def m3 {:e 5 :f 6})
+(def chained (bit-or (bit-or m1 m2) m3))
+
+(print "(bit-or (bit-or m1 m2) m3):" chained)
+(assert (= (count chained) 6) "Chained merge should have 6 keys")
+(assert (= (get chained :a) 1) "Should have :a")
+(assert (= (get chained :e) 5) "Should have :e")
+(assert (= (get chained :f) 6) "Should have :f")
+
+(print "Chained merge tests passed!")
+
+;; === Immutability ===
+(print "\n--- Immutability ---")
+
+(def original {:a 1 :b 2})
+(def after-merge (bit-or original {:c 3 :d 4}))
+
+(assert (= (count original) 2) "Original map unchanged after merge")
+(assert (= (count after-merge) 4) "Merged map has 4 keys")
+(assert (not (contains? original :c)) "Original doesn't have :c")
+(assert (contains? after-merge :c) "Merged has :c")
+
+(print "Immutability tests passed!")
+
+;; === Merge preserves hash consistency ===
+(print "\n--- Hash Consistency ---")
+
+(def h1 (bit-or {:a 1} {:b 2}))
+(def h2 (bit-or {:b 2} {:a 1}))
+
+; Same contents should have same hash
+(assert (= h1 h2) "Maps with same contents should be equal")
+(assert (= (hash h1) (hash h2)) "Equal maps should have same hash")
+
+(print "Hash consistency tests passed!")
+
+(print "\n=== All Map Merge Tests Passed! ===")

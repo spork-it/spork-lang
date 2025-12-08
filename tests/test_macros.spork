@@ -1,0 +1,26 @@
+; Test macro system
+
+(defmacro when [test body]
+  `(if ~test ~body nil))
+
+(defmacro unless [test body]
+  `(if ~test nil ~body))
+
+(def a (when true 100))
+(def b (unless false 200))
+
+(print "when result:" a)
+(print "unless result:" b)
+
+; Test quasiquote
+(def x 10)
+(def y 20)
+(def expr `(+ ~x ~y))
+(print "expr:" expr)
+
+; Test threading macro
+(defmacro -> [x form]
+  `(~(. form 0) ~x ~(. form 1)))
+
+(def result (-> 5 (+ 3)))
+(print "threading result:" result)

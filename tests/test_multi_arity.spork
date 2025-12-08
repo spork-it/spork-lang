@@ -1,0 +1,128 @@
+; Test multi-arity functions
+
+(print "\n=== Testing Multi-Arity Functions ===\n")
+
+; Basic multi-arity defn
+(defn greet
+  ([] "Hello, World!")
+  ([name] (+ "Hello, " name "!"))
+  ([greeting name] (+ greeting ", " name "!")))
+
+(print "Testing basic multi-arity defn:")
+(print "  (greet) =" (greet))
+(print "  (greet \"Alice\") =" (greet "Alice"))
+(print "  (greet \"Hi\" \"Bob\") =" (greet "Hi" "Bob"))
+
+; Multi-arity with varargs
+(defn add
+  ([x] x)
+  ([x y] (+ x y))
+  ([x y & more]
+    (let [total (+ x y)]
+      (for [n more]
+        (set! total (+ total n)))
+      total)))
+
+(print "\nTesting multi-arity with varargs:")
+(print "  (add 5) =" (add 5))
+(print "  (add 3 4) =" (add 3 4))
+(print "  (add 1 2 3) =" (add 1 2 3))
+(print "  (add 1 2 3 4 5) =" (add 1 2 3 4 5))
+
+; Multi-arity fn (anonymous)
+(print "\nTesting multi-arity fn:")
+(let [mul (fn
+            ([x] x)
+            ([x y] (* x y))
+            ([x y z] (* x y z)))]
+  (print "  (mul 5) =" (mul 5))
+  (print "  (mul 3 4) =" (mul 3 4))
+  (print "  (mul 2 3 4) =" (mul 2 3 4)))
+
+; Multi-arity with different return types
+(defn describe
+  ([] "nothing")
+  ([x] (+ "one thing: " (str x)))
+  ([x y] (+ "two things: " (str x) " and " (str y))))
+
+(print "\nTesting multi-arity with different return expressions:")
+(print "  (describe) =" (describe))
+(print "  (describe 42) =" (describe 42))
+(print "  (describe \"a\" \"b\") =" (describe "a" "b"))
+
+; Multi-arity with let bodies
+(defn compute
+  ([x]
+    (let [doubled (* x 2)]
+      doubled))
+  ([x y]
+    (let [sum (+ x y)
+          product (* x y)]
+      (+ sum product))))
+
+(print "\nTesting multi-arity with let bodies:")
+(print "  (compute 5) =" (compute 5))
+(print "  (compute 3 4) =" (compute 3 4))
+
+; Multi-arity with conditionals
+(defn safe-div
+  ([x] x)
+  ([x y]
+    (if (= y 0)
+      nil
+      (/ x y))))
+
+(print "\nTesting multi-arity with conditionals:")
+(print "  (safe-div 10) =" (safe-div 10))
+(print "  (safe-div 10 2) =" (safe-div 10 2))
+(print "  (safe-div 10 0) =" (safe-div 10 0))
+
+; Multi-arity using other arities (recursive pattern)
+(defn factorial-helper
+  ([n] (factorial-helper n 1))
+  ([n acc]
+    (if (<= n 1)
+      acc
+      (factorial-helper (- n 1) (* n acc)))))
+
+(print "\nTesting multi-arity with recursion:")
+(print "  (factorial-helper 5) =" (factorial-helper 5))
+(print "  (factorial-helper 10) =" (factorial-helper 10))
+
+; Multi-arity in higher-order function context
+(print "\nTesting multi-arity in higher-order context:")
+(let [ops [(fn ([] 0) ([x] x) ([x y] (+ x y)))
+           (fn ([] 1) ([x] x) ([x y] (* x y)))]]
+  (for [op ops]
+    (print "  op()=" (op) "op(5)=" (op 5) "op(3,4)=" (op 3 4))))
+
+; Multi-arity with destructuring
+(defn point-info
+  ([[x y]] (+ "Point at " (str x) ", " (str y)))
+  ([[x1 y1] [x2 y2]]
+    (let [dx (- x2 x1)
+          dy (- y2 y1)]
+      (+ "Distance: " (str (** (+ (* dx dx) (* dy dy)) 0.5))))))
+
+(print "\nTesting multi-arity with destructuring:")
+(print "  (point-info [3 4]) =" (point-info [3 4]))
+(print "  (point-info [0 0] [3 4]) =" (point-info [0 0] [3 4]))
+
+; Empty body (returns nil)
+(defn maybe-do
+  ([] nil)
+  ([x] x))
+
+(print "\nTesting multi-arity with nil return:")
+(print "  (maybe-do) =" (maybe-do))
+(print "  (maybe-do 42) =" (maybe-do 42))
+
+; Test error case - wrong number of args
+(print "\nTesting error handling:")
+(try
+  (greet "a" "b" "c")  ; greet only takes 0, 1, or 2 args
+  (print "  ERROR: Should have raised TypeError")
+  (catch TypeError e
+    (print "  Correctly raised TypeError for wrong arity")))
+
+(print "\n=== All Multi-Arity Tests Completed ===\n")

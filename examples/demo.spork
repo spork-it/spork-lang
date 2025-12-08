@@ -1,0 +1,67 @@
+;; Spork Demo - Example file to demonstrate the spork CLI driver
+(ns examples.demo)
+
+;; Define some basic functions
+(defn square [x]
+  "Returns the square of x"
+  (* x x))
+
+(defn cube [x]
+  "Returns the cube of x"
+  (* x x x))
+
+(defn factorial [n]
+  "Calculates factorial recursively"
+  (if (<= n 1)
+    1
+    (* n (factorial (- n 1)))))
+
+(defn fibonacci [n]
+  "Calculates the nth Fibonacci number"
+  (if (<= n 1)
+    n
+    (+ (fibonacci (- n 1))
+       (fibonacci (- n 2)))))
+
+;; Work with collections
+(defn sum [coll]
+  "Sum all elements in a collection"
+  (reduce + coll))
+
+(defn average [coll]
+  "Calculate average of a collection"
+  (/ (sum coll) (count coll)))
+
+;; Demonstrate some built-in functions
+(print "=== Basic Functions ===")
+(print "square(5) =" (square 5))
+(print "cube(3) =" (cube 3))
+(print "factorial(6) =" (factorial 6))
+(print "fibonacci(10) =" (fibonacci 10))
+
+(print "\n=== Working with Collections ===")
+(def numbers [1 2 3 4 5])
+(print "numbers:" numbers)
+(print "sum:" (sum numbers))
+(print "average:" (average numbers))
+
+(print "\n=== Higher-order Functions ===")
+(print "squares:" (vec (map square numbers)))
+(print "even numbers:" (vec (filter even? numbers)))
+(print "doubled:" (vec (map (fn [x] (* x 2)) numbers)))
+
+(print "\n=== Lazy Sequences ===")
+(def squares-lazy (map square (range 1 11)))
+(print "First 5 squares:" (vec (take 5 squares-lazy)))
+
+(print "\n=== Persistent Data Structures ===")
+(def my-map (hash-map :name "Alice" :age 30 :city "NYC"))
+(print "map:" my-map)
+(print "name:" (get my-map :name))
+
+; notice that assoc returns a
+; new map not an updated my-map
+(print "updated:" (assoc my-map :age 31))
+(print "original:" my-map)
+
+(print "Demo complete!")

@@ -1,0 +1,183 @@
+;; Test class definitions with defclass
+
+(ns test-defclass
+  (:import [dataclasses :refer [dataclass field]]))
+
+;; Test 1: Basic class with __init__ and methods
+(print "Test 1: Basic class definition")
+
+(defclass Point
+  (defn __init__ [self x y]
+    (set! self.x x)
+    (set! self.y y))
+
+  (defn __repr__ [self]
+    (+ "Point(" (str self.x) ", " (str self.y) ")"))
+
+  (defn distance-from-origin [self]
+    (** (+ (* self.x self.x) (* self.y self.y)) 0.5)))
+
+(def p1 (Point 3 4))
+(print "  Created:" p1)
+(print "  Distance from origin:" (.distance-from-origin p1))
+;; Should be 5.0 (3-4-5 triangle)
+
+;; Test 2: Inheritance
+(print "\nTest 2: Inheritance")
+
+(defclass Point3D [Point]
+  (defn __init__ [self x y z]
+    (call (super) __init__ x y)
+    (set! self.z z))
+
+  (defn __repr__ [self]
+    (+ "Point3D(" (str self.x) ", " (str self.y) ", " (str self.z) ")"))
+
+  (defn distance-from-origin [self]
+    (** (+ (* self.x self.x) (* self.y self.y) (* self.z self.z)) 0.5)))
+
+(def p3d (Point3D 1 2 2))
+(print "  Created:" p3d)
+(print "  Distance from origin:" (.distance-from-origin p3d))
+;; Should be 3.0
+
+;; Test 3: Class with staticmethod and classmethod
+(print "\nTest 3: Static and class methods")
+
+(defclass MathUtils
+  (def pi 3.14159)
+
+  (defn ^staticmethod add [a b]
+    (+ a b))
+
+  (defn ^classmethod get-pi [cls]
+    cls.pi)
+
+  (defn ^staticmethod circle-area [radius]
+    (* MathUtils.pi radius radius)))
+
+(print "  Static add(3, 4):" (MathUtils.add 3 4))
+(print "  Class method get-pi:" (MathUtils.get-pi))
+(print "  Circle area (r=2):" (MathUtils.circle-area 2))
+
+;; Test 4: Class with properties
+(print "\nTest 4: Properties")
+
+(defclass Temperature
+  (defn __init__ [self celsius]
+    (set! self._celsius celsius))
+
+  (defn ^property celsius [self]
+    self._celsius)
+
+  (defn get-fahrenheit [self]
+    (+ (* self._celsius 1.8) 32)))
+
+(def temp (Temperature 100))
+(print "  Celsius:" temp.celsius)
+(print "  Fahrenheit:" (.get-fahrenheit temp))
+
+;; Test 5: Decorated class (dataclass)
+(print "\nTest 5: Dataclass decorator")
+
+(defclass ^dataclass Config
+  (field name str "default")
+  (field debug bool false)
+  (field max-retries int 3))
+
+(def cfg1 (Config))
+(def cfg2 (Config "custom" true 5))
+(print "  Default config:" cfg1)
+(print "  Custom config:" cfg2)
+
+;; Test 5b: Dataclass with required fields (no defaults)
+(print "\nTest 5b: Dataclass with required fields")
+
+(defclass ^dataclass Person
+  (field name str)
+  (field age int)
+  (field email str "unknown@example.com"))
+
+(def person1 (Person "Alice" 30))
+(def person2 (Person "Bob" 25 "bob@example.com"))
+(print "  Person 1:" person1)
+(print "  Person 2:" person2)
+
+;; Test 6: Multiple inheritance
+(print "\nTest 6: Multiple inheritance")
+
+(defclass Printable
+  (defn describe [self]
+    (+ "I am " (.get-type self))))
+
+(defclass Countable
+  (def count 0)
+
+  (defn ^classmethod increment [cls]
+    (set! cls.count (+ cls.count 1))))
+
+(defclass Counter [Printable Countable]
+  (defn __init__ [self name]
+    (set! self.name name)
+    (.increment Counter))
+
+  (defn get-type [self]
+    (+ "Counter named '" self.name "'")))
+
+(def c1 (Counter "first"))
+(def c2 (Counter "second"))
+(print "  Counter 1:" (.describe c1))
+(print "  Counter 2:" (.describe c2))
+(print "  Total count:" Counter.count)
+
+;; Test 7: Class with class variables
+(print "\nTest 7: Class variables")
+
+(defclass Animal
+  (def kingdom "Animalia")
+  (def count 0)
+
+  (defn __init__ [self name species]
+    (set! self.name name)
+    (set! self.species species)
+    (set! Animal.count (+ Animal.count 1)))
+
+  (defn __repr__ [self]
+    (+ self.name " the " self.species)))
+
+(def dog (Animal "Buddy" "Dog"))
+(def cat (Animal "Whiskers" "Cat"))
+(print "  Kingdom:" Animal.kingdom)
+(print "  Animals created:" Animal.count)
+(print "  Dog:" dog)
+(print "  Cat:" cat)
+
+;; Test 8: Magic methods
+(print "\nTest 8: Magic methods (__add__, __len__, etc.)")
+
+(defclass Vector
+  (defn __init__ [self items]
+    (set! self.items (list items)))
+
+  (defn __repr__ [self]
+    (+ "Vector(" (str self.items) ")"))
+
+  (defn __len__ [self]
+    (len self.items))
+
+  (defn __add__ [self other]
+    (Vector (+ self.items other.items)))
+
+  (defn __getitem__ [self index]
+    (. self.items index)))
+
+(def v1 (Vector [1 2 3]))
+(def v2 (Vector [4 5 6]))
+(def v3 (+ v1 v2))
+(print "  v1:" v1)
+(print "  v2:" v2)
+(print "  v1 + v2:" v3)
+(print "  len(v3):" (len v3))
+(print "  v3[0]:" (. v3 items 0))
+
+(print "\nAll defclass tests passed!")

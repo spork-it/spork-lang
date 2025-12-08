@@ -1,0 +1,217 @@
+; Test auto-gensym feature in macros
+; Tests the # suffix for generating unique symbols in macros
+
+(print "=== Testing Auto-Gensym in Macros ===\n")
+
+; ============================================================================
+; 1. Basic gensym usage
+; ============================================================================
+
+(print "--- 1. Basic gensym usage ---")
+
+; A macro that uses temp# to avoid variable capture
+(defmacro with-doubled [x & body]
+  `(let [temp# (* 2 ~x)]
+     ~@body
+     temp#))
+
+(def result1 (with-doubled 21
+               (print "  Doubled value computed")))
+(print "with-doubled 21:" result1)
+(assert (= result1 42))
+
+; Using it multiple times shouldn't conflict
+(def result1b (with-doubled (with-doubled 5)))
+(print "nested with-doubled:" result1b)
+(assert (= result1b 20))  ; 5 * 2 = 10, 10 * 2 = 20
+(print "✓ Basic gensym works\n")
+
+; ============================================================================
+; 2. Multiple gensyms in same macro
+; ============================================================================
+
+(print "--- 2. Multiple gensyms in same macro ---")
+
+(defmacro swap-and-add [a b]
+  `(let [x# ~a
+         y# ~b]
+     (+ y# x#)))
+
+(def result2 (swap-and-add 10 20))
+(print "swap-and-add 10 20:" result2)
+(assert (= result2 30))
+(print "✓ Multiple gensyms work\n")
+
+; ============================================================================
+; 3. Gensym prevents variable capture
+; ============================================================================
+
+(print "--- 3. Gensym prevents variable capture ---")
+
+; This macro uses temp# which should NOT conflict with user's temp variable
+(defmacro safe-square [x]
+  `(let [temp# ~x]
+     (* temp# temp#)))
+
+; User code that has its own 'temp' variable
+(let [temp 100]
+  (def result3 (safe-square 5))
+  (print "User's temp:" temp)
+  (print "safe-square 5:" result3)
+  (assert (= temp 100) "User's temp should be unchanged")
+  (assert (= result3 25) "safe-square should work correctly"))
+(print "✓ Gensym prevents variable capture\n")
+
+; ============================================================================
+; 4. Same gensym name used multiple times in one macro = same symbol
+; ============================================================================
+
+(print "--- 4. Same gensym reused in macro ---")
+
+(defmacro triple-use [x]
+  `(let [val# ~x]
+     (+ val# val# val#)))
+
+(def result4 (triple-use 7))
+(print "triple-use 7:" result4)
+(assert (= result4 21))  ; 7 + 7 + 7
+(print "✓ Same gensym reused correctly\n")
+
+; ============================================================================
+; 5. Different macro invocations get different gensyms
+; ============================================================================
+
+(print "--- 5. Different invocations get different gensyms ---")
+
+; Each macro call should have its own unique symbols
+(defmacro capture-value [x]
+  `(let [captured# ~x]
+     (fn [] captured#)))
+
+(def getter1 (capture-value 100))
+(def getter2 (capture-value 200))
+
+(print "getter1:" (getter1))
+(print "getter2:" (getter2))
+(assert (= (getter1) 100))
+(assert (= (getter2) 200))
+(print "✓ Different invocations are independent\n")
+
+; ============================================================================
+; 6. Gensym in nested let expressions
+; ============================================================================
+
+(print "--- 6. Gensym in nested expressions ---")
+
+(defmacro nested-compute [a b]
+  `(let [outer# (+ ~a ~b)]
+     (let [inner# (* outer# 2)]
+       (+ outer# inner#))))
+
+(def result6 (nested-compute 3 4))
+(print "nested-compute 3 4:" result6)
+(assert (= result6 21))  ; outer = 7, inner = 14, result = 21
+(print "✓ Nested gensyms work\n")
+
+; ============================================================================
+; 7. Gensym with loop/recur
+; ============================================================================
+
+(print "--- 7. Gensym in loop/recur ---")
+
+(defmacro sum-to [n]
+  `(loop [i# 1 acc# 0]
+     (if (> i# ~n)
+       acc#
+       (recur (inc i#) (+ acc# i#)))))
+
+(def result7 (sum-to 10))
+(print "sum-to 10:" result7)
+(assert (= result7 55))
+(print "✓ Gensym in loop/recur works\n")
+
+; ============================================================================
+; 8. Gensym in function definitions
+; ============================================================================
+
+(print "--- 8. Gensym creating functions ---")
+
+(defmacro defn-with-logging [name args & body]
+  `(defn ~name ~args
+     (let [result# (do ~@body)]
+       (print "  [LOG]" '~name "returned:" result#)
+       result#)))
+
+(defn-with-logging add-logged [a b]
+  (+ a b))
+
+(def result8 (add-logged 15 27))
+(print "add-logged result:" result8)
+(assert (= result8 42))
+(print "✓ Gensym in function definitions works\n")
+
+; ============================================================================
+; 9. Complex macro with multiple gensym patterns
+; ============================================================================
+
+(print "--- 9. Complex macro with multiple gensyms ---")
+
+; A macro that uses multiple gensyms for intermediate values
+(defmacro compute-stats [& nums]
+  `(let [sum# (+ ~@nums)
+         count# ~(len nums)
+         first# ~(nth nums 0)
+         last# ~(nth nums (- (len nums) 1))]
+     {:sum sum# :count count# :first first# :last last#}))
+
+(def result9 (compute-stats 10 20 30 40))
+(print "compute-stats result:" result9)
+(assert (= (get result9 :sum) 100))
+(assert (= (get result9 :count) 4))
+(assert (= (get result9 :first) 10))
+(assert (= (get result9 :last) 40))
+(print "✓ Complex multi-gensym macro works\n")
+
+; ============================================================================
+; 10. Gensym with conditional logic
+; ============================================================================
+
+(print "--- 10. Gensym in conditional macro ---")
+
+(defmacro if-let [binding then else]
+  (let [var (nth binding 0)
+        expr (nth binding 1)]
+    `(let [temp# ~expr]
+       (if temp#
+         (let [~var temp#]
+           ~then)
+         ~else))))
+
+(def result10a (if-let [x (get {:a 1} :a)]
+                 (+ x 10)
+                 :not-found))
+(print "if-let with found key:" result10a)
+(assert (= result10a 11))
+
+(def result10b (if-let [x (get {:a 1} :b)]
+                 (+ x 10)
+                 :not-found))
+(print "if-let with missing key:" result10b)
+(assert (= result10b :not-found))
+(print "✓ Gensym in conditional macro works\n")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== All Auto-Gensym Tests Passed! ===")
+(print "✓ Basic gensym with # suffix")
+(print "✓ Multiple gensyms in same macro")
+(print "✓ Gensym prevents variable capture")
+(print "✓ Same gensym reused in one expansion")
+(print "✓ Different invocations are independent")
+(print "✓ Nested gensym expressions")
+(print "✓ Gensym in loop/recur")
+(print "✓ Gensym in function definitions")
+(print "✓ Complex multi-gensym macros")
+(print "✓ Gensym in conditional macros")

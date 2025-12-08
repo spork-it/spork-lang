@@ -1,0 +1,77 @@
+; std.json - JSON Serialization with Spork Type Support
+;
+; This module provides JSON serialization that automatically handles
+; Spork's persistent data structures (Map, Vector, Set, Cons) and
+; other Spork types (Keyword, Symbol).
+;
+; Unlike Python's json module, loads/load return Spork Maps and Vectors
+; instead of Python dicts and lists.
+;
+; Usage: (require [std.json :as json])
+;
+; Examples:
+;   (json.dumps {:name "Spork" :version 1.0})  ; => '{"name": "Spork", "version": 1.0}'
+;   (json.loads "{\"x\": 1}")                   ; => {"x" 1}  ; Returns Spork Map!
+;   (json.loads "{\"x\": 1}" true)              ; => {:x 1}   ; With keywordized keys
+
+(ns std.json
+  (:require [spork.runtime.json :as rt-json]))
+
+; dumps - serialize Spork data to a JSON string
+; Maps, Vectors, Sets, and Keywords are automatically converted.
+;
+; (json.dumps {:name "Spork" :items [1 2 3]})
+; => '{"name": "Spork", "items": [1, 2, 3]}'
+(defn dumps [obj]
+  (rt-json.dumps obj))
+
+; dumps-pretty - serialize with indentation for readability
+;
+; (json.dumps-pretty {:name "Spork"})
+; => '{\n  "name": "Spork"\n}'
+(defn dumps-pretty [obj]
+  (rt-json.dumps obj *{:indent 2}))
+
+; dump - serialize Spork data to a file-like object
+;
+; (with-open [f (open "data.json" "w")]
+;   (json.dump {:name "Spork"} f))
+(defn dump [obj fp]
+  (rt-json.dump obj fp))
+
+; dump-pretty - serialize to file with indentation
+(defn dump-pretty [obj fp]
+  (rt-json.dump obj fp *{:indent 2}))
+
+; loads - parse a JSON string into Spork Maps and Vectors
+; Returns Spork persistent data structures, not Python dicts/lists.
+;
+; (json.loads "{\"x\": 1, \"items\": [1, 2, 3]}")
+; => {"x" 1 "items" [1 2 3]}
+;
+; With keywordize-keys=true, string keys become Keywords:
+; (json.loads "{\"x\": 1}" true)
+; => {:x 1}
+(defn loads
+  ([s] (rt-json.loads_spork s))
+  ([s keywordize-keys] (rt-json.loads_spork s *{:keywordize_keys keywordize-keys})))
+
+; load - parse JSON from a file into Spork Maps and Vectors
+;
+; (with-open [f (open "data.json" "r")]
+;   (json.load f))
+;
+; (with-open [f (open "data.json" "r")]
+;   (json.load f true))  ; With keywordized keys
+(defn load
+  ([fp] (rt-json.load_spork fp))
+  ([fp keywordize-keys] (rt-json.load_spork fp *{:keywordize_keys keywordize-keys})))
+
+; parse - alias for loads (more Clojure-like name)
+(defn parse
+  ([s] (loads s))
+  ([s keywordize-keys] (loads s keywordize-keys)))
+
+; generate - alias for dumps (more Clojure-like name)
+(defn generate [obj]
+  (rt-json.dumps obj))

@@ -1,0 +1,111 @@
+; Test file for Stage 0 cleanup: do, booleans, and nil
+
+(print "=== Testing booleans and nil ===")
+
+(def my-true true)
+(def my-false false)
+(def my-nil nil)
+
+(print "true is:" my-true)
+(print "false is:" my-false)
+(print "nil is:" my-nil)
+
+; Test in if expressions
+(print "if true:" (if true "yes" "no"))
+(print "if false:" (if false "yes" "no"))
+(print "if nil:" (if nil "yes" "no"))
+
+(print "\n=== Testing do at statement level ===")
+
+; do at statement level should execute multiple statements in sequence
+(defn test-stmt-do []
+  (print "Function starting")
+  (do
+    (print "Statement 1")
+    (print "Statement 2")
+    (print "Statement 3"))
+  (print "Function ending"))
+
+(test-stmt-do)
+
+(print "\n=== Testing do at expression level ===")
+
+; do at expression level should return the last value
+(def result1 (do
+               (print "Computing...")
+               (print "Still computing...")
+               42))
+
+(print "result1 =" result1)
+
+; do in function call
+(print "do in call:" (do
+                        (print "Side effect 1")
+                        (print "Side effect 2")
+                        "final-value"))
+
+; do with different types
+(def result2 (do
+               1
+               2
+               3
+               "hello"
+               [1 2 3]))
+
+(print "result2 =" result2)
+
+; do returning boolean
+(def result3 (do
+               (print "Checking...")
+               true))
+
+(print "result3 =" result3)
+
+; do returning nil
+(def result4 (do
+               (print "Returning nil...")
+               nil))
+
+(print "result4 =" result4)
+
+(print "\n=== Testing do in if expressions ===")
+
+; do in if branches (expression context)
+(def x (if true
+         (do
+           (print "True branch: step 1")
+           (print "True branch: step 2")
+           "true-result")
+         (do
+           (print "False branch: step 1")
+           "false-result")))
+
+(print "if-do result:" x)
+
+(print "\n=== Testing nested do ===")
+
+(def nested (do
+              (print "Outer 1")
+              (do
+                (print "Inner 1")
+                (print "Inner 2")
+                "inner-value")
+              (print "Outer 2")
+              "outer-value"))
+
+(print "nested result:" nested)
+
+(print "\n=== Testing empty and single-element do ===")
+
+; Empty do at statement level
+(defn test-empty-do []
+  (do)
+  (print "After empty do"))
+
+(test-empty-do)
+
+; Single element do
+(def single (do 99))
+(print "single do result:" single)
+
+(print "\n=== All tests complete! ===")

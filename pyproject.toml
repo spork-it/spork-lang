@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spork-lang"
+version = "0.1.0"
+description = "A Lisp to Python transpiler with persistent data structures"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "Grant Wade", email = "grant@spork.sh"}
+]
+keywords = [
+    "lisp",
+    "clojure",
+    "transpiler",
+    "compiler",
+    "persistent-data-structures",
+    "functional-programming",
+    "repl"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Lisp",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Software Development :: Libraries",
+]
+license-files = ["LICENSE"]
+
+# Runtime dependencies for spork dist command
+dependencies = [
+    "build>=1.0",
+    "setuptools>=61.0",
+    "wheel",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "twine",
+    "numpy"
+]
+
+[project.urls]
+Homepage = "https://github.com/spork-it/spork-lang"
+Documentation = "https://github.com/spork-it/spork-lang#readme"
+Repository = "https://github.com/spork-it/spork-lang"
+Issues = "https://github.com/spork-it/spork-lang/issues"
+Changelog = "https://github.com/grant-wade/spork/releases"
+
+[project.scripts]
+spork = "spork.cli:main"
+
+[tool.setuptools]
+# Include the package and all subpackages
+packages = [
+    "spork",
+    "spork.compiler",
+    "spork.lsp",
+    "spork.project",
+    "spork.repl",
+    "spork.runtime",
+    "spork.std",
+]
+
+[tool.setuptools.package-data]
+# Include C source files for building the extension
+"spork.runtime" = ["*.c"]
+# Include standard library Spork files
+"spork.std" = ["*.spork"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc", "__pycache__", "*.so", "*.pyd"]

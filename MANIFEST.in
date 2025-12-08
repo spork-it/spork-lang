@@ -1,0 +1,13 @@
+include *.md
+include LICENSE
+include pyproject.toml
+include setup.py
+
+# C extension source
+recursive-include spork/runtime *.c
+
+# Spork library files (macros)
+recursive-include spork/std *.spork
+
+# Test files
+recursive-include tests *.spork

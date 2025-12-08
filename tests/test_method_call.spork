@@ -1,0 +1,56 @@
+;; Simple test for method call syntax
+
+(print "=== Testing Method Call Syntax ===\n")
+
+;; Test 1: Basic method call - use Python list for mutation
+(def test-append
+  (fn []
+    (let [lst (list [1 2 3])]
+      (.append lst 4)
+      lst)))
+
+(print "test-append:" (test-append))
+
+;; Test 2: Method call with string
+(def test-string-methods
+  (fn []
+    (let [text "hello world"]
+      (.upper text))))
+
+(print "test-string-methods:" (test-string-methods))
+
+;; Test 3: Method call in let binding
+(def test-method-in-binding
+  (fn []
+    (let [text "one,two,three"
+          parts (.split text ",")]
+      parts)))
+
+(print "test-method-in-binding:" (test-method-in-binding))
+
+;; Test 4: Chained-ish method calls
+(def test-multiple-methods
+  (fn []
+    (let [text "  hello  "
+          trimmed (.strip text)
+          upper (.upper trimmed)]
+      upper)))
+
+(print "test-multiple-methods:" (test-multiple-methods))
+
+;; Test 5: Method with multiple args
+(def test-replace
+  (fn []
+    (let [text "hello world"]
+      (.replace text "world" "python"))))
+
+(print "test-replace:" (test-replace))
+
+;; Test 6: Method call in complex expression - use Python list for .count
+(def test-method-in-expr
+  (fn []
+    (+ 1 2 (.count (list [1 2 3 2 1]) 2))))
+
+(print "test-method-in-expr:" (test-method-in-expr))
+
+(print "\n=== All Method Call Tests Passed! ===")

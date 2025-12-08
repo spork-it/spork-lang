@@ -1,0 +1,174 @@
+; Advanced async/await tests - edge cases and destructuring
+
+(ns test-async-advanced
+  (:import [asyncio]
+           [io]))
+
+(print "=== Advanced Async/Await Tests ===\n")
+
+; Async generator function (requires both ^async and ^generator)
+(defn ^async ^generator async-range [n]
+  "Create an async generator that yields 0 to n-1"
+  (for [i (range n)]
+    (await (asyncio.sleep 0.001))
+    (yield i)))
+
+; Test 1: async-for with simple variable
+(defn ^async test-async-for-simple []
+  (def results (list))
+  (async-for [x (async-range 5)]
+    (.append results x))
+  results)
+
+; Test 2: async-for with destructuring (vector)
+(defn ^async ^generator async-pairs []
+  "Async generator yielding pairs"
+  (for [i (range 3)]
+    (await (asyncio.sleep 0.001))
+    (yield [i (* i 2)])))
+
+(defn ^async test-async-for-destructure []
+  (def results (list))
+  (async-for [[a b] (async-pairs)]
+    (.append results (+ a b)))
+  results)
+
+; Test 3: Nested async-for loops
+(defn ^async test-nested-async-for []
+  (def results (list))
+  (async-for [x (async-range 2)]
+    (async-for [y (async-range 2)]
+      (.append results [x y])))
+  results)
+
+; Test 4: Async function with try/catch
+(defn ^async async-with-error []
+  (try
+    (await (asyncio.sleep 0.001))
+    (throw (Exception "test error"))
+  (catch Exception e
+    "caught")))
+
+; Test 5: Async function with with statement
+(defn ^async test-async-with-context []
+  (with [buf (io.StringIO)]
+    (await (asyncio.sleep 0.001))
+    (.write buf "hello")
+    (.getvalue buf)))
+
+; Test 6: Multi-arity async function
+(defn ^async multi-arity-async
+  ([x]
+   (await (asyncio.sleep 0.001))
+   x)
+  ([x y]
+   (await (asyncio.sleep 0.001))
+   (+ x y))
+  ([x y z]
+   (await (asyncio.sleep 0.001))
+   (+ x y z)))
+
+; Test 7: Async with loop/recur
+(defn ^async async-loop-sum [n]
+  (await (asyncio.sleep 0.001))
+  (loop [i 0
+         acc 0]
+    (if (>= i n)
+      acc
+      (recur (+ i 1) (+ acc i)))))
+
+; Test 8: Async with do block
+(defn ^async async-with-do []
+  (do
+    (await (asyncio.sleep 0.001))
+    (def x 10)
+    (await (asyncio.sleep 0.001))
+    (def y 20)
+    (+ x y)))
+
+; Test 9: Combining ^async with other decorators
+(defclass AsyncClass []
+  (defn ^async ^staticmethod async-static []
+    (await (asyncio.sleep 0.001))
+    "static async result"))
+
+; Test 10: Simple sync generator (to verify ^generator works alone)
+(defn ^generator simple-gen [n]
+  (for [i (range n)]
+    (yield (* i 2))))
+
+(defn test-sync-generator []
+  (def results (list))
+  (for [x (simple-gen 5)]
+    (.append results x))
+  results)
+
+; Run tests
+(defn ^async run-tests []
+  (print "Test 1: async-for with simple variable")
+  (def r1 (await (test-async-for-simple)))
+  (print "Result:" r1)
+  (assert (= (vec r1) [0 1 2 3 4]))
+  (print "PASS\n")
+
+  (print "Test 2: async-for with destructuring")
+  (def r2 (await (test-async-for-destructure)))
+  (print "Result:" r2)
+  (assert (= (vec r2) [0 3 6]))  ; [0+0, 1+2, 2+4]
+  (print "PASS\n")
+
+  (print "Test 3: Nested async-for")
+  (def r3 (await (test-nested-async-for)))
+  (print "Result:" r3)
+  (assert (= (len r3) 4))  ; Compare length since nested lists/vectors
+  (print "PASS\n")
+
+  (print "Test 4: Async with try/catch")
+  (def r4 (await (async-with-error)))
+  (print "Result:" r4)
+  (assert (= r4 "caught"))
+  (print "PASS\n")
+
+  (print "Test 5: Async with context manager")
+  (def r5 (await (test-async-with-context)))
+  (print "Result:" r5)
+  (assert (= r5 "hello"))
+  (print "PASS\n")
+
+  (print "Test 6: Multi-arity async function")
+  (def r6a (await (multi-arity-async 10)))
+  (def r6b (await (multi-arity-async 10 20)))
+  (def r6c (await (multi-arity-async 10 20 30)))
+  (print "Results:" r6a r6b r6c)
+  (assert (= r6a 10))
+  (assert (= r6b 30))
+  (assert (= r6c 60))
+  (print "PASS\n")
+
+  (print "Test 7: Async with loop/recur")
+  (def r7 (await (async-loop-sum 10)))
+  (print "Result:" r7)
+  (assert (= r7 45))  ; 0+1+2+...+9
+  (print "PASS\n")
+
+  (print "Test 8: Async with do block")
+  (def r8 (await (async-with-do)))
+  (print "Result:" r8)
+  (assert (= r8 30))
+  (print "PASS\n")
+
+  (print "Test 9: Async static method")
+  (def r9 (await (AsyncClass.async-static)))
+  (print "Result:" r9)
+  (assert (= r9 "static async result"))
+  (print "PASS\n")
+
+  (print "Test 10: Sync generator with ^generator")
+  (def r10 (test-sync-generator))
+  (print "Result:" r10)
+  (assert (= (vec r10) [0 2 4 6 8]))  ; [0*2, 1*2, 2*2, 3*2, 4*2]
+  (print "PASS\n")
+
+  (print "=== All advanced async tests passed! ==="))
+
+(asyncio.run (run-tests))

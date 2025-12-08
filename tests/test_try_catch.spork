@@ -1,0 +1,260 @@
+; Test file for try-catch-finally syntax
+
+(print "=== Testing try-catch-finally ===\n")
+
+; ============================================================================
+; 1. Basic try-catch
+; ============================================================================
+
+(print "--- 1. Basic try-catch ---")
+
+(defn test-basic-try []
+  (try
+    (print "Executing body")
+    (/ 10 2)
+    (catch Exception e
+      (print "Caught exception:" e)
+      -1)))
+
+(print "Result without exception:" (test-basic-try))
+
+(defn test-divide-by-zero []
+  (try
+    (print "About to divide by zero")
+    (/ 10 0)
+    (catch ZeroDivisionError e
+      (print "Caught ZeroDivisionError!")
+      -1)))
+
+(print "Result with exception:" (test-divide-by-zero))
+
+(print "")
+
+; ============================================================================
+; 2. Multiple catch clauses
+; ============================================================================
+
+(print "--- 2. Multiple catch clauses ---")
+
+(defn test-error [x]
+  (try
+    (if (= x 0)
+      (/ 1 0)
+      (if (= x 1)
+        (. [1 2] 10)
+        (+ x 100)))
+    (catch ZeroDivisionError e
+      (print "Caught division by zero")
+      "div-error")
+    (catch IndexError e
+      (print "Caught index error")
+      "index-error")
+    (catch Exception e
+      (print "Caught general exception")
+      "other-error")))
+
+(print "test-error(0):" (test-error 0))
+(print "test-error(1):" (test-error 1))
+(print "test-error(5):" (test-error 5))
+
+(print "")
+
+; ============================================================================
+; 3. Try-finally (no catch)
+; ============================================================================
+
+(print "--- 3. Try-finally ---")
+
+(def cleanup-called false)
+
+(defn with-cleanup []
+  (try
+    (print "Doing work...")
+    42
+    (finally
+      (set! cleanup-called true)
+      (print "Cleanup executed"))))
+
+(def result3 (with-cleanup))
+(print "Result:" result3 "Cleanup called:" cleanup-called)
+
+(print "")
+
+; ============================================================================
+; 4. Try-catch-finally
+; ============================================================================
+
+(print "--- 4. Try-catch-finally ---")
+
+(defn full-try [should-error]
+  (try
+    (print "In try block")
+    (if should-error
+      (/ 1 0)
+      "success")
+    (catch ZeroDivisionError e
+      (print "In catch block")
+      "caught")
+    (finally
+      (print "In finally block"))))
+
+(print "Without error:")
+(def result4a (full-try false))
+(print "Result:" result4a)
+
+(print "\nWith error:")
+(def result4b (full-try true))
+(print "Result:" result4b)
+
+(print "")
+
+; ============================================================================
+; 5. Nested try blocks
+; ============================================================================
+
+(print "--- 5. Nested try blocks ---")
+
+(defn nested-try []
+  (try
+    (print "Outer try")
+    (try
+      (print "Inner try")
+      (/ 1 0)
+      (catch ValueError e
+        (print "Inner catch (wrong type)")
+        "inner"))
+    (catch ZeroDivisionError e
+      (print "Outer catch")
+      "outer")))
+
+(print "Nested result:" (nested-try))
+
+(print "")
+
+; ============================================================================
+; 6. Try in let body
+; ============================================================================
+
+(print "--- 6. Try in let body ---")
+
+(def result6
+  (let [x 10]
+    (try
+      (print "Try in let body, x =" x)
+      (/ x 2)
+      (catch Exception e
+        (print "Error in let")
+        0))))
+
+(print "Let with try result:" result6)
+
+(print "")
+
+; ============================================================================
+; 7. Re-raising and propagation
+; ============================================================================
+
+(print "--- 7. Exception propagation ---")
+
+(defn inner-func []
+  (/ 1 0))
+
+(defn outer-func []
+  (try
+    (inner-func)
+    (catch ZeroDivisionError e
+      (print "Caught in outer-func")
+      "recovered")))
+
+(print "Propagation result:" (outer-func))
+
+(print "")
+
+; ============================================================================
+; 8. Try with multiple body forms
+; ============================================================================
+
+(print "--- 8. Multiple body forms ---")
+
+(defn multi-statement-try []
+  (try
+    (print "Statement 1")
+    (print "Statement 2")
+    (print "Statement 3")
+    "final-value"
+    (catch Exception e
+      "error")))
+
+(print "Result with multiple statements:" (multi-statement-try))
+
+(print "")
+
+; ============================================================================
+; 9. Finally executes even without catch
+; ============================================================================
+
+(print "--- 9. Finally without catch ---")
+
+(defn finally-no-catch []
+  (let [result nil]
+    (try
+      (print "Try block")
+      (set! result 100)
+      (finally
+        (print "Finally without catch")))
+    result))
+
+(print "Finally result:" (finally-no-catch))
+
+(print "")
+
+; ============================================================================
+; 10. Try-catch with variable binding
+; ============================================================================
+
+(print "--- 10. Exception variable binding ---")
+
+(defn test-exception-var []
+  (try
+    (/ 1 0)
+    (catch ZeroDivisionError e
+      (print "Exception message:" e)
+      (print "Exception type:" (type e))
+      "handled")))
+
+(print "Exception var test:" (test-exception-var))
+
+(print "")
+
+; ============================================================================
+; 11. Statement context in do block
+; ============================================================================
+
+(print "--- 11. Try in do block ---")
+
+(do
+  (print "Before try")
+  (try
+    (print "In try")
+    (catch Exception e
+      (print "In catch")))
+  (print "After try"))
+
+(print "")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== try-catch-finally Complete! ===")
+(print "✓ Basic try-catch")
+(print "✓ Multiple catch clauses")
+(print "✓ Try-finally without catch")
+(print "✓ Try-catch-finally combined")
+(print "✓ Nested try blocks")
+(print "✓ Try in let body")
+(print "✓ Exception propagation")
+(print "✓ Multiple body forms")
+(print "✓ Finally always executes")
+(print "✓ Exception variable binding")
+(print "✓ Try in various statement contexts")

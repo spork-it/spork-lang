@@ -1,0 +1,174 @@
+; Test fmt macro - Python-style string formatting
+
+(ns tests.test-fmt)
+
+(print "=== Testing fmt Macro ===\n")
+
+; =============================================================================
+; Basic positional formatting
+; =============================================================================
+
+(print "--- Positional Formatting ---")
+
+; Single placeholder
+(def name "Alice")
+(def greeting (fmt "Hello {}!" name))
+(print "Single placeholder:" greeting)
+(assert (= greeting "Hello Alice!") "Single placeholder failed")
+
+; Multiple placeholders
+(def result1 (fmt "{} + {} = {}" 1 2 3))
+(print "Multiple placeholders:" result1)
+(assert (= result1 "1 + 2 = 3") "Multiple placeholders failed")
+
+; Empty string with no placeholders
+(def result2 (fmt "No placeholders here"))
+(print "No placeholders:" result2)
+(assert (= result2 "No placeholders here") "No placeholders failed")
+
+; =============================================================================
+; Indexed formatting
+; =============================================================================
+
+(print "\n--- Indexed Formatting ---")
+
+; Swap order with indices
+(def result3 (fmt "{1} before {0}" "second" "first"))
+(print "Swapped order:" result3)
+(assert (= result3 "first before second") "Indexed swap failed")
+
+; Repeat same index
+(def result4 (fmt "{0} {0} {0}" "echo"))
+(print "Repeated index:" result4)
+(assert (= result4 "echo echo echo") "Repeated index failed")
+
+; Mixed indices
+(def result5 (fmt "{2} {0} {1}" "a" "b" "c"))
+(print "Mixed indices:" result5)
+(assert (= result5 "c a b") "Mixed indices failed")
+
+; =============================================================================
+; Named formatting
+; =============================================================================
+
+(print "\n--- Named Formatting ---")
+
+; Single named argument
+(def result6 (fmt "Hello {name}!" *{:name "Bob"}))
+(print "Single named:" result6)
+(assert (= result6 "Hello Bob!") "Single named failed")
+
+; Multiple named arguments
+(def result7 (fmt "{name} is {age} years old" *{:name "Charlie" :age 25}))
+(print "Multiple named:" result7)
+(assert (= result7 "Charlie is 25 years old") "Multiple named failed")
+
+; Repeated named argument
+(def result8 (fmt "{x} + {x} = {y}" *{:x 5 :y 10}))
+(print "Repeated named:" result8)
+(assert (= result8 "5 + 5 = 10") "Repeated named failed")
+
+; =============================================================================
+; Format specifications
+; =============================================================================
+
+(print "\n--- Format Specifications ---")
+
+; Floating point precision
+(def result9 (fmt "{:.2f}" 3.14159))
+(print "Float precision:" result9)
+(assert (= result9 "3.14") "Float precision failed")
+
+; Right alignment
+(def result10 (fmt "{:>10}" "hi"))
+(print "Right align:" (+ "[" result10 "]"))
+(assert (= result10 "        hi") "Right alignment failed")
+
+; Left alignment
+(def result11 (fmt "{:<10}" "hi"))
+(print "Left align:" (+ "[" result11 "]"))
+(assert (= result11 "hi        ") "Left alignment failed")
+
+; Center alignment
+(def result12 (fmt "{:^10}" "hi"))
+(print "Center align:" (+ "[" result12 "]"))
+(assert (= result12 "    hi    ") "Center alignment failed")
+
+; Zero padding for numbers
+(def result13 (fmt "{:05d}" 42))
+(print "Zero padding:" result13)
+(assert (= result13 "00042") "Zero padding failed")
+
+; Hexadecimal formatting
+(def result14 (fmt "{:x}" 255))
+(print "Hexadecimal:" result14)
+(assert (= result14 "ff") "Hexadecimal failed")
+
+; Binary formatting
+(def result15 (fmt "{:b}" 10))
+(print "Binary:" result15)
+(assert (= result15 "1010") "Binary failed")
+
+; =============================================================================
+; Complex expressions
+; =============================================================================
+
+(print "\n--- Complex Expressions ---")
+
+; Using fmt in a function
+(defn greet [person]
+  (fmt "Welcome, {}!" person))
+
+(def result16 (greet "Diana"))
+(print "Function result:" result16)
+(assert (= result16 "Welcome, Diana!") "Function with fmt failed")
+
+; Nested expressions as arguments
+(def result17 (fmt "Sum: {}" (+ 10 20 30)))
+(print "Expression argument:" result17)
+(assert (= result17 "Sum: 60") "Expression argument failed")
+
+; fmt with computed values
+(def x 5)
+(def y 7)
+(def result18 (fmt "{} * {} = {}" x y (* x y)))
+(print "Computed values:" result18)
+(assert (= result18 "5 * 7 = 35") "Computed values failed")
+
+; fmt with collection elements
+(def nums [10 20 30])
+(def result19 (fmt "First: {}, Last: {}" (first nums) (last nums)))
+(print "Collection elements:" result19)
+(assert (= result19 "First: 10, Last: 30") "Collection elements failed")
+
+; =============================================================================
+; Edge cases
+; =============================================================================
+
+(print "\n--- Edge Cases ---")
+
+; Empty placeholder in string
+(def result20 (fmt "{}{}{}" "a" "b" "c"))
+(print "Adjacent placeholders:" result20)
+(assert (= result20 "abc") "Adjacent placeholders failed")
+
+; Formatting nil
+(def result21 (fmt "Value: {}" nil))
+(print "Nil value:" result21)
+(assert (= result21 "Value: None") "Nil value failed")
+
+; Boolean formatting
+(def result22 (fmt "True: {}, False: {}" true false))
+(print "Booleans:" result22)
+(assert (= result22 "True: True, False: False") "Boolean formatting failed")
+
+; Lists/vectors in format
+(def result23 (fmt "Vector: {}" [1 2 3]))
+(print "Vector:" result23)
+
+; Escaping braces with double braces
+(def result24 (fmt "Use {{}} for placeholders"))
+(print "Escaped braces:" result24)
+(assert (= result24 "Use {} for placeholders") "Escaped braces failed")
+
+(print "\n=== All fmt Tests Passed! ===")

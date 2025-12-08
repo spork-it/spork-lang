@@ -1,0 +1,120 @@
+; std.string - String Utilities
+;
+; Usage: (ns my.app (:require [std.string :as str]))
+
+(ns std.string)
+
+; join - join a collection with a separator
+; (str.join ", " ["a" "b" "c"]) => "a, b, c"
+(defn join [sep coll]
+  (.join sep (list coll)))
+
+; split - split a string by separator
+; (str.split "a,b,c" ",") => ["a" "b" "c"]
+(defn split [s sep]
+  (vec (.split s sep)))
+
+; trim - remove leading/trailing whitespace
+; (str.trim "  hello  ") => "hello"
+(defn trim [s]
+  (.strip s))
+
+; ltrim - remove leading whitespace
+(defn ltrim [s]
+  (.lstrip s))
+
+; rtrim - remove trailing whitespace
+(defn rtrim [s]
+  (.rstrip s))
+
+; upper - convert to uppercase
+(defn upper [s]
+  (.upper s))
+
+; lower - convert to lowercase
+(defn lower [s]
+  (.lower s))
+
+; capitalize - capitalize first letter
+(defn capitalize [s]
+  (.capitalize s))
+
+; title - title case
+(defn title [s]
+  (.title s))
+
+; starts-with? - check if string starts with prefix
+(defn starts-with? [s prefix]
+  (.startswith s prefix))
+
+; ends-with? - check if string ends with suffix
+(defn ends-with? [s suffix]
+  (.endswith s suffix))
+
+; includes? - check if string contains substring
+(defn includes? [s substr]
+  (in substr s))
+
+; blank? - check if string is nil, empty, or only whitespace
+(defn blank? [s]
+  (or (= s nil)
+      (= s "")
+      (= (.strip s) "")))
+
+; replace - replace all occurrences of old with new
+(defn replace [s old new]
+  (.replace s old new))
+
+; replace-first - replace first occurrence of old with new
+(defn replace-first [s old new]
+  (.replace s old new 1))
+
+; reverse - reverse a string
+(defn reverse [s]
+  (. s (slice nil nil -1)))
+
+; repeat - repeat a string n times
+(defn repeat [s n]
+  (* s n))
+
+; count - count occurrences of substring
+(defn substring-count [s substr]
+  (.count s substr))
+
+; index-of - find index of substring, or nil if not found
+(defn index-of [s substr]
+  (let [idx (.find s substr)]
+    (if (= idx -1) nil idx)))
+
+; last-index-of - find last index of substring, or nil if not found
+(defn last-index-of [s substr]
+  (let [idx (.rfind s substr)]
+    (if (= idx -1) nil idx)))
+
+; substring - get substring from start to end (exclusive)
+(defn substring [s start end]
+  (. s (slice start end)))
+
+; char-at - get character at index
+(defn char-at [s idx]
+  (. s (slice idx (+ idx 1))))
+
+; length - get string length
+(defn length [s]
+  (len s))
+
+; pad-left - pad string on the left to reach width
+(defn pad-left [s width char]
+  (.rjust s width char))
+
+; pad-right - pad string on the right to reach width
+(defn pad-right [s width char]
+  (.ljust s width char))
+
+; center - center string with padding
+(defn center [s width char]
+  (.center s width char))
+
+; lines - split string into lines
+(defn lines [s]
+  (vec (.splitlines s)))

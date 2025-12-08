@@ -1,0 +1,95 @@
+;; Test decorators on functions
+
+(ns test-decorators
+  (:import [functools]))
+
+;; Test 1: Simple decorator (staticmethod-like)
+(print "Test 1: Simple decorator")
+
+(defn my-decorator [f]
+  (defn wrapper [& args]
+    (print "  Before call")
+    (let [result (apply f args)]
+      (print "  After call")
+      result))
+  wrapper)
+
+(defn ^my-decorator greet [name]
+  (print (+ "  Hello, " name "!")))
+
+(greet "World")
+
+;; Test 2: Multiple decorators
+(print "\nTest 2: Multiple decorators")
+
+(defn decorator-a [f]
+  (defn wrapper [& args]
+    (print "  A: before")
+    (let [result (apply f args)]
+      (print "  A: after")
+      result))
+  wrapper)
+
+(defn decorator-b [f]
+  (defn wrapper [& args]
+    (print "  B: before")
+    (let [result (apply f args)]
+      (print "  B: after")
+      result))
+  wrapper)
+
+(defn ^decorator-a ^decorator-b say-hi []
+  (print "  Hi!"))
+
+(say-hi)
+;; Should print: A: before, B: before, Hi!, B: after, A: after
+
+;; Test 3: Decorator with arguments
+(print "\nTest 3: Decorator with arguments")
+
+(defn repeat-call [n]
+  (fn [f]
+    (fn [& args]
+      (for [i (range n)]
+        (apply f args)))))
+
+(defn ^(repeat-call 3) ping []
+  (print "  Ping!"))
+
+(ping)
+;; Should print Ping! three times
+
+;; Test 4: functools.wraps decorator
+(print "\nTest 4: functools.wraps usage")
+
+(defn make-logged [f]
+  (defn ^(functools.wraps f) logged [& args]
+    (print "  Calling:" (. f __name__))
+    (apply f args))
+  logged)
+
+(defn ^make-logged add-nums [a b]
+  (+ a b))
+
+(print "  Function name:" (. add-nums __name__))
+(print "  Result:" (add-nums 3 4))
+
+;; Test 5: Decorator on multi-arity function
+(print "\nTest 5: Decorator on multi-arity function")
+
+(defn logging-decorator [f]
+  (defn wrapper [& args]
+    (print "  Calling multi-arity function...")
+    (apply f args))
+  wrapper)
+
+(defn ^logging-decorator multi-add
+  ([x] x)
+  ([x y] (+ x y))
+  ([x y z] (+ x y z)))
+
+(print "  1 arg:" (multi-add 5))
+(print "  2 args:" (multi-add 5 3))
+(print "  3 args:" (multi-add 1 2 3))
+
+(print "\nAll decorator tests passed!")

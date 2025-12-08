@@ -1,0 +1,168 @@
+; Test keyword-only arguments with # syntax
+; Tests the (defn name [positional # keyword-only] ...) pattern
+; Uses explicit *{:key value} syntax for passing keyword arguments
+
+(print "=== Testing Keyword-Only Arguments ===\n")
+
+; ============================================================================
+; 1. Basic keyword-only arguments
+; ============================================================================
+
+(print "--- 1. Basic keyword-only arguments ---")
+
+(defn create-user [name # age email]
+  {:name name :age age :email email})
+
+(def user1 (create-user "Alice" *{:age 30 :email "alice@example.com"}))
+(print "user1:" user1)
+(assert (= (get user1 :name) "Alice"))
+(assert (= (get user1 :age) 30))
+(assert (= (get user1 :email) "alice@example.com"))
+(print "✓ Basic keyword-only args work\n")
+
+; ============================================================================
+; 2. Keyword-only with defaults
+; ============================================================================
+
+(print "--- 2. Keyword-only with defaults ---")
+
+(defn config [host # (port 8080) (debug false)]
+  {:host host :port port :debug debug})
+
+(def cfg1 (config "localhost"))
+(print "cfg1 (defaults):" cfg1)
+(assert (= (get cfg1 :host) "localhost"))
+(assert (= (get cfg1 :port) 8080))
+(assert (= (get cfg1 :debug) false))
+
+(def cfg2 (config "example.com" *{:port 3000 :debug true}))
+(print "cfg2 (custom):" cfg2)
+(assert (= (get cfg2 :host) "example.com"))
+(assert (= (get cfg2 :port) 3000))
+(assert (= (get cfg2 :debug) true))
+
+(def cfg3 (config "test.com" *{:debug true}))
+(print "cfg3 (partial override):" cfg3)
+(assert (= (get cfg3 :port) 8080))
+(assert (= (get cfg3 :debug) true))
+(print "✓ Keyword-only with defaults work\n")
+
+; ============================================================================
+; 3. Multiple positional and keyword-only
+; ============================================================================
+
+(print "--- 3. Multiple positional and keyword-only ---")
+
+(defn make-request [method url # (headers {}) (body nil) (timeout 30)]
+  {:method method
+   :url url
+   :headers headers
+   :body body
+   :timeout timeout})
+
+(def req1 (make-request "GET" "/api/users"))
+(print "req1:" req1)
+(assert (= (get req1 :method) "GET"))
+(assert (= (get req1 :url) "/api/users"))
+(assert (= (get req1 :timeout) 30))
+
+(def req2 (make-request "POST" "/api/users"
+                        *{:body "{\"name\": \"Bob\"}"
+                          :headers {:content-type "application/json"}}))
+(print "req2:" req2)
+(assert (= (get req2 :method) "POST"))
+(assert (= (get req2 :body) "{\"name\": \"Bob\"}"))
+(print "✓ Multiple positional and keyword-only work\n")
+
+; ============================================================================
+; 4. Keyword-only with varargs
+; ============================================================================
+
+(print "--- 4. Positional + varargs + keyword-only ---")
+
+(defn log-message [level & messages # (timestamp true) (prefix "")]
+  (let [msg-str (.join "" messages)]
+    {:level level
+     :message (+ prefix msg-str)
+     :timestamp timestamp}))
+
+(def log1 (log-message "INFO" "Hello " "World"))
+(print "log1:" log1)
+(assert (= (get log1 :level) "INFO"))
+(assert (= (get log1 :message) "Hello World"))
+(assert (= (get log1 :timestamp) true))
+
+(def log2 (log-message "ERROR" "Something " "went " "wrong" *{:prefix "[APP] " :timestamp false}))
+(print "log2:" log2)
+(assert (= (get log2 :message) "[APP] Something went wrong"))
+(assert (= (get log2 :timestamp) false))
+(print "✓ Varargs with keyword-only work\n")
+
+; ============================================================================
+; 5. Using ** for collecting all keyword args
+; ============================================================================
+
+(print "--- 5. Collecting keyword args with ** ---")
+
+(defn flexible-func [required ** opts]
+  {:required required :opts opts})
+
+(def flex1 (flexible-func "value" *{:a 1 :b 2 :c 3}))
+(print "flex1:" flex1)
+(assert (= (get flex1 :required) "value"))
+; Note: Python **kwargs collects keyword args as a dict with string keys
+(assert (= (get (get flex1 :opts) "a") 1))
+(assert (= (get (get flex1 :opts) "b") 2))
+(assert (= (get (get flex1 :opts) "c") 3))
+(print "✓ ** kwargs collection works\n")
+
+; ============================================================================
+; 6. Keyword-only in anonymous functions
+; ============================================================================
+
+(print "--- 6. Keyword-only in anonymous functions ---")
+
+(def make-point (fn [# x y (z 0)]
+                  [x y z]))
+
+(def p1 (make-point *{:x 10 :y 20}))
+(print "p1:" p1)
+(assert (= (nth p1 0) 10))
+(assert (= (nth p1 1) 20))
+(assert (= (nth p1 2) 0))
+
+(def p2 (make-point *{:x 1 :y 2 :z 3}))
+(print "p2:" p2)
+(assert (= (nth p2 2) 3))
+(print "✓ Keyword-only in fn works\n")
+
+; ============================================================================
+; 7. Error handling - missing required keyword arg
+; ============================================================================
+
+(print "--- 7. Error on missing required keyword arg ---")
+
+(defn strict-func [# required-kw]
+  required-kw)
+
+(try
+  (strict-func)  ; Should fail - missing required keyword arg
+  (print "ERROR: Should have raised TypeError!")
+  (assert false)
+  (catch TypeError e
+    (print "✓ Correctly raised TypeError for missing required kwarg")))
+
+(print "")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== All Keyword-Only Argument Tests Passed! ===")
+(print "✓ Basic keyword-only arguments")
+(print "✓ Keyword-only with defaults")
+(print "✓ Multiple positional and keyword-only")
+(print "✓ Varargs with keyword-only")
+(print "✓ ** kwargs collection")
+(print "✓ Keyword-only in anonymous functions")
+(print "✓ Error handling for missing required kwargs")

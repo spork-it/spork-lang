@@ -1,0 +1,208 @@
+;; Comprehensive Demo: Every Form Has a Value
+;; ==========================================
+;; This demonstrates the power of the block-with-result pattern:
+;; while/for/try can appear anywhere, and everything returns a value.
+
+(print "=== Demo: Expression Everywhere ===")
+(print)
+
+;; Example 1: Using while in an if expression
+;; -------------------------------------------
+(print "Example 1: while in if-expression")
+(def result1
+  (if true
+    (let [count 0]
+      (while (< count 5)
+        (set! count (+ count 1)))
+      count)
+    -1))
+(print "  Counter after while loop:" result1)
+(print "  ✓ while can be used in if branches")
+(print)
+
+;; Example 2: Using for in a let binding
+;; --------------------------------------
+(print "Example 2: for in let binding")
+(def result2
+  (let [numbers [1 2 3 4 5]
+        sum 0]
+    (for [n numbers]
+      (set! sum (+ sum n)))
+    sum))
+(print "  Sum of [1 2 3 4 5]:" result2)
+(print "  ✓ for can be used in let bodies")
+(print)
+
+;; Example 3: Complex nested structure
+;; ------------------------------------
+(print "Example 3: Complex nested structure")
+(def result3
+  (let [mode "accumulate"]
+    (if (= mode "accumulate")
+      (let [acc 0]
+        (for [x [10 20 30]]
+          (set! acc (+ acc x)))
+        acc)
+      (do
+        (print "  Different mode")
+        0))))
+(print "  Accumulated value:" result3)
+(print "  ✓ Nesting: let → if → let → for")
+(print)
+
+;; Example 4: while as the only form (returns nil)
+;; ------------------------------------------------
+(print "Example 4: while returning nil")
+(def result4
+  (if true
+    (let [i 0]
+      (while (< i 3)
+        (set! i (+ i 1))))
+    "else-value"))
+(print "  Result:" result4)
+(print "  ✓ Statement-only forms return nil")
+(print)
+
+;; Example 5: Mixing statements and expressions
+;; ---------------------------------------------
+(print "Example 5: Mixed statements and expressions")
+(def result5
+  (let [base 100]
+    (def temp 0)
+    (while (< temp 5)
+      (set! temp (+ temp 1)))
+    (+ base temp)))
+(print "  Base + counter:" result5)
+(print "  ✓ Statements and expressions coexist naturally")
+(print)
+
+;; Example 6: Using in function calls
+;; -----------------------------------
+(print "Example 6: Expression-context in function arguments")
+(defn process [value]
+  (* value 2))
+
+(def result6
+  (process
+    (let [n 0]
+      (while (< n 10)
+        (set! n (+ n 1)))
+      n)))
+(print "  Processed value:" result6)
+(print "  ✓ Can pass complex expressions as arguments")
+(print)
+
+;; Example 7: Conditional accumulation
+;; ------------------------------------
+(print "Example 7: Conditional accumulation")
+(def result7
+  (let [items [1 2 3 4 5 6 7 8 9 10]
+        sum 0]
+    (for [item items]
+      (if (= (% item 2) 0)
+        (set! sum (+ sum item))
+        nil))
+    sum))
+(print "  Sum of even numbers 1-10:" result7)
+(print "  ✓ if inside for loop body")
+(print)
+
+;; Example 8: Building data structures
+;; ------------------------------------
+(print "Example 8: Building lists with loops")
+(def result8
+  (let [result []]
+    (for [i [1 2 3]]
+      (for [j [10 20]]
+        (set! result (+ result [(+ i j)]))))
+    result))
+(print "  Nested loop results:" result8)
+(print "  ✓ Accumulating into data structures")
+(print)
+
+;; Example 9: Early termination patterns
+;; --------------------------------------
+(print "Example 9: Loop with conditional logic")
+(def result9
+  (let [found nil
+        items [5 10 15 20 25]]
+    (for [item items]
+      (if (and (= found nil) (> item 12))
+        (set! found item)
+        nil))
+    found))
+(print "  First item > 12:" result9)
+(print "  ✓ Finding first matching element")
+(print)
+
+;; Example 10: The classic FizzBuzz (sort of)
+;; -------------------------------------------
+(print "Example 10: FizzBuzz-style logic")
+(def result10
+  (let [output []]
+    (for [n [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]]
+      (set! output
+        (+ output
+          [(if (= (% n 15) 0)
+             "FizzBuzz"
+             (if (= (% n 3) 0)
+               "Fizz"
+               (if (= (% n 5) 0)
+                 "Buzz"
+                 n)))])))
+    output))
+(print "  FizzBuzz 1-15:" result10)
+(print "  ✓ Complex conditional logic in loops")
+(print)
+
+;; Example 11: Nested if expressions with loops
+;; ---------------------------------------------
+(print "Example 11: Nested if with multiple branches")
+(def mode "count-evens")
+(def result11
+  (if (= mode "count-evens")
+    (let [count 0]
+      (for [x [1 2 3 4 5 6 7 8 9 10]]
+        (if (= (% x 2) 0)
+          (set! count (+ count 1))
+          nil))
+      count)
+    (if (= mode "count-odds")
+      (let [count 0]
+        (for [x [1 2 3 4 5 6 7 8 9 10]]
+          (if (= (% x 2) 1)
+            (set! count (+ count 1))
+            nil))
+        count)
+      0)))
+(print "  Count of evens:" result11)
+(print "  ✓ Multiple nested branches with loops")
+(print)
+
+;; Example 12: Do blocks everywhere
+;; ---------------------------------
+(print "Example 12: do blocks with mixed forms")
+(def result12
+  (do
+    (print "  Executing do block...")
+    (def x 10)
+    (def y 20)
+    (let [z 5]
+      (while (> z 0)
+        (set! z (- z 1)))
+      (+ x y))))
+(print "  Result:" result12)
+(print "  ✓ do allows sequencing anywhere")
+(print)
+
+;; Summary
+;; -------
+(print)
+(print "=== Summary ===")
+(print "✓ while and for work in any expression context")
+(print "✓ No need for special 'expression versions' of loops")
+(print "✓ Every form has a value (statements return nil)")
+(print "✓ Lisp-y feel: no statement/expression distinction")
+(print "✓ Implementation: block-with-result pattern with _spork_ret")
+(print)
+(print "The compiler handles value management transparently!")

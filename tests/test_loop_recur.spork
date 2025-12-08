@@ -1,0 +1,191 @@
+; Test file for loop/recur Tail Call Optimization
+
+(print "=== Testing basic loop/recur ===")
+
+; Basic countdown loop
+(defn countdown [n]
+  (loop [i n]
+    (if (> i 0)
+      (do
+        (print "Countdown:" i)
+        (recur (- i 1)))
+      (print "Liftoff!"))))
+
+(countdown 5)
+
+(print "\n=== Testing loop with multiple bindings ===")
+
+; Sum of numbers from 1 to n using loop/recur
+(defn sum-to [n]
+  (loop [i 1 acc 0]
+    (if (<= i n)
+      (recur (+ i 1) (+ acc i))
+      acc)))
+
+(print "Sum 1 to 10:" (sum-to 10))  ; Should be 55
+(print "Sum 1 to 100:" (sum-to 100))  ; Should be 5050
+
+(print "\n=== Testing loop as expression ===")
+
+; Loop returning a value directly
+(def factorial-10
+  (loop [n 10 acc 1]
+    (if (<= n 1)
+      acc
+      (recur (- n 1) (* acc n)))))
+
+(print "10! =" factorial-10)  ; Should be 3628800
+
+(print "\n=== Testing loop with value swapping (Fibonacci) ===")
+
+; Fibonacci using loop/recur - tests that recur properly uses temps
+(defn fib [n]
+  (loop [i n a 0 b 1]
+    (if (= i 0)
+      a
+      (recur (- i 1) b (+ a b)))))
+
+(print "fib(0) =" (fib 0))   ; 0
+(print "fib(1) =" (fib 1))   ; 1
+(print "fib(5) =" (fib 5))   ; 5
+(print "fib(10) =" (fib 10)) ; 55
+(print "fib(20) =" (fib 20)) ; 6765
+
+(print "\n=== Testing deep recursion (would overflow without TCO) ===")
+
+; This would cause RecursionError with normal recursion
+(defn count-to [n]
+  (loop [i 0]
+    (if (< i n)
+      (recur (+ i 1))
+      i)))
+
+(print "Count to 10000:" (count-to 10000))
+
+(print "\n=== Testing loop with let in tail position ===")
+
+(defn test-let-tail [n]
+  (loop [i n]
+    (if (> i 0)
+      (let [next (- i 1)]
+        (recur next))
+      "done")))
+
+(print "Let tail test:" (test-let-tail 5))
+
+(print "\n=== Testing loop with do in tail position ===")
+
+(defn test-do-tail [n]
+  (loop [i n acc []]
+    (if (> i 0)
+      (do
+        (print "  Processing:" i)
+        (recur (- i 1) (+ acc [i])))
+      acc)))
+
+(print "Do tail test:" (test-do-tail 3))
+
+(print "\n=== Testing nested if in loop ===")
+
+(defn classify-and-count [n]
+  (loop [i 1 evens 0 odds 0]
+    (if (> i n)
+      {:evens evens :odds odds}
+      (if (= (% i 2) 0)
+        (recur (+ i 1) (+ evens 1) odds)
+        (recur (+ i 1) evens (+ odds 1))))))
+
+(print "Classify 1-10:" (classify-and-count 10))
+
+(print "\n=== Testing loop in statement context ===")
+
+; Loop without using return value
+(defn print-range [start end]
+  (loop [i start]
+    (if (<= i end)
+      (do
+        (print "  Value:" i)
+        (recur (+ i 1)))
+      nil))
+  (print "  Done!"))
+
+(print "Print range 1-3:")
+(print-range 1 3)
+
+(print "\n=== Testing GCD with loop/recur ===")
+
+(defn gcd [a b]
+  (loop [x a y b]
+    (if (= y 0)
+      x
+      (recur y (% x y)))))
+
+(print "gcd(48, 18) =" (gcd 48 18))  ; 6
+(print "gcd(100, 35) =" (gcd 100 35))  ; 5
+
+(print "\n=== Testing loop with cond ===")
+
+(defn fizzbuzz-count [n]
+  (loop [i 1 fizzes 0 buzzes 0 fizzbuzzes 0]
+    (cond
+      (> i n) {:fizzes fizzes :buzzes buzzes :fizzbuzzes fizzbuzzes}
+      (= (% i 15) 0) (recur (+ i 1) fizzes buzzes (+ fizzbuzzes 1))
+      (= (% i 3) 0) (recur (+ i 1) (+ fizzes 1) buzzes fizzbuzzes)
+      (= (% i 5) 0) (recur (+ i 1) fizzes (+ buzzes 1) fizzbuzzes)
+      :else (recur (+ i 1) fizzes buzzes fizzbuzzes))))
+
+(print "FizzBuzz 1-100:" (fizzbuzz-count 100))
+
+(print "\n=== Testing nested loops ===")
+
+; Nested loops - inner loop uses outer loop's variable
+(defn sum-of-triangle-numbers [n]
+  "Calculate sum of first n triangle numbers using nested loops"
+  (loop [outer n result 0]
+    (if (= outer 0)
+      result
+      (let [triangle (loop [inner outer acc 0]
+                       (if (= inner 0)
+                         acc
+                         (recur (- inner 1) (+ acc inner))))]
+        (recur (- outer 1) (+ result triangle))))))
+
+(print "Sum of first 5 triangle numbers:" (sum-of-triangle-numbers 5))  ; 1+3+6+10+15=35
+
+; Triple nested loops
+(defn nested-3-deep [n]
+  (loop [i n total 0]
+    (if (= i 0)
+      total
+      (let [mid-sum (loop [j i mid 0]
+                      (if (= j 0)
+                        mid
+                        (let [inner-sum (loop [k j inner 0]
+                                          (if (= k 0)
+                                            inner
+                                            (recur (- k 1) (+ inner 1))))]
+                          (recur (- j 1) (+ mid inner-sum)))))]
+        (recur (- i 1) (+ total mid-sum))))))
+
+(print "Triple nested (3):" (nested-3-deep 3))  ; Should be 10
+
+(print "\n=== Stress test: Very deep recursion ===")
+
+; This would cause RecursionError with normal recursion (Python limit ~1000)
+; but works fine with loop/recur TCO
+(defn deep-sum [n]
+  "Sum from 1 to n using loop/recur - works even for n > recursion limit"
+  (loop [i 1 acc 0]
+    (if (> i n)
+      acc
+      (recur (+ i 1) (+ acc i)))))
+
+; Test with 100,000 iterations - way beyond Python's recursion limit
+(print "Sum 1 to 100000:" (deep-sum 100000))  ; Should be 5000050000
+
+; For comparison, here's what would fail with normal recursion:
+; (defn bad-sum [n acc]
+;   (if (= n 0) acc (bad-sum (- n 1) (+ acc n))))
+; (bad-sum 100000 0)  ; RecursionError!
+
+(print "\n=== All loop/recur tests complete! ===")

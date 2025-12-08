@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""
+Spork CLI driver - A thin wrapper for the Spork compiler
+"""
+
+import os
+import sys
+from pathlib import Path
+
+# Add parent directory to Python path so we can import spork
+script_dir = Path(__file__).parent.resolve()
+parent_dir = script_dir.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+
+from spork.__main__ import main
+
+if __name__ == "__main__":
+    main()

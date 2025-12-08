@@ -1,0 +1,151 @@
+; Test std.map module
+
+(ns tests.test-std-map
+  (:require [std.map :as m]))
+
+(print "=== Testing std.map ===\n")
+
+; keys and vals
+(def test-map {:a 1 :b 2 :c 3})
+(print "keys:" (m.keys test-map))
+(print "vals:" (m.vals test-map))
+(assert (= (count (m.keys test-map)) 3) "keys count failed")
+(assert (= (count (m.vals test-map)) 3) "vals count failed")
+(print "keys/vals: passed")
+
+; entries
+(def ents (m.entries test-map))
+(print "entries:" ents)
+(assert (= (count ents) 3) "entries count failed")
+(print "entries: passed")
+
+; update
+(def updated (m.update {:a 1} :a inc))
+(print "update:" updated)
+(assert (= (get updated :a) 2) "update failed")
+(print "update: passed")
+
+; update-with (with default)
+(def updated2 (m.update-with {} :b inc 0))
+(print "update-with:" updated2)
+(assert (= (get updated2 :b) 1) "update-with failed")
+(print "update-with: passed")
+
+; get-in
+(def nested {:a {:b {:c 42}}})
+(assert (= (m.get-in nested [:a :b :c]) 42) "get-in failed")
+(assert (= (m.get-in nested [:a :b]) {:c 42}) "get-in intermediate failed")
+(assert (= (m.get-in nested [:a]) {:b {:c 42}}) "get-in top failed")
+(print "get-in: passed")
+
+; get-in-or
+(assert (= (m.get-in-or nested [:a :b :c] 0) 42) "get-in-or found failed")
+(assert (= (m.get-in-or nested [:a :b :x] 99) 99) "get-in-or default failed")
+(assert (= (m.get-in-or nested [:x :y :z] "missing") "missing") "get-in-or deep missing failed")
+(print "get-in-or: passed")
+
+; assoc-in
+(def assoc-result (m.assoc-in {} [:a :b :c] 1))
+(print "assoc-in:" assoc-result)
+(assert (= (m.get-in assoc-result [:a :b :c]) 1) "assoc-in failed")
+
+(def assoc-result2 (m.assoc-in {:a {:b 1}} [:a :c] 2))
+(assert (= (m.get-in assoc-result2 [:a :b]) 1) "assoc-in preserve failed")
+(assert (= (m.get-in assoc-result2 [:a :c]) 2) "assoc-in new key failed")
+(print "assoc-in: passed")
+
+; update-in
+(def update-in-result (m.update-in {:a {:b 1}} [:a :b] inc))
+(print "update-in:" update-in-result)
+(assert (= (m.get-in update-in-result [:a :b]) 2) "update-in failed")
+(print "update-in: passed")
+
+; select-keys
+(def selected (m.select-keys {:a 1 :b 2 :c 3} [:a :c]))
+(print "select-keys:" selected)
+(assert (= (get selected :a) 1) "select-keys :a failed")
+(assert (= (get selected :c) 3) "select-keys :c failed")
+(assert (= (get selected :b nil) nil) "select-keys :b should be nil")
+(print "select-keys: passed")
+
+; dissoc-in
+(def dissoc-result (m.dissoc-in {:a {:b 1 :c 2}} [:a :b]))
+(print "dissoc-in:" dissoc-result)
+(assert (= (m.get-in dissoc-result [:a :c]) 2) "dissoc-in preserve failed")
+(assert (= (m.get-in dissoc-result [:a :b]) nil) "dissoc-in remove failed")
+(print "dissoc-in: passed")
+
+; merge
+(def merged (m.merge {:a 1} {:b 2} {:c 3}))
+(print "merge:" merged)
+(assert (= (get merged :a) 1) "merge :a failed")
+(assert (= (get merged :b) 2) "merge :b failed")
+(assert (= (get merged :c) 3) "merge :c failed")
+
+(def merge-override (m.merge {:a 1} {:a 2}))
+(assert (= (get merge-override :a) 2) "merge override failed")
+(print "merge: passed")
+
+; merge-with
+(def merge-with-result (m.merge-with + {:a 1 :b 2} {:a 3 :c 4}))
+(print "merge-with:" merge-with-result)
+(assert (= (get merge-with-result :a) 4) "merge-with :a failed")
+(assert (= (get merge-with-result :b) 2) "merge-with :b failed")
+(assert (= (get merge-with-result :c) 4) "merge-with :c failed")
+(print "merge-with: passed")
+
+; rename-keys
+(def renamed (m.rename-keys {:a 1 :b 2} {:a :x}))
+(print "rename-keys:" renamed)
+(assert (= (get renamed :x) 1) "rename-keys :x failed")
+(assert (= (get renamed :b) 2) "rename-keys :b failed")
+(assert (= (get renamed :a nil) nil) "rename-keys old key should be nil")
+(print "rename-keys: passed")
+
+; invert
+(def inverted (m.invert {:a 1 :b 2}))
+(print "invert:" inverted)
+(assert (= (get inverted 1) :a) "invert 1 failed")
+(assert (= (get inverted 2) :b) "invert 2 failed")
+(print "invert: passed")
+
+; map-keys
+(def mapped-keys (m.map-keys (fn [k] (. k name)) {:a 1 :b 2}))
+(print "map-keys:" mapped-keys)
+(assert (= (get mapped-keys "a") 1) "map-keys failed")
+(print "map-keys: passed")
+
+; map-vals
+(def mapped-vals (m.map-vals inc {:a 1 :b 2}))
+(print "map-vals:" mapped-vals)
+(assert (= (get mapped-vals :a) 2) "map-vals :a failed")
+(assert (= (get mapped-vals :b) 3) "map-vals :b failed")
+(print "map-vals: passed")
+
+; filter-keys
+(def filtered-keys (m.filter-keys (fn [k] (= k :a)) {:a 1 :b 2 :c 3}))
+(print "filter-keys:" filtered-keys)
+(assert (= (count filtered-keys) 1) "filter-keys count failed")
+(assert (= (get filtered-keys :a) 1) "filter-keys :a failed")
+(print "filter-keys: passed")
+
+; filter-vals
+(def filtered-vals (m.filter-vals (fn [v] (> v 1)) {:a 1 :b 2 :c 3}))
+(print "filter-vals:" filtered-vals)
+(assert (= (count filtered-vals) 2) "filter-vals count failed")
+(assert (= (get filtered-vals :b) 2) "filter-vals :b failed")
+(assert (= (get filtered-vals :c) 3) "filter-vals :c failed")
+(print "filter-vals: passed")
+
+; deep-merge
+(def deep1 {:a {:b 1 :c 2}})
+(def deep2 {:a {:c 3 :d 4} :e 5})
+(def deep-merged (m.deep-merge deep1 deep2))
+(print "deep-merge:" deep-merged)
+(assert (= (m.get-in deep-merged [:a :b]) 1) "deep-merge [:a :b] failed")
+(assert (= (m.get-in deep-merged [:a :c]) 3) "deep-merge [:a :c] failed")
+(assert (= (m.get-in deep-merged [:a :d]) 4) "deep-merge [:a :d] failed")
+(assert (= (get deep-merged :e) 5) "deep-merge :e failed")
+(print "deep-merge: passed")
+
+(print "\n=== All std.map tests passed! ===")

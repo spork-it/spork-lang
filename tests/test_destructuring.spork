@@ -1,0 +1,181 @@
+;; Test file for destructuring bindings
+;; Tests vector and dict destructuring in let, fn, and for
+
+(print "=== Testing Destructuring Bindings ===\n")
+
+;; === Let destructuring tests ===
+
+(print "--- Let Vector Destructuring ---")
+
+;; Basic vector destructuring
+(let [[a b c] [1 2 3]]
+  (print "Basic [a b c] = [1 2 3]:" a b c)
+  (assert (= a 1))
+  (assert (= b 2))
+  (assert (= c 3)))
+
+;; Nested vector destructuring
+(let [[[x y] z] [[1 2] 3]]
+  (print "Nested [[x y] z] = [[1 2] 3]:" x y z)
+  (assert (= x 1))
+  (assert (= y 2))
+  (assert (= z 3)))
+
+;; Vector with rest
+(let [[first second & rest] [1 2 3 4 5]]
+  (print "Rest [first second & rest] = [1 2 3 4 5]:" first second rest)
+  (assert (= first 1))
+  (assert (= second 2))
+  (assert (= rest [3 4 5])))
+
+(print "\n--- Let Dict Destructuring ---")
+
+;; Dict destructuring with :keys
+(let [{:keys [x y]} {:x 10 :y 20}]
+  (print "Keys {:keys [x y]} from {:x 10 :y 20}:" x y)
+  (assert (= x 10))
+  (assert (= y 20)))
+
+;; Clojure-style dict destructuring: {binding :key}
+(let [{foo :a bar :b} {:a 100 :b 200}]
+  (print "Clojure-style {foo :a bar :b} from {:a 100 :b 200}:" foo bar)
+  (assert (= foo 100))
+  (assert (= bar 200)))
+
+;; Alternative syntax: {:key binding}
+(let [{:a baz :b qux} {:a 300 :b 400}]
+  (print "Alternative {:a baz :b qux} from {:a 300 :b 400}:" baz qux)
+  (assert (= baz 300))
+  (assert (= qux 400)))
+
+(print "\n--- Mixed Destructuring in Let ---")
+
+;; Multiple bindings with mixed patterns
+(let [simple 42
+      [a b] [1 2]
+      {:keys [name]} {:name "test"}]
+  (print "Mixed bindings:" simple a b name)
+  (assert (= simple 42))
+  (assert (= a 1))
+  (assert (= b 2))
+  (assert (= name "test")))
+
+;; === Function parameter destructuring tests ===
+
+(print "\n--- Function Parameter Destructuring ---")
+
+;; Vector destructuring in fn params
+(defn add-pair [[x y]]
+  (+ x y))
+
+(print "add-pair [3 4] =" (add-pair [3 4]))
+(assert (= (add-pair [3 4]) 7))
+
+;; Nested destructuring in fn params
+(defn process-nested [[[a b] c]]
+  (+ a b c))
+
+(print "process-nested [[1 2] 3] =" (process-nested [[1 2] 3]))
+(assert (= (process-nested [[1 2] 3]) 6))
+
+;; Dict destructuring in fn params
+(defn greet [{:keys [name greeting]}]
+  (+ greeting ", " name "!"))
+
+(print "greet {:name \"World\" :greeting \"Hello\"} ="
+       (greet {:name "World" :greeting "Hello"}))
+(assert (= (greet {:name "World" :greeting "Hello"}) "Hello, World!"))
+
+;; Mixed params with destructuring
+(defn process-point [label [x y]]
+  (+ label ": (" (str x) ", " (str y) ")"))
+
+(print "process-point \"Point\" [10 20] =" (process-point "Point" [10 20]))
+(assert (= (process-point "Point" [10 20]) "Point: (10, 20)"))
+
+;; Anonymous function with destructuring
+(def sum-triple (fn [[a b c]] (+ a b c)))
+(print "sum-triple [1 2 3] =" (sum-triple [1 2 3]))
+(assert (= (sum-triple [1 2 3]) 6))
+
+;; === For loop destructuring tests ===
+
+(print "\n--- For Loop Destructuring ---")
+
+;; Vector destructuring in for
+(def pairs [[1 2] [3 4] [5 6]])
+(def result (vec (map (fn [[a b]] (+ a b)) pairs)))
+(print "For with pairs:" result)
+(assert (= result [3 7 11]))
+
+;; Dict iteration (simulating with .items)
+(def my-dict {:a 1 :b 2 :c 3})
+(def dict-result (vec (map (fn [[k v]] (+ (str k) "=" (str v))) (.items my-dict))))
+(print "For with dict.items:" dict-result)
+
+;; Nested destructuring in for
+(def nested-data [[[1 2] "a"] [[3 4] "b"]])
+(def nested-result (vec (map (fn [[[x y] label]] (+ label ":" (str (+ x y)))) nested-data)))
+(print "For with nested data:" nested-result)
+(assert (= nested-result ["a:3" "b:7"]))
+
+;; === Edge cases ===
+
+(print "\n--- Edge Cases ---")
+
+;; Single element destructuring
+(let [[only] [42]]
+  (print "Single element [only] = [42]:" only)
+  (assert (= only 42)))
+
+;; Empty rest
+(let [[a b & rest] [1 2]]
+  (print "Empty rest [a b & rest] = [1 2]:" a b rest)
+  (assert (= a 1))
+  (assert (= b 2))
+  (assert (= rest [])))
+
+;; Destructuring with computations
+(let [[x y] [(+ 1 2) (* 3 4)]]
+  (print "Computed [x y] = [(+ 1 2) (* 3 4)]:" x y)
+  (assert (= x 3))
+  (assert (= y 12)))
+
+;; Destructuring result of function call
+(defn make-pair [a b] [a b])
+(let [[p q] (make-pair 100 200)]
+  (print "From function call [p q] = (make-pair 100 200):" p q)
+  (assert (= p 100))
+  (assert (= q 200)))
+
+;; === Def destructuring tests ===
+
+(print "\n--- Def Destructuring ---")
+
+;; Vector destructuring with def
+(def [da db dc] [10 20 30])
+(print "def [da db dc] = [10 20 30]:" da db dc)
+(assert (= da 10))
+(assert (= db 20))
+(assert (= dc 30))
+
+;; Dict destructuring with def
+(def {:keys [dx dy]} {:dx 100 :dy 200})
+(print "def {:keys [dx dy]} from {:dx 100 :dy 200}:" dx dy)
+(assert (= dx 100))
+(assert (= dy 200))
+
+;; Nested destructuring with def
+(def [[inner-a inner-b] outer-c] [[1 2] 3])
+(print "def [[inner-a inner-b] outer-c] = [[1 2] 3]:" inner-a inner-b outer-c)
+(assert (= inner-a 1))
+(assert (= inner-b 2))
+(assert (= outer-c 3))
+
+;; Def with rest
+(def [first-def & rest-def] [1 2 3 4])
+(print "def [first-def & rest-def] = [1 2 3 4]:" first-def rest-def)
+(assert (= first-def 1))
+(assert (= rest-def [2 3 4]))
+
+(print "\n=== All Destructuring Tests Passed! ===")

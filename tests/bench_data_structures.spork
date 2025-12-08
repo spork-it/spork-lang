@@ -1,0 +1,451 @@
+;; Benchmark: Spork Persistent Data Structures vs Python Built-ins
+;;
+;; Compares performance of:
+;; - Vector vs Python list
+;; - DoubleVector vs Python list of floats
+;; - IntVector vs Python list of ints
+;; - Map vs Python dict
+;; - NumPy interop (buffer protocol)
+
+(ns bench-data-structures
+  (:require [time]
+            [numpy :as np])
+  (:import [operator]))
+
+; (import time)
+; (import numpy :as np)
+
+;; === Benchmark Utilities ===
+
+(defn time-ms [f]
+  "Run f and return elapsed time in milliseconds"
+  (let [start (time.perf_counter)
+        _ (f)
+        end (time.perf_counter)]
+    (* 1000.0 (- end start))))
+
+(defn bench [name f iterations]
+  "Run f for `iterations` and print average time"
+  (let [times (doall (map (fn [_] (time-ms f)) (range iterations)))
+        total (reduce + 0.0 times)
+        avg (/ total iterations)]
+    (print (+ "  " name ": " (str (round avg 3)) " ms (avg of " (str iterations) " runs)"))))
+
+(defn format-speedup [base other]
+  "Format speedup ratio"
+  (let [ratio (/ base other)]
+    (if (>= ratio 1.0)
+      (+ (str (round ratio 2)) "x faster")
+      (+ (str (round (/ 1.0 ratio) 2)) "x slower"))))
+
+;; === Configuration ===
+(def SMALL 1000)
+(def MEDIUM 10000)
+(def LARGE 100000)
+(def ITERATIONS 50)
+
+(print "\n" (* "=" 60) "\n")
+(print "  SPORK DATA STRUCTURE BENCHMARKS")
+(print "\n" (* "=" 60) "\n")
+(print "Config: SMALL=" SMALL ", MEDIUM=" MEDIUM ", LARGE=" LARGE ", ITERATIONS=" ITERATIONS)
+
+;; =============================================================================
+;; VECTOR CONSTRUCTION BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Vector Construction ---\n")
+
+;; Python list construction
+(defn python-list-construct [n]
+  (fn []
+    (def result [])
+    (for [i (range n)]
+      (set! result (+ result [i])))
+    result))
+
+;; Python list.append (more idiomatic)
+(defn python-list-append [n]
+  (fn []
+    (def result (list))
+    (for [i (range n)]
+      (.append result i))
+    result))
+
+;; Vector construction using conj
+(defn Vector-construct [n]
+  (fn []
+    (def result EMPTY_VECTOR)
+    (for [i (range n)]
+      (set! result (conj result i)))
+    result))
+
+;; Vector using transient (batch operations)
+(defn Vector-transient-construct [n]
+  (fn []
+    (def t (.transient EMPTY_VECTOR))
+    (for [i (range n)]
+      (.conj_mut t i))
+    (.persistent t)))
+
+;; PDoubleVector construction
+(defn pdoublevector-construct [n]
+  (fn []
+    (def result EMPTY_DOUBLE_VECTOR)
+    (for [i (range n)]
+      (set! result (.conj result (float i))))
+    result))
+
+;; PDoubleVector using transient (batch operations)
+(defn pdoublevector-transient-construct [n]
+  (fn []
+    (def t (.transient EMPTY_DOUBLE_VECTOR))
+    (for [i (range n)]
+      (.conj_mut t (float i)))
+    (.persistent t)))
+
+;; PIntVector construction
+(defn intvector-construct [n]
+  (fn []
+    (def result EMPTY_LONG_VECTOR)
+    (for [i (range n)]
+      (set! result (.conj result i)))
+    result))
+
+;; PIntVector using transient (batch operations)
+(defn intvector-transient-construct [n]
+  (fn []
+    (def t (.transient EMPTY_LONG_VECTOR))
+    (for [i (range n)]
+      (.conj_mut t i))
+    (.persistent t)))
+
+(print "Small vectors (n=" SMALL "):")
+(bench "Python list.append" (python-list-append SMALL) ITERATIONS)
+(bench "Vector (conj)" (Vector-construct SMALL) ITERATIONS)
+(bench "Vector (transient)" (Vector-transient-construct SMALL) ITERATIONS)
+(bench "DoubleVector (conj)" (pdoublevector-construct SMALL) ITERATIONS)
+(bench "DoubleVector (transient)" (pdoublevector-transient-construct SMALL) ITERATIONS)
+(bench "IntVector (conj)" (intvector-construct SMALL) ITERATIONS)
+(bench "IntVector (transient)" (intvector-transient-construct SMALL) ITERATIONS)
+
+(print "\nMedium vectors (n=" MEDIUM "):")
+(bench "Python list.append" (python-list-append MEDIUM) ITERATIONS)
+(bench "Vector (transient)" (Vector-transient-construct MEDIUM) ITERATIONS)
+(bench "DoubleVector (conj)" (pdoublevector-construct MEDIUM) ITERATIONS)
+(bench "DoubleVector (transient)" (pdoublevector-transient-construct MEDIUM) ITERATIONS)
+(bench "IntVector (conj)" (intvector-construct MEDIUM) ITERATIONS)
+(bench "IntVector (transient)" (intvector-transient-construct MEDIUM) ITERATIONS)
+
+(print "\nLarge vectors (n=" LARGE "):")
+(bench "Python list.append" (python-list-append LARGE) ITERATIONS)
+(bench "Vector (transient)" (Vector-transient-construct LARGE) ITERATIONS)
+(bench "DoubleVector (conj)" (pdoublevector-construct LARGE) ITERATIONS)
+(bench "DoubleVector (transient)" (pdoublevector-transient-construct LARGE) ITERATIONS)
+(bench "IntVector (conj)" (intvector-construct LARGE) ITERATIONS)
+(bench "IntVector (transient)" (intvector-transient-construct LARGE) ITERATIONS)
+
+;; =============================================================================
+;; VECTOR ACCESS BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Vector Random Access ---\n")
+
+;; Pre-build test vectors
+(def py-list (list (range MEDIUM)))
+(def pv (into [] (range MEDIUM)))
+(def pdv (apply vec_f64 (map float (range MEDIUM))))
+(def plv (apply vec_i64 (range MEDIUM)))
+
+(defn random-access-python [lst n]
+  (fn []
+    (def sum 0)
+    (for [i (range n)]
+      (set! sum (+ sum (nth lst (% (* i 37) (len lst))))))
+    sum))
+
+(defn random-access-Vector [v n]
+  (fn []
+    (def sum 0)
+    (for [i (range n)]
+      (set! sum (+ sum (nth v (% (* i 37) (len v))))))
+    sum))
+
+(print "Random access (n=" MEDIUM ", accesses=" SMALL "):")
+(bench "Python list" (random-access-python py-list SMALL) ITERATIONS)
+(bench "Vector" (random-access-Vector pv SMALL) ITERATIONS)
+(bench "DoubleVector" (random-access-Vector pdv SMALL) ITERATIONS)
+(bench "IntVector" (random-access-Vector plv SMALL) ITERATIONS)
+
+;; =============================================================================
+;; VECTOR ITERATION BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Vector Iteration ---\n")
+
+(defn iterate-sum-python [lst]
+  (fn []
+    (def sum 0)
+    (for [x lst]
+      (set! sum (+ sum x)))
+    sum))
+
+(defn iterate-sum-Vector [v]
+  (fn []
+    (def sum 0)
+    (for [x v]
+      (set! sum (+ sum x)))
+    sum))
+
+(print "Iterate and sum (n=" MEDIUM "):")
+(bench "Python list" (iterate-sum-python py-list) ITERATIONS)
+(bench "Vector" (iterate-sum-Vector pv) ITERATIONS)
+(bench "DoubleVector" (iterate-sum-Vector pdv) ITERATIONS)
+(bench "IntVector" (iterate-sum-Vector plv) ITERATIONS)
+
+;; =============================================================================
+;; MAP BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Map Construction ---\n")
+
+(defn python-dict-construct [n]
+  (fn []
+    (def result (dict))
+    (for [i (range n)]
+      (.__setitem__ result (str i) i))
+    result))
+
+(defn map-construct [n]
+  (fn []
+    (def result EMPTY_MAP)
+    (for [i (range n)]
+      (set! result (assoc result (str i) i)))
+    result))
+
+(defn map-transient-construct [n]
+  (fn []
+    (def t (.transient EMPTY_MAP))
+    (for [i (range n)]
+      (.assoc_mut t (str i) i))
+    (.persistent t)))
+
+(print "Small maps (n=" SMALL "):")
+(bench "Python dict" (python-dict-construct SMALL) ITERATIONS)
+(bench "Map (assoc)" (map-construct SMALL) ITERATIONS)
+(bench "Map (transient)" (map-transient-construct SMALL) ITERATIONS)
+
+(print "\nMedium maps (n=" MEDIUM "):")
+(bench "Python dict" (python-dict-construct MEDIUM) ITERATIONS)
+(bench "Map (assoc)" (map-construct MEDIUM) ITERATIONS)
+(bench "Map (transient)" (map-transient-construct MEDIUM) ITERATIONS)
+
+; (print "\nLarge maps (n=" LARGE "):")
+; (bench "Python dict" (python-dict-construct LARGE) ITERATIONS)
+; (bench "Map (assoc)" (map-construct LARGE) ITERATIONS)
+; (bench "Map (transient)" (map-transient-construct LARGE) ITERATIONS)
+
+;; =============================================================================
+;; SET BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Set Construction ---\n")
+
+(defn python-set-construct [n]
+  (fn []
+    (def result (set))
+    (for [i (range n)]
+      (.add result i))
+    result))
+
+(defn set-construct [n]
+  (fn []
+    (def result EMPTY_SET)
+    (for [i (range n)]
+      (set! result (conj result i)))
+    result))
+
+(defn set-transient-construct [n]
+  (fn []
+    (def t (.transient EMPTY_SET))
+    (for [i (range n)]
+      (.conj_mut t i))
+    (.persistent t)))
+
+(print "Small sets (n=" SMALL "):")
+(bench "Python set.add" (python-set-construct SMALL) ITERATIONS)
+(bench "Set (conj)" (set-construct SMALL) ITERATIONS)
+(bench "Set (transient)" (set-transient-construct SMALL) ITERATIONS)
+
+(print "\nMedium sets (n=" MEDIUM "):")
+(bench "Python set.add" (python-set-construct MEDIUM) ITERATIONS)
+(bench "Set (conj)" (set-construct MEDIUM) ITERATIONS)
+(bench "Set (transient)" (set-transient-construct MEDIUM) ITERATIONS)
+
+; (print "\nLarge sets (n=" LARGE "):")
+; (bench "Python set.add" (python-set-construct LARGE) ITERATIONS)
+; (bench "Set (conj)" (set-construct LARGE) ITERATIONS)
+; (bench "Set (transient)" (set-transient-construct LARGE) ITERATIONS)
+
+;; =============================================================================
+;; SET LOOKUP BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Set Lookup ---\n")
+
+;; Pre-build test sets
+(def py-set-lookup (set (range MEDIUM)))
+(def ps (into #{} (range MEDIUM)))
+
+(defn set-lookup-python [s n]
+  (fn []
+    (def count 0)
+    (for [i (range n)]
+      (if (in (% (* i 37) MEDIUM) s)
+        (set! count (+ count 1))))
+    count))
+
+(defn set-lookup-set [s n]
+  (fn []
+    (def count 0)
+    (for [i (range n)]
+      (if (in (% (* i 37) MEDIUM) s)
+        (set! count (+ count 1))))
+    count))
+
+(print "Set lookups (set size=" MEDIUM ", lookups=" SMALL "):")
+(bench "Python set" (set-lookup-python py-set-lookup SMALL) ITERATIONS)
+(bench "Set" (set-lookup-set ps SMALL) ITERATIONS)
+
+;; =============================================================================
+;; SET OPERATIONS BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Set Operations ---\n")
+
+;; Pre-build test sets with overlap
+(def py-set-a (set (range 0 SMALL)))
+(def py-set-b (set (range (// SMALL 2) (+ SMALL (// SMALL 2)))))
+(def ps-a (into #{} (range 0 SMALL)))
+(def ps-b (into #{} (range (// SMALL 2) (+ SMALL (// SMALL 2)))))
+
+(defn set-union-python [a b]
+  (fn [] (.union a b)))
+
+(defn set-union-set [a b]
+  (fn [] (bit-or a b)))
+
+(defn set-intersection-python [a b]
+  (fn [] (.intersection a b)))
+
+(defn set-intersection-set [a b]
+  (fn [] (bit-and a b)))
+
+(defn set-difference-python [a b]
+  (fn [] (.difference a b)))
+
+(defn set-difference-set [a b]
+  (fn [] (operator.sub a b)))
+
+(print "Set operations (set size=" SMALL ", 50% overlap):")
+(bench "Python set union" (set-union-python py-set-a py-set-b) ITERATIONS)
+(bench "Set union (bit-or)" (set-union-set ps-a ps-b) ITERATIONS)
+(bench "Python set intersection" (set-intersection-python py-set-a py-set-b) ITERATIONS)
+(bench "Set intersection (bit-and)" (set-intersection-set ps-a ps-b) ITERATIONS)
+(bench "Python set difference" (set-difference-python py-set-a py-set-b) ITERATIONS)
+(bench "Set difference" (set-difference-set ps-a ps-b) ITERATIONS)
+
+;; =============================================================================
+;; MAP ACCESS BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Map Lookup ---\n")
+
+;; Pre-build test maps
+(def py-dict (dict (map (fn [i] [(str i) i]) (range MEDIUM))))
+(def pm (into {} (map (fn [i] [(str i) i]) (range MEDIUM))))
+
+(defn map-lookup-python [d n]
+  (fn []
+    (def sum 0)
+    (for [i (range n)]
+      (set! sum (+ sum (get d (str (% (* i 37) n)) 0))))
+    sum))
+
+(defn map-lookup-pmap [m n]
+  (fn []
+    (def sum 0)
+    (for [i (range n)]
+      (set! sum (+ sum (get m (str (% (* i 37) n)) 0))))
+    sum))
+
+(print "Map lookups (map size=" MEDIUM ", lookups=" SMALL "):")
+(bench "Python dict" (map-lookup-python py-dict SMALL) ITERATIONS)
+(bench "Map" (map-lookup-pmap pm SMALL) ITERATIONS)
+
+;; =============================================================================
+;; NUMPY INTEROP BENCHMARKS (if available)
+;; =============================================================================
+
+(print "\n--- NumPy Interop ---\n")
+
+(try
+  (do
+    ;(import numpy :as np)
+    ;(def np (__import__ numpy))
+
+    ;; Pre-build test data
+    (def large-pdv (apply vec_f64 (map float (range LARGE))))
+    (def large-py-list (list (map float (range LARGE))))
+
+    (defn numpy-from-python-list [lst]
+      (fn [] (np.array lst)))
+
+    (defn numpy-from-pdoublevector [pdv]
+      (fn [] (np.array pdv)))
+
+    (print "NumPy array creation (n=" LARGE "):")
+    (bench "From Python list" (numpy-from-python-list large-py-list) ITERATIONS)
+    (bench "From DoubleVector" (numpy-from-pdoublevector large-pdv) ITERATIONS)
+
+    ;; Verify buffer protocol is zero-copy by checking memory
+    (def arr1 (np.array large-pdv))
+    (def arr2 (np.array large-pdv))
+    ;; Both should share the same cached buffer
+    (print "\nBuffer protocol verification:")
+    (print "  Array dtype:" arr1.dtype)
+    (print "  Array shape:" arr1.shape)
+    (print "  Sum matches:" (= (.sum arr1) (.sum (np.array large-py-list)))))
+
+  (catch ImportError e
+    (print "NumPy not available, skipping NumPy benchmarks")))
+
+;; =============================================================================
+;; IMMUTABILITY / STRUCTURAL SHARING BENCHMARKS
+;; =============================================================================
+
+(print "\n--- Structural Sharing ---\n")
+
+(defn copy-and-modify-python [lst n]
+  "Python: copy list and modify - requires full copy"
+  (fn []
+    (for [i (range n)]
+      (def copy (list lst))
+      (set! (nth copy 0) i))))
+
+(defn modify-Vector [v n]
+  "Vector: assoc creates new vector with structural sharing"
+  (fn []
+    (for [i (range n)]
+      (assoc v 0 i))))
+
+(print "Copy-and-modify pattern (base size=" MEDIUM ", modifications=" SMALL "):")
+(bench "Python list (full copy)" (copy-and-modify-python py-list SMALL) ITERATIONS)
+(bench "Vector (structural sharing)" (modify-Vector pv SMALL) ITERATIONS)
+
+;; =============================================================================
+;; SUMMARY
+;; =============================================================================
+
+(print "\n" (* "=" 60) "\n")
+(print "  BENCHMARK COMPLETE")
+(print "\n" (* "=" 60) "\n")

@@ -1,0 +1,33 @@
+;; Test namespace requiring another namespace
+;; Tests the (ns ...) and :require functionality
+
+(ns test.ns (:require [math :as m]
+                      [std.json :as json]))
+
+;; Test Python module import
+(print "\nTesting Python module import:")
+(print "m.sqrt 16:" (m.sqrt 16))
+(print "m.pi:" m.pi)
+
+;; Define something in this namespace
+(defn local-fn [x]
+  "A function defined in the test namespace"
+  (* x 10))
+
+(print "\nTesting local definition:")
+(print "local-fn 7:" (local-fn 7))
+
+;; Test that std.json works with dot notation
+(print "\n--- Testing std.json with dot notation ---")
+(def json-str (json.dumps {:name "test" :value 42}))
+(print "json.dumps result:" json-str)
+(assert (in "name" json-str) "json.dumps should serialize map")
+(print "std.json with dot notation: passed")
+
+;; Test parsing
+(def parsed (json.loads "{\"x\": 1, \"y\": 2}"))
+(print "json.loads result:" parsed)
+(assert (= (get parsed "x") 1) "json.loads should parse JSON")
+(print "json.loads: passed")
+
+(print "\nAll namespace tests passed!")

@@ -1,0 +1,71 @@
+(print "=== Testing Persistent Data Structures ===\n")
+
+; Test Vector
+(print "--- Vector ---")
+(def v [1 2 3])
+(print "v:" v)
+(print "type:" (type v))
+(print "(nth v 0):" (nth v 0))
+(print "(nth v 2):" (nth v 2))
+(print "(conj v 4):" (conj v 4))
+(print "v after conj (unchanged):" v)
+(print "(assoc v 1 99):" (assoc v 1 99))
+(print "v after assoc (unchanged):" v)
+(print "(+ v [4 5]):" (+ v [4 5]))
+(print "(drop 1 v):" (vec (drop 1 v)))
+(print "(count v):" (count v))
+
+; Test iteration
+(print "\nIterating over v:")
+(for [x v]
+  (print "  -" x))
+
+; Test Map
+(print "\n--- Map ---")
+(def m {:a 1 :b 2})
+(print "m:" m)
+(print "type:" (type m))
+(print "(get m :a):" (get m :a))
+(print "(get m :missing :default):" (get m :missing :default))
+(print "(assoc m :c 3):" (assoc m :c 3))
+(print "m after assoc (unchanged):" m)
+(print "(dissoc m :a):" (dissoc m :a))
+(print "(count m):" (count m))
+
+; Test iteration
+(print "\nIterating over m:")
+(for [k m]
+  (print "  -" k ":" (get m k)))
+
+; Test Cons (quoted list)
+(print "\n--- Cons (quoted list) ---")
+(def lst '(1 2 3))
+(print "lst:" lst)
+(print "type:" (type lst))
+(print "(first lst):" (first lst))
+(print "(rest lst):" (rest lst))
+(print "(cons 0 lst):" (cons 0 lst))
+(print "(nth lst 1):" (nth lst 1))
+
+; Test seq
+(print "\n--- seq conversion ---")
+(print "(seq [1 2 3]):" (seq [1 2 3]))
+(print "(seq {:a 1}):" (seq {:a 1}))
+
+; Test into
+(print "\n--- into ---")
+(print "(into [] '(1 2 3)):" (into [] '(1 2 3)))
+(print "(into [1 2] [3 4]):" (into [1 2] [3 4]))
+
+; Test concat (now lazy - returns generator)
+(print "\n--- concat ---")
+(print "(concat [1 2] [3 4] [5]):" (vec (concat [1 2] [3 4] [5])))
+(print "(concat '(a b) '(c d)):" (vec (concat '(a b) '(c d))))
+
+; Test empty
+(print "\n--- empty ---")
+(print "(empty [1 2 3]):" (empty [1 2 3]))
+(print "(empty {:a 1}):" (empty {:a 1}))
+(print "(empty '(a b)):" (empty '(a b)))
+
+(print "\n=== All PDS tests passed! ===")

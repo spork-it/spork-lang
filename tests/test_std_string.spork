@@ -1,0 +1,84 @@
+; Test std.string module
+
+(ns tests.test-std-string
+  (:require [std.string :as str]))
+
+(print "=== Testing std.string ===\n")
+
+; join
+(def joined (str.join ", " ["a" "b" "c"]))
+(print "join:" joined)
+(assert (= joined "a, b, c") "join failed")
+
+; split
+(def parts (str.split "a,b,c" ","))
+(print "split:" parts)
+(assert (= parts ["a" "b" "c"]) "split failed")
+
+; trim
+(assert (= (str.trim "  hello  ") "hello") "trim failed")
+(assert (= (str.ltrim "  hello  ") "hello  ") "ltrim failed")
+(assert (= (str.rtrim "  hello  ") "  hello") "rtrim failed")
+(print "trim: passed")
+
+; case conversion
+(assert (= (str.upper "hello") "HELLO") "upper failed")
+(assert (= (str.lower "HELLO") "hello") "lower failed")
+(assert (= (str.capitalize "hello world") "Hello world") "capitalize failed")
+(assert (= (str.title "hello world") "Hello World") "title failed")
+(print "case conversion: passed")
+
+; predicates
+(assert (str.starts-with? "hello" "hel") "starts-with? failed")
+(assert (not (str.starts-with? "hello" "world")) "starts-with? negative failed")
+(assert (str.ends-with? "hello" "llo") "ends-with? failed")
+(assert (str.includes? "hello world" "o w") "includes? failed")
+(print "predicates: passed")
+
+; blank?
+(assert (str.blank? nil) "blank? nil failed")
+(assert (str.blank? "") "blank? empty failed")
+(assert (str.blank? "   ") "blank? whitespace failed")
+(assert (not (str.blank? "x")) "blank? non-empty failed")
+(print "blank?: passed")
+
+; replace
+(assert (= (str.replace "hello" "l" "L") "heLLo") "replace failed")
+(assert (= (str.replace-first "hello" "l" "L") "heLlo") "replace-first failed")
+(print "replace: passed")
+
+; reverse
+(assert (= (str.reverse "hello") "olleh") "reverse failed")
+(print "reverse: passed")
+
+; repeat
+(assert (= (str.repeat "ab" 3) "ababab") "repeat failed")
+(print "repeat: passed")
+
+; index-of
+(assert (= (str.index-of "hello" "l") 2) "index-of failed")
+(assert (= (str.index-of "hello" "x") nil) "index-of not found failed")
+(assert (= (str.last-index-of "hello" "l") 3) "last-index-of failed")
+(print "index-of: passed")
+
+; substring and char-at
+(assert (= (str.substring "hello" 1 4) "ell") "substring failed")
+(assert (= (str.char-at "hello" 1) "e") "char-at failed")
+(print "substring/char-at: passed")
+
+; length
+(assert (= (str.length "hello") 5) "length failed")
+(print "length: passed")
+
+; padding
+(assert (= (str.pad-left "hi" 5 " ") "   hi") "pad-left failed")
+(assert (= (str.pad-right "hi" 5 " ") "hi   ") "pad-right failed")
+(assert (= (str.center "hi" 6 " ") "  hi  ") "center failed")
+(print "padding: passed")
+
+; lines
+(def text "line1\nline2\nline3")
+(assert (= (str.lines text) ["line1" "line2" "line3"]) "lines failed")
+(print "lines: passed")
+
+(print "\n=== All std.string tests passed! ===")

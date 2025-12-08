@@ -1,0 +1,487 @@
+(print "=== Testing Transient Data Structures ===\n")
+
+; ============================================
+; Test transient Vector
+; ============================================
+(print "--- TransientVector ---")
+
+; Basic transient creation and persistent conversion
+(print "\n-- Basic transient workflow --")
+(def v [1 2 3])
+(print "Original vector v:" v)
+
+(def t (transient v))
+(print "Created transient from v, type:" (type t))
+
+; conj! - add elements
+(conj! t 4)
+(conj! t 5)
+(print "After (conj! t 4) and (conj! t 5)")
+
+(def v2 (persistent! t))
+(print "Persistent vector v2:" v2)
+(print "Original v unchanged:" v)
+
+; Verify values
+(assert (= (count v) 3) "Original vector count should be 3")
+(assert (= (count v2) 5) "New vector count should be 5")
+(assert (= (nth v2 3) 4) "v2[3] should be 4")
+(assert (= (nth v2 4) 5) "v2[4] should be 5")
+(print "Basic transient vector tests passed!")
+
+; assoc! - modify elements by index
+(print "\n-- assoc! tests --")
+(def v3 [10 20 30 40 50])
+(def t2 (transient v3))
+(assoc! t2 0 100)
+(assoc! t2 2 300)
+(assoc! t2 4 500)
+(def v4 (persistent! t2))
+(print "Original v3:" v3)
+(print "After assoc! at indices 0, 2, 4:" v4)
+
+(assert (= (nth v4 0) 100) "v4[0] should be 100")
+(assert (= (nth v4 1) 20) "v4[1] should be unchanged (20)")
+(assert (= (nth v4 2) 300) "v4[2] should be 300")
+(assert (= (nth v4 3) 40) "v4[3] should be unchanged (40)")
+(assert (= (nth v4 4) 500) "v4[4] should be 500")
+(print "assoc! tests passed!")
+
+; Negative indexing with assoc!
+(print "\n-- assoc! with negative indices --")
+(def v5 [1 2 3 4 5])
+(def t3 (transient v5))
+(assoc! t3 -1 999)  ; last element
+(assoc! t3 -3 777)  ; third from end
+(def v6 (persistent! t3))
+(print "Original v5:" v5)
+(print "After assoc! at -1 and -3:" v6)
+
+(assert (= (nth v6 4) 999) "v6[-1] should be 999")
+(assert (= (nth v6 2) 777) "v6[-3] should be 777")
+(print "Negative index assoc! tests passed!")
+
+; pop! - remove last element
+(print "\n-- pop! tests --")
+(def v7 [1 2 3 4 5])
+(def t4 (transient v7))
+(pop! t4)
+(pop! t4)
+(def v8 (persistent! t4))
+(print "Original v7:" v7)
+(print "After two pop! calls:" v8)
+
+(assert (= (count v8) 3) "v8 count should be 3")
+(assert (= (nth v8 2) 3) "v8[2] should be 3")
+(print "pop! tests passed!")
+
+; Chaining operations
+(print "\n-- Chaining transient operations --")
+(def v9 [])
+(def t5 (transient v9))
+(-> t5
+    (conj! 1)
+    (conj! 2)
+    (conj! 3)
+    (assoc! 1 20)
+    (conj! 4))
+(def v10 (persistent! t5))
+(print "Built from empty with chained ops:" v10)
+
+(assert (= (count v10) 4) "v10 count should be 4")
+(assert (= (nth v10 0) 1) "v10[0] should be 1")
+(assert (= (nth v10 1) 20) "v10[1] should be 20")
+(assert (= (nth v10 2) 3) "v10[2] should be 3")
+(assert (= (nth v10 3) 4) "v10[3] should be 4")
+(print "Chaining tests passed!")
+
+; ============================================
+; Test transient Map
+; ============================================
+(print "\n--- TransientMap ---")
+
+; Basic transient map workflow
+(print "\n-- Basic transient map workflow --")
+(def m {:a 1 :b 2})
+(print "Original map m:" m)
+
+(def tm (transient m))
+(print "Created transient from m, type:" (type tm))
+
+(assoc! tm :c 3)
+(assoc! tm :d 4)
+(print "After (assoc! tm :c 3) and (assoc! tm :d 4)")
+
+(def m2 (persistent! tm))
+(print "Persistent map m2:" m2)
+(print "Original m unchanged:" m)
+
+(assert (= (count m) 2) "Original map count should be 2")
+(assert (= (count m2) 4) "New map count should be 4")
+(assert (= (get m2 :c) 3) "m2[:c] should be 3")
+(assert (= (get m2 :d) 4) "m2[:d] should be 4")
+(print "Basic transient map tests passed!")
+
+; dissoc! - remove keys
+(print "\n-- dissoc! tests --")
+(def m3 {:x 10 :y 20 :z 30 :w 40})
+(def tm2 (transient m3))
+(dissoc! tm2 :x)
+(dissoc! tm2 :z)
+(def m4 (persistent! tm2))
+(print "Original m3:" m3)
+(print "After dissoc! :x and :z:" m4)
+
+(assert (= (count m4) 2) "m4 count should be 2")
+(assert (= (get m4 :x nil) nil) "m4[:x] should be nil")
+(assert (= (get m4 :y) 20) "m4[:y] should be 20")
+(assert (= (get m4 :z nil) nil) "m4[:z] should be nil")
+(assert (= (get m4 :w) 40) "m4[:w] should be 40")
+(print "dissoc! tests passed!")
+
+; Overwriting existing keys
+(print "\n-- Overwriting keys with assoc! --")
+(def m5 {:name "Alice" :age 30})
+(def tm3 (transient m5))
+(assoc! tm3 :age 31)
+(assoc! tm3 :name "Bob")
+(def m6 (persistent! tm3))
+(print "Original m5:" m5)
+(print "After overwriting :name and :age:" m6)
+
+(assert (= (get m6 :name) "Bob") "m6[:name] should be Bob")
+(assert (= (get m6 :age) 31) "m6[:age] should be 31")
+(print "Overwrite tests passed!")
+
+; conj! on maps with pairs
+(print "\n-- conj! on transient maps --")
+(def m7 {:a 1})
+(def tm4 (transient m7))
+(conj! tm4 [:b 2])
+(conj! tm4 [:c 3])
+(def m8 (persistent! tm4))
+(print "Original m7:" m7)
+(print "After conj! with pairs:" m8)
+
+(assert (= (count m8) 3) "m8 count should be 3")
+(assert (= (get m8 :b) 2) "m8[:b] should be 2")
+(assert (= (get m8 :c) 3) "m8[:c] should be 3")
+(print "conj! on maps tests passed!")
+
+; ============================================
+; Test error conditions
+; ============================================
+(print "\n--- Error handling ---")
+
+; Test that transient can't be used after persistent!
+(print "\n-- Transient invalidation after persistent! --")
+(def v11 [1 2 3])
+(def t6 (transient v11))
+(conj! t6 4)
+(def v12 (persistent! t6))
+
+(def error-caught
+  (try
+    (conj! t6 5)  ; Should fail - transient already made persistent
+    false
+    (catch Exception e
+      (print "Correctly caught error:" (str e))
+      true)))
+(assert error-caught "Should catch error when using transient after persistent!")
+(print "Transient invalidation test passed!")
+
+; Test pop! on empty transient vector
+(print "\n-- pop! on empty vector --")
+(def empty-v [])
+(def t7 (transient empty-v))
+(def pop-error-caught
+  (try
+    (pop! t7)
+    false
+    (catch Exception e
+      (print "Correctly caught error:" (str e))
+      true)))
+(assert pop-error-caught "Should catch error when popping empty vector")
+(print "Empty pop! test passed!")
+
+; ============================================
+; Performance-oriented batch operations
+; ============================================
+(print "\n--- Batch operations (transient performance use case) ---")
+
+; Build a large vector using transient
+(def large-t (transient []))
+(for [i (range 100)]
+  (conj! large-t i))
+(def large-v (persistent! large-t))
+(print "Built vector with 100 elements using transient")
+(print "Count:" (count large-v))
+(print "First 5 elements:" [(nth large-v 0) (nth large-v 1) (nth large-v 2) (nth large-v 3) (nth large-v 4)])
+(print "Last element:" (nth large-v 99))
+
+(assert (= (count large-v) 100) "large-v count should be 100")
+(assert (= (nth large-v 0) 0) "large-v[0] should be 0")
+(assert (= (nth large-v 99) 99) "large-v[99] should be 99")
+(print "Large vector batch build test passed!")
+
+; Build a map from pairs using transient
+(def large-tm (transient {}))
+(for [i (range 50)]
+  (assoc! large-tm (+ "key" (str i)) (* i 10)))
+(def large-m (persistent! large-tm))
+(print "\nBuilt map with 50 entries using transient")
+(print "Count:" (count large-m))
+(print "Sample entries: key0 =" (get large-m "key0") ", key25 =" (get large-m "key25") ", key49 =" (get large-m "key49"))
+
+(assert (= (count large-m) 50) "large-m count should be 50")
+(assert (= (get large-m "key0") 0) "large-m[key0] should be 0")
+(assert (= (get large-m "key25") 250) "large-m[key25] should be 250")
+(assert (= (get large-m "key49") 490) "large-m[key49] should be 490")
+(print "Large map batch build test passed!")
+
+; ============================================
+; Test interaction with into (which uses transients internally)
+; ============================================
+(print "\n--- into function (uses transients internally) ---")
+
+(def result1 (into [] (range 10)))
+(print "(into [] (range 10)):" result1)
+(assert (= (count result1) 10) "into result count should be 10")
+
+(def result2 (into [1 2 3] [4 5 6]))
+(print "(into [1 2 3] [4 5 6]):" result2)
+(assert (= (count result2) 6) "into result count should be 6")
+(assert (= (nth result2 5) 6) "into result[5] should be 6")
+
+(def result3 (into {:a 1} [[:b 2] [:c 3]]))
+(print "(into {:a 1} [[:b 2] [:c 3]]):" result3)
+(assert (= (count result3) 3) "into map result count should be 3")
+(assert (= (get result3 :b) 2) "into result[:b] should be 2")
+
+(print "into tests passed!")
+
+; ============================================
+; Test vector comprehension (uses transients internally)
+; ============================================
+(print "\n--- Vector comprehension [for [...] expr] ---")
+
+(def squares [for [x (range 10)] (* x x)])
+(print "squares:" squares)
+(assert (= (count squares) 10) "squares count should be 10")
+(assert (= (nth squares 0) 0) "squares[0] should be 0")
+(assert (= (nth squares 9) 81) "squares[9] should be 81")
+
+; With conditional expression
+(def evens [for [x (range 10)] (if (even? x) x nil)])
+(print "evens (with nils):" evens)
+(assert (= (nth evens 0) 0) "evens[0] should be 0")
+(assert (= (nth evens 1) nil) "evens[1] should be nil")
+(assert (= (nth evens 4) 4) "evens[4] should be 4")
+
+; With destructuring
+(def pairs [[1 2] [3 4] [5 6]])
+(def sums [for [[a b] pairs] (+ a b)])
+(print "sums from pairs:" sums)
+(assert (= (count sums) 3) "sums count should be 3")
+(assert (= (nth sums 0) 3) "sums[0] should be 3")
+(assert (= (nth sums 2) 11) "sums[2] should be 11")
+
+; Large vector to test efficiency
+(def big-comp [for [x (range 1000)] (* x 2)])
+(print "big comprehension count:" (count big-comp))
+(assert (= (count big-comp) 1000) "big-comp count should be 1000")
+(assert (= (nth big-comp 500) 1000) "big-comp[500] should be 1000")
+
+(print "Vector comprehension tests passed!")
+
+; ============================================
+; Test with-mutable macro
+; ============================================
+(print "\n--- with-mutable macro ---")
+
+; with-mutable on map
+(print "\n-- with-mutable on map --")
+(def wm-map {:a 1 :b 2})
+(def wm-result1
+  (with-mutable [t wm-map]
+    (assoc! t :c 3)
+    (assoc! t :d 4)))
+(print "Original map:" wm-map)
+(print "After with-mutable:" wm-result1)
+(assert (= (count wm-map) 2) "Original map should be unchanged")
+(assert (= (count wm-result1) 4) "Result map should have 4 entries")
+(assert (= (get wm-result1 :c) 3) "Result[:c] should be 3")
+(assert (= (get wm-result1 :d) 4) "Result[:d] should be 4")
+(print "with-mutable on map tests passed!")
+
+; with-mutable on vector
+(print "\n-- with-mutable on vector --")
+(def wm-vec [1 2 3])
+(def wm-result2
+  (with-mutable [t wm-vec]
+    (.append t 4)
+    (.append t 5)))
+(print "Original vector:" wm-vec)
+(print "After with-mutable:" wm-result2)
+(assert (= (count wm-vec) 3) "Original vector should be unchanged")
+(assert (= (count wm-result2) 5) "Result vector should have 5 elements")
+(assert (= (nth wm-result2 3) 4) "Result[3] should be 4")
+(assert (= (nth wm-result2 4) 5) "Result[4] should be 5")
+(print "with-mutable on vector tests passed!")
+
+; with-mutable on set
+(print "\n-- with-mutable on set --")
+(def wm-set #{1 2 3})
+(def wm-result3
+  (with-mutable [t wm-set]
+    (.add t 4)
+    (.add t 5)))
+(print "Original set:" wm-set)
+(print "After with-mutable:" wm-result3)
+(assert (= (count wm-set) 3) "Original set should be unchanged")
+(assert (= (count wm-result3) 5) "Result set should have 5 elements")
+(assert (contains? wm-result3 4) "Result should contain 4")
+(assert (contains? wm-result3 5) "Result should contain 5")
+(print "with-mutable on set tests passed!")
+
+; ============================================
+; Test Python MutableMapping protocol on TransientMap
+; ============================================
+(print "\n--- TransientMap MutableMapping protocol ---")
+
+(def tm-proto (transient {:x 10}))
+
+; Test __contains__ via `in`
+(assert (in :x tm-proto) ":x should be in tm")
+(assert (not (in :missing tm-proto)) ":missing should not be in tm")
+(print "__contains__ works")
+
+; Test __len__ via `len`
+(assert (= (len tm-proto) 1) "len(tm) should be 1")
+(print "__len__ works")
+
+; Test .get method
+(assert (= (.get tm-proto :x) 10) ".get(:x) should be 10")
+(assert (= (.get tm-proto :missing "default") "default") ".get(:missing) should return default")
+(print ".get works")
+
+; Test .keys, .values, .items
+(assoc! tm-proto :y 20)
+(def tm-keys (list (.keys tm-proto)))
+(def tm-vals (list (.values tm-proto)))
+(def tm-items (list (.items tm-proto)))
+(print "keys:" tm-keys)
+(print "values:" tm-vals)
+(print "items:" tm-items)
+(assert (= (len tm-keys) 2) "Should have 2 keys")
+(assert (= (len tm-vals) 2) "Should have 2 values")
+(assert (= (len tm-items) 2) "Should have 2 items")
+(print ".keys, .values, .items work")
+
+; Test iteration (yields keys)
+(def iterated-keys [])
+(for [k tm-proto]
+  (def iterated-keys (conj iterated-keys k)))
+(print "Iterated keys:" iterated-keys)
+(assert (= (count iterated-keys) 2) "Should iterate over 2 keys")
+(print "iteration works")
+
+(persistent! tm-proto)
+(print "TransientMap MutableMapping protocol tests passed!")
+
+; ============================================
+; Test Python MutableSequence protocol on TransientVector
+; ============================================
+(print "\n--- TransientVector MutableSequence protocol ---")
+
+(def tv-proto (transient [10 20 30]))
+
+; Test __len__
+(assert (= (len tv-proto) 3) "len should be 3")
+(print "__len__ works")
+
+; Test __contains__
+(assert (in 20 tv-proto) "20 should be in tv")
+(assert (not (in 99 tv-proto)) "99 should not be in tv")
+(print "__contains__ works")
+
+; Test .append
+(.append tv-proto 40)
+(assert (= (len tv-proto) 4) "len should be 4 after append")
+(print ".append works")
+
+; Test .extend
+(.extend tv-proto [50 60])
+(assert (= (len tv-proto) 6) "len should be 6 after extend")
+(print ".extend works")
+
+; Test iteration
+(def tv-items [])
+(for [x tv-proto]
+  (def tv-items (conj tv-items x)))
+(print "Iterated items:" tv-items)
+(assert (= (count tv-items) 6) "Should iterate over 6 items")
+(print "iteration works")
+
+(persistent! tv-proto)
+(print "TransientVector MutableSequence protocol tests passed!")
+
+; ============================================
+; Test Python MutableSet protocol on TransientSet
+; ============================================
+(print "\n--- TransientSet MutableSet protocol ---")
+
+(def ts-proto (transient #{10 20 30}))
+
+; Test __len__
+(assert (= (len ts-proto) 3) "len should be 3")
+(print "__len__ works")
+
+; Test __contains__
+(assert (in 20 ts-proto) "20 should be in ts")
+(assert (not (in 99 ts-proto)) "99 should not be in ts")
+(print "__contains__ works")
+
+; Test .add
+(.add ts-proto 40)
+(assert (= (len ts-proto) 4) "len should be 4 after add")
+(assert (in 40 ts-proto) "40 should be in ts")
+(print ".add works")
+
+; Test .discard (no error if missing)
+(.discard ts-proto 20)
+(assert (= (len ts-proto) 3) "len should be 3 after discard")
+(assert (not (in 20 ts-proto)) "20 should not be in ts")
+(.discard ts-proto 999)  ; should not raise
+(print ".discard works")
+
+; Test .remove (raises KeyError if missing)
+(.remove ts-proto 30)
+(assert (= (len ts-proto) 2) "len should be 2 after remove")
+(def remove-error-caught
+  (try
+    (.remove ts-proto 999)
+    false
+    (catch KeyError e
+      true)))
+(assert remove-error-caught ".remove should raise KeyError for missing key")
+(print ".remove works")
+
+; Test .clear
+(.clear ts-proto)
+(assert (= (len ts-proto) 0) "len should be 0 after clear")
+(print ".clear works")
+
+; Test iteration
+(def ts-proto2 (transient #{1 2 3}))
+(def ts-items [])
+(for [x ts-proto2]
+  (def ts-items (conj ts-items x)))
+(print "Iterated items:" ts-items)
+(assert (= (count ts-items) 3) "Should iterate over 3 items")
+(print "iteration works")
+
+(persistent! ts-proto2)
+(print "TransientSet MutableSet protocol tests passed!")
+
+(print "\n=== All Transient tests passed! ===")

@@ -1,0 +1,193 @@
+; Test slice syntax for Python interop
+; Tests (. coll (slice start end)) and related patterns
+
+(ns test-slice
+  (:import [builtins :refer [slice :as py-slice]]))
+
+(print "=== Testing Slice Syntax ===\n")
+
+; ============================================================================
+; 1. Basic slice on Python list
+; ============================================================================
+
+(print "--- 1. Basic slice on Python list ---")
+
+(def py-list (list [0 1 2 3 4 5 6 7 8 9]))
+(print "py-list:" py-list)
+
+; Slice from index 2 to 5
+(def slice1 (. py-list (slice 2 5)))
+(print "(. py-list (slice 2 5)):" slice1)
+(assert (= (list slice1) (list [2 3 4])))
+
+; Slice from beginning to index 3
+(def slice2 (. py-list (slice nil 3)))
+(print "(. py-list (slice nil 3)):" slice2)
+(assert (= (list slice2) (list [0 1 2])))
+
+; Slice from index 7 to end
+(def slice3 (. py-list (slice 7 nil)))
+(print "(. py-list (slice 7 nil)):" slice3)
+(assert (= (list slice3) (list [7 8 9])))
+
+(print "✓ Basic slicing works\n")
+
+; ============================================================================
+; 2. Slice with step
+; ============================================================================
+
+(print "--- 2. Slice with step ---")
+
+; Every other element
+(def slice4 (. py-list (slice nil nil 2)))
+(print "(. py-list (slice nil nil 2)):" slice4)
+(assert (= (list slice4) (list [0 2 4 6 8])))
+
+; Every third element starting from 1
+(def slice5 (. py-list (slice 1 nil 3)))
+(print "(. py-list (slice 1 nil 3)):" slice5)
+(assert (= (list slice5) (list [1 4 7])))
+
+(print "✓ Slice with step works\n")
+
+; ============================================================================
+; 3. Negative indices
+; ============================================================================
+
+(print "--- 3. Negative indices ---")
+
+; Last 3 elements
+(def slice6 (. py-list (slice -3 nil)))
+(print "(. py-list (slice -3 nil)):" slice6)
+(assert (= (list slice6) (list [7 8 9])))
+
+; All except last 2
+(def slice7 (. py-list (slice nil -2)))
+(print "(. py-list (slice nil -2)):" slice7)
+(assert (= (list slice7) (list [0 1 2 3 4 5 6 7])))
+
+; From -5 to -2
+(def slice8 (. py-list (slice -5 -2)))
+(print "(. py-list (slice -5 -2)):" slice8)
+(assert (= (list slice8) (list [5 6 7])))
+
+(print "✓ Negative indices work\n")
+
+; ============================================================================
+; 4. Reverse with negative step
+; ============================================================================
+
+(print "--- 4. Reverse with negative step ---")
+
+; Reverse entire list
+(def slice9 (. py-list (slice nil nil -1)))
+(print "(. py-list (slice nil nil -1)):" slice9)
+(assert (= (list slice9) (list [9 8 7 6 5 4 3 2 1 0])))
+
+; Reverse slice from 7 to 2
+(def slice10 (. py-list (slice 7 2 -1)))
+(print "(. py-list (slice 7 2 -1)):" slice10)
+(assert (= (list slice10) (list [7 6 5 4 3])))
+
+(print "✓ Negative step works\n")
+
+; ============================================================================
+; 5. Slice on strings
+; ============================================================================
+
+(print "--- 5. Slice on strings ---")
+
+(def text "Hello, World!")
+
+(def str-slice1 (. text (slice 0 5)))
+(print "(. \"Hello, World!\" (slice 0 5)):" str-slice1)
+(assert (= str-slice1 "Hello"))
+
+(def str-slice2 (. text (slice 7 12)))
+(print "(. \"Hello, World!\" (slice 7 12)):" str-slice2)
+(assert (= str-slice2 "World"))
+
+(def str-slice3 (. text (slice nil nil -1)))
+(print "(. \"Hello, World!\" (slice nil nil -1)):" str-slice3)
+(assert (= str-slice3 "!dlroW ,olleH"))
+
+(print "✓ String slicing works\n")
+
+; ============================================================================
+; 6. Slice on tuples
+; ============================================================================
+
+(print "--- 6. Slice on tuples ---")
+
+(def py-tuple (tuple [1 2 3 4 5]))
+(print "py-tuple:" py-tuple)
+
+(def tuple-slice (. py-tuple (slice 1 4)))
+(print "(. py-tuple (slice 1 4)):" tuple-slice)
+(assert (= (list tuple-slice) (list [2 3 4])))
+
+(print "✓ Tuple slicing works\n")
+
+; ============================================================================
+; 7. Empty slices
+; ============================================================================
+
+(print "--- 7. Empty slices ---")
+
+; Slice beyond bounds returns empty
+(def empty-slice1 (. py-list (slice 100 200)))
+(print "(. py-list (slice 100 200)):" empty-slice1)
+(assert (= (len empty-slice1) 0))
+
+; Start == end returns empty
+(def empty-slice2 (. py-list (slice 5 5)))
+(print "(. py-list (slice 5 5)):" empty-slice2)
+(assert (= (len empty-slice2) 0))
+
+(print "✓ Empty slices work\n")
+
+; ============================================================================
+; 8. Slice in expressions
+; ============================================================================
+
+(print "--- 8. Slice in expressions ---")
+
+; Use slice result in computation
+(def sum-of-slice (reduce + (. py-list (slice 0 5))))
+(print "Sum of first 5 elements:" sum-of-slice)
+(assert (= sum-of-slice 10))  ; 0+1+2+3+4 = 10
+
+; Nested slice
+(def nested (. (. py-list (slice 2 8)) (slice 1 4)))
+(print "Nested slice:" (list nested))
+(assert (= (list nested) (list [3 4 5])))
+
+(print "✓ Slice in expressions works\n")
+
+; ============================================================================
+; 9. Using Python's slice object directly
+; ============================================================================
+
+(print "--- 9. Direct slice object ---")
+
+(def my-slice (py-slice 2 7 2))
+(def result9 (call py-list __getitem__ my-slice))
+(print "Using slice object directly:" (list result9))
+(assert (= (list result9) (list [2 4 6])))
+
+(print "✓ Direct slice object works\n")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== All Slice Syntax Tests Passed! ===")
+(print "✓ Basic slicing (start, end)")
+(print "✓ Slice with step")
+(print "✓ Negative indices")
+(print "✓ Reverse with negative step")
+(print "✓ String slicing")
+(print "✓ Tuple slicing")
+(print "✓ Empty slices")
+(print "✓ Slice in expressions")
+(print "✓ Direct slice object usage")

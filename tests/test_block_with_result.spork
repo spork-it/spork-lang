@@ -1,0 +1,172 @@
+;; Test block-with-result pattern: while/for in if arms
+
+;; Test 1: while in if then-branch with do block
+(def result1
+  (if true
+    (do
+      (def counter 0)
+      (while (< counter 3)
+        (set! counter (+ counter 1)))
+      counter)
+    99))
+
+(print "Test 1 - while in if then-branch:")
+(print "  Expected: 3")
+(print "  Got:" result1)
+(print)
+
+;; Test 2: while in if else-branch
+(def result2
+  (if false
+    42
+    (do
+      (def counter 0)
+      (while (< counter 5)
+        (set! counter (+ counter 1)))
+      counter)))
+
+(print "Test 2 - while in if else-branch:")
+(print "  Expected: 5")
+(print "  Got:" result2)
+(print)
+
+;; Test 3: while as only form in branch (should return nil)
+(def result3
+  (if true
+    (do
+      (def counter 0)
+      (while (< counter 2)
+        (set! counter (+ counter 1))))
+    "else"))
+
+(print "Test 3 - while as only form in then-branch:")
+(print "  Expected: None")
+(print "  Got:" result3)
+(print)
+
+;; Test 4: for in if branch
+(def result4
+  (if true
+    (do
+      (def items [])
+      (for [x [1 2 3]]
+        (set! items (+ items [x])))
+      items)
+    []))
+
+(print "Test 4 - for in if then-branch:")
+(print "  Expected: [1, 2, 3]")
+(print "  Got:" result4)
+(print)
+
+;; Test 5: nested if with while
+(def result5
+  (if true
+    (if true
+      (do
+        (def counter 0)
+        (while (< counter 10)
+          (set! counter (+ counter 1)))
+        counter)
+      0)
+    -1))
+
+(print "Test 5 - nested if with while:")
+(print "  Expected: 10")
+(print "  Got:" result5)
+(print)
+
+;; Test 6: let with while in body
+(def result6
+  (let [x 0]
+    (while (< x 7)
+      (set! x (+ x 1)))
+    x))
+
+(print "Test 6 - let with while in body:")
+(print "  Expected: 7")
+(print "  Got:" result6)
+(print)
+
+;; Test 7: do with while
+(def result7
+  (do
+    (print "  Starting do block...")
+    (def counter 0)
+    (while (< counter 4)
+      (set! counter (+ counter 1)))
+    counter))
+
+(print "Test 7 - do with while:")
+(print "  Expected: 4")
+(print "  Got:" result7)
+(print)
+
+;; Test 8: if with no else, while in then
+(def result8
+  (if true
+    (do
+      (def counter 0)
+      (while (< counter 6)
+        (set! counter (+ counter 1))))))
+
+(print "Test 8 - if with while, no else:")
+(print "  Expected: None")
+(print "  Got:" result8)
+(print)
+
+;; Test 9: Multiple statements before while
+(def result9
+  (if true
+    (do
+      (print "  Setup phase...")
+      (def temp 100)
+      (def counter 0)
+      (while (< counter 3)
+        (set! counter (+ counter 1)))
+      (+ counter temp))
+    0))
+
+(print "Test 9 - multiple statements before while:")
+(print "  Expected: 103")
+(print "  Got:" result9)
+(print)
+
+;; Test 10: for loop with accumulator
+(def result10
+  (let [sum 0]
+    (for [x [10 20 30]]
+      (set! sum (+ sum x)))
+    sum))
+
+(print "Test 10 - for with accumulator in let:")
+(print "  Expected: 60")
+(print "  Got:" result10)
+(print)
+
+;; Test 11: if returning expression value
+(def result11
+  (if true
+    (do
+      (def x 5)
+      (+ x 10))
+    0))
+
+(print "Test 11 - if with expression return:")
+(print "  Expected: 15")
+(print "  Got:" result11)
+(print)
+
+;; Test 12: Mix of statements and expressions
+(def result12
+  (do
+    (def a 1)
+    (def b 2)
+    (+ a b)))
+
+(print "Test 12 - do with defs and expression:")
+(print "  Expected: 3")
+(print "  Got:" result12)
+(print)
+
+(print "All tests completed!")

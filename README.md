@@ -40,7 +40,7 @@ $ pipx install spork-lang
 To uninstall:
 
 ```bash
-$ make pipx-uninstall
+$ pipx uninstall spork-lang
 ```
 
 ### For Development

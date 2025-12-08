@@ -62,6 +62,7 @@ from spork.runtime.core import (
     iterate,
     keep,
     keep_indexed,
+    last,
     map_indexed,
     mapcat,
     mod,
@@ -112,21 +113,25 @@ from spork.runtime.pds import (  # pyright: ignore[reportMissingModuleSource]
     EMPTY_LONG_VECTOR,
     EMPTY_MAP,
     EMPTY_SET,
+    EMPTY_SORTED_VECTOR,
     EMPTY_VECTOR,
     Cons,
     DoubleVector,
     IntVector,
     Map,
     Set,
+    SortedVector,
     TransientDoubleVector,
     TransientIntVector,
     TransientMap,
     TransientSet,
+    TransientSortedVector,
     TransientVector,
     Vector,
     cons,
     hash_map,
     hash_set,
+    sorted_vec,
     vec,
     vec_f64,
     vec_i64,
@@ -448,6 +453,12 @@ def setup_runtime_env(env: dict[str, Any]) -> None:
     env.setdefault("vec_i64", vec_i64)
     env.setdefault("hash_map", hash_map)
     env.setdefault("hash_set", hash_set)
+    env.setdefault("sorted_vec", sorted_vec)
+
+    # SortedVector types
+    env.setdefault("SortedVector", SortedVector)
+    env.setdefault("TransientSortedVector", TransientSortedVector)
+    env.setdefault("EMPTY_SORTED_VECTOR", EMPTY_SORTED_VECTOR)
 
     # Transient operations for batch mutations
     env.setdefault("transient", transient)
@@ -460,6 +471,7 @@ def setup_runtime_env(env: dict[str, Any]) -> None:
 
     # Sequence operations (core)
     env.setdefault("first", first)
+    env.setdefault("last", last)
     env.setdefault("rest", rest)
     env.setdefault("seq", seq)
     env.setdefault("nth", nth)

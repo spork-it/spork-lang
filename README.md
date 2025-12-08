@@ -82,6 +82,62 @@ user> (map inc [1 2 3])
 
 ## Language Overview
 
+### Examples
+
+#### [GitHub Stars](examples/stars/src/stars/core.spork)
+
+Example program that fetches and ranks GitHub repositories by star count. 
+
+```clojure
+(ns stars.core
+  (:import
+    [requests]
+    [time :as t]))
+
+;; Simple profiling macro using Python's time.perf_counter
+(defmacro profile [label & body]
+  `(let [start# (t.perf_counter)
+         result# (do ~@body)
+         end# (t.perf_counter)
+         elapsed# (- end# start#)]
+     (print (+ ~label " took " (str elapsed#) "s"))
+     result#))
+
+;; Fetch the star count for a given GitHub repo full name
+(defn ^int fetch-stars [^str full-name]
+  (let [resp (requests.get (+ "https://api.github.com/repos/" full-name))]
+    (match resp.status_code
+      200 (get (resp.json) "stargazers_count")
+      404 0                                     ; missing repo → 0 stars
+      _   (throw (RuntimeError "GitHub API error")))))
+
+;; Get top repos by star count
+(defn top-repos [names]
+  ;; Returns a SortedVector of Maps with :name and :stars
+  [sorted-for [full-name names]
+                 {:name full-name
+                  :stars (fetch-stars full-name)}
+              :key :stars :reverse true])
+
+(defn main []
+  (let [repos ["pallets/flask"
+               "django/django"
+               "tiangolo/fastapi"
+               "psf/requests"]
+        ranked (profile "GitHub fetch" (top-repos repos))]
+    (for [row ranked]
+      (let [{:keys [name stars]} row]
+        (print stars "-" name)))))
+
+(main)
+;; Example Output:
+; GitHub fetch took 0.1801389280008152s
+; 92823 - tiangolo/fastapi
+; 86079 - django/django
+; 70890 - pallets/flask
+; 53551 - psf/requests
+```
+
 ### Immutable Data Structures
 
 Spork provides Persistent Data Structures (PDS) implemented in C for performance. These are the default literals in the language.

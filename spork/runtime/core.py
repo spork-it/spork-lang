@@ -22,19 +22,23 @@ from typing import Any, Iterator, Optional
 from spork.runtime.pds import (
     EMPTY_MAP,
     EMPTY_SET,
+    EMPTY_SORTED_VECTOR,
     EMPTY_VECTOR,
     Cons,
     DoubleVector,
     IntVector,
     Map,
     Set,
+    SortedVector,
     TransientDoubleVector,
     TransientIntVector,
     TransientMap,
     TransientSet,
+    TransientSortedVector,
     TransientVector,
     Vector,
     hash_map,
+    sorted_vec,
     vec,
 )
 from spork.runtime.types import _MISSING, Keyword
@@ -330,10 +334,44 @@ def first(coll):
         return coll.first
     if isinstance(coll, Vector):
         return coll.nth(0, None) if len(coll) > 0 else None
+    if isinstance(coll, SortedVector):
+        return coll.first()
     # Fallback for Python sequences
     try:
         it = iter(coll)
         return next(it, None)
+    except TypeError:
+        return None
+
+
+def last(coll):
+    """Return the last element of a collection."""
+    if coll is None:
+        return None
+    if isinstance(coll, SortedVector):
+        return coll.last()
+    if isinstance(coll, Vector):
+        return coll.nth(len(coll) - 1, None) if len(coll) > 0 else None
+    if isinstance(coll, (Cons, LazySeq)):
+        # Walk to the end
+        result = None
+        curr = coll
+        while curr is not None:
+            if isinstance(curr, (Cons, LazySeq)):
+                result = curr.first
+                curr = curr.rest
+            else:
+                break
+        return result
+    # Fallback for Python sequences
+    try:
+        if hasattr(coll, "__len__") and hasattr(coll, "__getitem__"):
+            return coll[-1] if len(coll) > 0 else None
+        # For iterables without random access, consume to find last
+        result = None
+        for item in coll:
+            result = item
+        return result
     except TypeError:
         return None
 
@@ -433,6 +471,9 @@ def nth(coll, index, default=_MISSING):
     if isinstance(coll, Vector):
         return coll.nth(index, default) if default is not _MISSING else coll.nth(index)
 
+    if isinstance(coll, SortedVector):
+        return coll.nth(index, default) if default is not _MISSING else coll.nth(index)
+
     if isinstance(coll, (Cons, LazySeq)):
         curr = coll
         for _ in range(index):
@@ -461,6 +502,8 @@ def conj(coll, val):
     if coll is None:
         return Cons(val, None)
     if isinstance(coll, Vector):
+        return coll.conj(val)
+    if isinstance(coll, SortedVector):
         return coll.conj(val)
     if isinstance(coll, Cons):
         return Cons(val, coll)
@@ -511,10 +554,12 @@ def dissoc(coll, key):
 
 
 def disj(coll, val):
-    """Remove an element from a set."""
+    """Remove an element from a set or sorted vector."""
     if coll is None:
         return None
     if isinstance(coll, Set):
+        return coll.disj(val)
+    if isinstance(coll, SortedVector):
         return coll.disj(val)
     if isinstance(coll, set):
         new_set = set(coll)
@@ -530,6 +575,10 @@ def get(coll, key, default=None):
     if isinstance(coll, Map):
         return coll.get(key, default)
     if isinstance(coll, Vector):
+        if isinstance(key, int):
+            return coll.nth(key, default)
+        return default
+    if isinstance(coll, SortedVector):
         if isinstance(key, int):
             return coll.nth(key, default)
         return default
@@ -585,6 +634,8 @@ def empty(coll):
         return EMPTY_MAP
     if isinstance(coll, Set):
         return EMPTY_SET
+    if isinstance(coll, SortedVector):
+        return EMPTY_SORTED_VECTOR
     if isinstance(coll, Cons):
         return None
     if isinstance(coll, list):
@@ -620,6 +671,11 @@ def into(to_coll, from_coll):
         for item in from_coll:
             t.conj_mut(item)
         return t.persistent()
+    if isinstance(to_coll, SortedVector):
+        t = to_coll.transient()
+        for item in from_coll:
+            t.conj_mut(item)
+        return t.persistent()
     if isinstance(to_coll, Cons):
         result = to_coll
         for item in from_coll:
@@ -649,6 +705,8 @@ def transient(coll):
         return coll.transient()
     if isinstance(coll, Set):
         return coll.transient()
+    if isinstance(coll, SortedVector):
+        return coll.transient()
     raise TypeError(f"Don't know how to create transient from {type(coll)}")
 
 
@@ -666,6 +724,8 @@ def persistent_bang(coll):
     if isinstance(coll, TransientMap):
         return coll.persistent()
     if isinstance(coll, TransientSet):
+        return coll.persistent()
+    if isinstance(coll, TransientSortedVector):
         return coll.persistent()
     raise TypeError(f"Don't know how to make persistent from {type(coll)}")
 
@@ -688,6 +748,8 @@ def conj_bang(coll, val):
             return coll.assoc_mut(val[0], val[1])
         raise ValueError("conj! on transient map requires a [key value] pair")
     if isinstance(coll, TransientSet):
+        return coll.conj_mut(val)
+    if isinstance(coll, TransientSortedVector):
         return coll.conj_mut(val)
     raise TypeError(f"Don't know how to conj! onto {type(coll)}")
 
@@ -715,11 +777,13 @@ def dissoc_bang(coll, key):
 
 
 def disj_bang(coll, val):
-    """Mutably remove an element from a transient set.
+    """Mutably remove an element from a transient set or sorted vector.
 
     Returns the same transient (mutated in place).
     """
     if isinstance(coll, TransientSet):
+        return coll.disj_mut(val)
+    if isinstance(coll, TransientSortedVector):
         return coll.disj_mut(val)
     raise TypeError(f"Don't know how to disj! from {type(coll)}")
 
@@ -1528,4 +1592,9 @@ __all__ = [
     "bit_not",
     "bit_shift_left",
     "bit_shift_right",
+    # SortedVector
+    "SortedVector",
+    "TransientSortedVector",
+    "EMPTY_SORTED_VECTOR",
+    "sorted_vec",
 ]

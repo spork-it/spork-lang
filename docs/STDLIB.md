@@ -135,6 +135,122 @@ Represents identifiers in Spork code. Used for variable and function names.
 'foo.bar        ; namespaced symbol
 ```
 
+### SortedVector
+
+Persistent sorted vectors maintain elements in sorted order using a Red-Black tree. All operations are O(log n).
+
+```clojure
+; Creating sorted vectors
+(sorted_vec [3 1 4 1 5 9])      ; => sorted_vec(1, 1, 3, 4, 5, 9)
+(sorted_vec)                     ; empty sorted vector
+
+; With key function (sort by result of key-fn)
+(sorted_vec ["banana" "apple" "cherry"] :key len)
+; => sorted_vec("apple", "banana", "cherry")
+
+; With keyword as key (for sorting maps/dicts)
+(sorted_vec [{:name "Bob" :age 25} {:name "Alice" :age 30}] :key :age)
+; => sorted by age
+
+; Reverse order
+(sorted_vec [3 1 4] :reverse true)  ; => sorted_vec(4, 3, 1)
+
+; Combine key and reverse
+(sorted_vec items :key :score :reverse true)  ; highest scores first
+```
+
+**Basic Operations:**
+```clojure
+(def sv (sorted_vec [5 2 8 1 9]))
+
+(count sv)           ; => 5
+(first sv)           ; => 1 (minimum element)
+(last sv)            ; => 9 (maximum element)
+(nth sv 2)           ; => 5 (element at index 2)
+(nth sv 10 :default) ; => :default (with default value)
+(get sv 0)           ; => 1 (same as nth)
+(get sv -1)          ; => 9 (negative indexing supported)
+```
+
+**Adding and Removing Elements:**
+```clojure
+(def sv (sorted_vec [1 3 5]))
+
+(conj sv 2)          ; => sorted_vec(1, 2, 3, 5) - inserts in sorted position
+(conj sv 3)          ; => sorted_vec(1, 3, 3, 5) - duplicates allowed
+(disj sv 3)          ; => sorted_vec(1, 5) - removes one occurrence
+(disj sv 99)         ; => sorted_vec(1, 3, 5) - no-op if not found
+```
+
+**Search Operations:**
+```clojure
+(def sv (sorted_vec [10 20 30 40 50]))
+
+(contains? sv 30)    ; => true (O(log n) search)
+(contains? sv 25)    ; => false
+(.index_of sv 30)    ; => 2 (index of element)
+(.index_of sv 25)    ; => -1 (not found)
+(.rank sv 25)        ; => 2 (count of elements < 25)
+(.rank sv 100)       ; => 5 (all elements are less)
+```
+
+**Iteration:**
+```clojure
+; Iterates in sorted order
+(for [x (sorted_vec [3 1 4 1 5])]
+  (print x))
+; prints: 1 1 3 4 5
+
+; Convert to vector
+(vec (sorted_vec [3 1 4]))  ; => [1 3 4]
+```
+
+**Sorted Vector Comprehension:**
+```clojure
+; Use sorted-for to build a sorted vector from a comprehension
+[sorted-for [x (range 10)] (* x x)]
+; => sorted_vec(0, 1, 4, 9, 16, 25, 36, 49, 64, 81)
+
+; With :key function
+[sorted-for [s ["banana" "apple" "fig"]] s :key len]
+; => sorted_vec("fig", "apple", "banana")
+
+; With :reverse
+[sorted-for [x [3 1 4 1 5]] x :reverse true]
+; => sorted_vec(5, 4, 3, 1, 1)
+
+; Real-world example: rank items by score
+[sorted-for [item items]
+            {:name (:name item) :score (:score item)}
+            :key :score :reverse true]
+```
+
+**Transient Operations:**
+```clojure
+; For batch operations, use transients
+(def sv (sorted_vec [1 3 5]))
+(def tsv (.transient sv))
+
+(.conj_mut tsv 2)           ; mutates in place
+(.conj_mut tsv 4)
+(.disj_mut tsv 3)
+(def result (.persistent tsv))  ; => sorted_vec(1, 2, 4, 5)
+
+; Transient preserves key and reverse settings
+(def sv (sorted_vec items :key :score :reverse true))
+(def tsv (.transient sv))   ; still sorts by :score, reversed
+```
+
+**Equality and Hashing:**
+```clojure
+; Equal if same elements in same order
+(= (sorted_vec [3 1 2]) (sorted_vec [1 2 3]))  ; => true
+(= (sorted_vec [1 2]) (sorted_vec [1 2 3]))    ; => false
+
+; Can be used as map keys (hashable)
+(def cache {(sorted_vec [1 2 3]) "result"})
+```
+
 ---
 
 ## Core Functions
@@ -388,6 +504,35 @@ Removes last element from transient vector.
 (pop! tv)
 (persistent! tv)  ; => [1 2]
 ```
+
+#### SortedVector Transient Operations
+
+SortedVector has its own transient type with methods that maintain sorted order:
+
+```clojure
+; Create transient from sorted vector
+(def sv (sorted_vec [1 3 5 7]))
+(def tsv (.transient sv))
+
+; Add elements (maintains sorted order)
+(.conj_mut tsv 2)    ; now contains 1, 2, 3, 5, 7
+(.conj_mut tsv 4)    ; now contains 1, 2, 3, 4, 5, 7
+(.conj_mut tsv 6)    ; now contains 1, 2, 3, 4, 5, 6, 7
+
+; Remove elements
+(.disj_mut tsv 3)    ; now contains 1, 2, 4, 5, 6, 7
+(.disj_mut tsv 99)   ; no-op, element not present
+
+; Convert back to persistent
+(def result (.persistent tsv))  ; => sorted_vec(1, 2, 4, 5, 6, 7)
+
+; Transient preserves key function and reverse settings
+(def sv (sorted_vec items :key :score :reverse true))
+(def tsv (.transient sv))
+(.conj_mut tsv new-item)  ; still sorted by :score in reverse
+```
+
+Note: After calling `.persistent`, the transient can no longer be used.
 
 #### `with-mutable`
 Executes body with a transient collection, automatically converting back to persistent when done. This is the recommended way to work with transients.

@@ -164,6 +164,36 @@ The core types are:
 (rest lst)           ; tail
 ```
 
+### SortedVector
+
+Persistent sorted vectors maintain elements in sorted order using a Red-Black tree. All operations are O(log n).
+
+```clojure
+; Creating sorted vectors
+(sorted_vec [3 1 4 1 5 9])    ; => sorted_vec(1, 1, 3, 4, 5, 9)
+(sorted_vec)                   ; empty sorted vector
+
+; With key function (sort by result of key-fn)
+(sorted_vec ["banana" "apple" "cherry"] :key len)
+; => sorted_vec("apple", "banana", "cherry")
+
+; Reverse order
+(sorted_vec [3 1 4] :reverse true)  ; => sorted_vec(4, 3, 1)
+
+; Basic operations
+(conj sv 2)          ; add element, maintains sorted order
+(disj sv 3)          ; remove one occurrence of element
+(nth sv 0)           ; get element by index (O(log n))
+(first sv)           ; smallest element (or largest if reversed)
+(last sv)            ; largest element (or smallest if reversed)
+(count sv)           ; number of elements
+
+; Search operations
+(contains? sv 5)     ; check if element exists (O(log n))
+(.index_of sv 5)     ; index of element, or -1 if not found
+(.rank sv 5)         ; count of elements less than given value
+```
+
 ### Sequence Abstraction
 
 All collections support the sequence protocol:
@@ -294,6 +324,33 @@ All collections support the sequence protocol:
 ; Can use let and other expressions in body
 [for [x (range 5)] (let [sq (* x x)] (+ sq 1))]
 ; => [1 2 5 10 17]
+```
+
+### Sorted Vector Comprehension
+
+```clojure
+; Use sorted-for to build a sorted vector from a comprehension
+[sorted-for [x (range 10)] (* x x)]
+; => sorted_vec(0, 1, 4, 9, 16, 25, 36, 49, 64, 81)
+
+; With :key function for custom sorting
+[sorted-for [s ["banana" "apple" "fig"]] s :key len]
+; => sorted_vec("fig", "apple", "banana")
+
+; With :reverse for descending order
+[sorted-for [x [3 1 4 1 5]] x :reverse true]
+; => sorted_vec(5, 4, 3, 1, 1)
+
+; Combine :key and :reverse
+[sorted-for [item items] 
+            {:name (:name item) :score (:score item)}
+            :key :score :reverse true]
+; => sorted by score, highest first
+
+; Real-world example: rank GitHub repos by stars
+[sorted-for [repo repos]
+            {:name repo :stars (fetch-stars repo)}
+            :key :stars :reverse true]
 ```
 
 ### Loop / Recur (Tail-Call Optimization)
@@ -905,13 +962,17 @@ Use `#` suffix to generate unique symbols:
 
 ## 14. Transient Data Structures
 
-Transients provide **mutable** versions of persistent collections for efficient batch operations. Available for `Vector`, `Map`, `Set`, `DoubleVector`, and `IntVector`.
+Transients provide **mutable** versions of persistent collections for efficient batch operations. Available for `Vector`, `Map`, `Set`, `SortedVector`, `DoubleVector`, and `IntVector`.
 
 ### Creating Transients
 
 ```clojure
 (def v [1 2 3])
 (def tv (transient v))  ; Create mutable version
+
+; SortedVector transients preserve sort options
+(def sv (sorted_vec [3 1 4] :key abs :reverse true))
+(def tsv (transient sv))
 ```
 
 ### Mutating Operations
@@ -932,6 +993,12 @@ Transients provide **mutable** versions of persistent collections for efficient 
 (def ts (transient #{1 2 3}))
 (conj! ts 4)         ; Add element
 (disj! ts 2)         ; Remove element
+
+; SortedVector operations
+(def tsv (transient (sorted_vec [1 3 5])))
+(.conj_mut tsv 2)    ; Add element (maintains sort order)
+(.conj_mut tsv 4)    ; => now contains 1, 2, 3, 4, 5
+(.disj_mut tsv 3)    ; Remove element
 ```
 
 ### Converting Back to Persistent

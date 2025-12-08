@@ -1,0 +1,390 @@
+;; Tests for SortedVector - Persistent sorted vector (Red-Black Tree)
+
+(ns test-sorted-vector)
+
+;; =============================================================================
+;; Basic Creation Tests
+;; =============================================================================
+
+(defn test-empty-sorted-vector []
+  (let [sv (sorted_vec)]
+    (assert (= (len sv) 0) "empty sorted_vec should have length 0")
+    (assert (= (.first sv) nil) "first of empty should be nil")
+    (assert (= (.last sv) nil) "last of empty should be nill"))
+  (print "✓ test-empty-sorted-vector"))
+
+(defn test-sorted-vec-from-list []
+  (let [sv (sorted_vec [3 1 4 1 5 9 2 6])]
+    (assert (= (len sv) 8) "should have 8 elements")
+    (assert (= (vec sv) [1 1 2 3 4 5 6 9]) "should be sorted"))
+  (print "✓ test-sorted-vec-from-list"))
+
+(defn test-sorted-vec-varargs []
+  ;; Test that single iterable is expanded
+  (let [sv (sorted_vec [5 2 8 1])]
+    (assert (= (vec sv) [1 2 5 8]) "should sort iterable"))
+  (print "✓ test-sorted-vec-varargs"))
+
+;; =============================================================================
+;; Indexing Tests
+;; =============================================================================
+
+(defn test-indexing []
+  (let [sv (sorted_vec [30 10 20 40])]
+    (assert (= (get sv 0) 10) "sv[0] should be 10")
+    (assert (= (get sv 1) 20) "sv[1] should be 20")
+    (assert (= (get sv 2) 30) "sv[2] should be 30")
+    (assert (= (get sv 3) 40) "sv[3] should be 40"))
+  (print "✓ test-indexing"))
+
+(defn test-negative-indexing []
+  (let [sv (sorted_vec [1 2 3 4 5])]
+    (assert (= (get sv -1) 5) "sv[-1] should be last element")
+    (assert (= (get sv -2) 4) "sv[-2] should be second to last")
+    (assert (= (get sv -5) 1) "sv[-5] should be first element"))
+  (print "✓ test-negative-indexing"))
+
+(defn test-nth-with-default []
+  (let [sv (sorted_vec [1 2 3])]
+    (assert (= (.nth sv 0) 1) "nth 0 should be 1")
+    (assert (= (.nth sv 10 :default) :default) "nth out of range should return default")
+    (assert (= (.nth sv -10 :missing) :missing) "nth negative out of range should return default"))
+  (print "✓ test-nth-with-default"))
+
+;; =============================================================================
+;; Conj Tests (Adding Elements)
+;; =============================================================================
+
+(defn test-conj []
+  (let [sv1 (sorted_vec [3 1 4])
+        sv2 (.conj sv1 2)
+        sv3 (.conj sv2 0)
+        sv4 (.conj sv3 5)]
+    (assert (= (vec sv1) [1 3 4]) "original should be unchanged")
+    (assert (= (vec sv2) [1 2 3 4]) "after conj 2")
+    (assert (= (vec sv3) [0 1 2 3 4]) "after conj 0")
+    (assert (= (vec sv4) [0 1 2 3 4 5]) "after conj 5"))
+  (print "✓ test-conj"))
+
+(defn test-conj-duplicates []
+  (let [sv (sorted_vec [1 2 3])
+        sv2 (.conj sv 2)
+        sv3 (.conj sv2 2)]
+    (assert (= (vec sv3) [1 2 2 2 3]) "duplicates should be preserved"))
+  (print "✓ test-conj-duplicates"))
+
+;; =============================================================================
+;; Disj Tests (Removing Elements)
+;; =============================================================================
+
+(defn test-disj []
+  (let [sv (sorted_vec [1 2 3 4 5])
+        sv2 (.disj sv 3)
+        sv3 (.disj sv2 1)
+        sv4 (.disj sv3 5)]
+    (assert (= (vec sv) [1 2 3 4 5]) "original should be unchanged")
+    (assert (= (vec sv2) [1 2 4 5]) "after disj 3")
+    (assert (= (vec sv3) [2 4 5]) "after disj 1")
+    (assert (= (vec sv4) [2 4]) "after disj 5"))
+  (print "✓ test-disj"))
+
+(defn test-disj-nonexistent []
+  (let [sv (sorted_vec [1 2 3])
+        sv2 (.disj sv 99)]
+    (assert (= (vec sv2) [1 2 3]) "disj of nonexistent element should return same elements")
+    (assert (is sv sv2) "disj of nonexistent should return same object"))
+  (print "✓ test-disj-nonexistent"))
+
+(defn test-disj-duplicates []
+  (let [sv (sorted_vec [1 2 2 2 3])
+        sv2 (.disj sv 2)]
+    (assert (= (len sv2) 4) "should remove only one occurrence")
+    (assert (= (vec sv2) [1 2 2 3]) "should have 2 twos left"))
+  (print "✓ test-disj-duplicates"))
+
+;; =============================================================================
+;; First/Last Tests
+;; =============================================================================
+
+(defn test-first-last []
+  (let [sv (sorted_vec [5 2 8 1 9 3])]
+    (assert (= (.first sv) 1) "first should be minimum")
+    (assert (= (.last sv) 9) "last should be maximum"))
+  (print "✓ test-first-last"))
+
+;; =============================================================================
+;; Contains Tests
+;; =============================================================================
+
+(defn test-contains []
+  (let [sv (sorted_vec [1 3 5 7 9])]
+    (assert (in 1 sv) "should contain 1")
+    (assert (in 5 sv) "should contain 5")
+    (assert (in 9 sv) "should contain 9")
+    (assert (not (in 2 sv)) "should not contain 2")
+    (assert (not (in 0 sv)) "should not contain 0")
+    (assert (not (in 10 sv)) "should not contain 10"))
+  (print "✓ test-contains"))
+
+;; =============================================================================
+;; Index-of and Rank Tests
+;; =============================================================================
+
+(defn test-index-of []
+  (let [sv (sorted_vec [10 20 30 40 50])]
+    (assert (= (.index_of sv 10) 0) "index of 10 should be 0")
+    (assert (= (.index_of sv 30) 2) "index of 30 should be 2")
+    (assert (= (.index_of sv 50) 4) "index of 50 should be 4")
+    (assert (= (.index_of sv 99) -1) "index of nonexistent should be -1"))
+  (print "✓ test-index-of"))
+
+(defn test-rank []
+  (let [sv (sorted_vec [10 20 30 40 50])]
+    (assert (= (.rank sv 10) 0) "rank of 10 should be 0 (0 elements less)")
+    (assert (= (.rank sv 25) 2) "rank of 25 should be 2 (10, 20 are less)")
+    (assert (= (.rank sv 50) 4) "rank of 50 should be 4")
+    (assert (= (.rank sv 100) 5) "rank of 100 should be 5 (all elements less)"))
+  (print "✓ test-rank"))
+
+;; =============================================================================
+;; Reverse Order Tests
+;; =============================================================================
+
+(defn test-reverse-order []
+  (let [sv (sorted_vec [3 1 4 1 5] *{:reverse true})]
+    (assert (= (vec sv) [5 4 3 1 1]) "reverse=True should sort descending")
+    (assert (= (.first sv) 5) "first in reverse should be maximum")
+    (assert (= (.last sv) 1) "last in reverse should be minimum"))
+  (print "✓ test-reverse-order"))
+
+(defn test-reverse-conj []
+  (let [sv (sorted_vec [5 3 1] *{:reverse true})
+        sv2 (.conj sv 4)
+        sv3 (.conj sv2 6)]
+    (assert (= (vec sv2) [5 4 3 1]) "conj should maintain reverse order")
+    (assert (= (vec sv3) [6 5 4 3 1]) "conj larger should go to front"))
+  (print "✓ test-reverse-conj"))
+
+;; =============================================================================
+;; Key Function Tests
+;; =============================================================================
+
+(defn test-key-function []
+  (let [sv (sorted_vec ["banana" "apple" "cherry" "date"] *{:key len})]
+    (assert (= (.first sv) "date") "shortest string first")
+    (assert (= (len (.last sv)) 6) "longest string should have length 6"))
+  (print "✓ test-key-function"))
+
+(defn test-key-function-with-dicts []
+  (let [data [{:name "Alice" :age 30}
+              {:name "Bob" :age 25}
+              {:name "Charlie" :age 35}]
+        sv (sorted_vec data *{:key :age})]
+    (assert (= (:name (.first sv)) "Bob") "youngest first")
+    (assert (= (:name (.last sv)) "Charlie") "oldest last"))
+  (print "✓ test-key-function-with-dicts"))
+
+(defn test-key-with-reverse []
+  (let [sv (sorted_vec ["a" "bbb" "cc"] *{:key len :reverse true})]
+    (assert (= (.first sv) "bbb") "longest first with reverse")
+    (assert (= (.last sv) "a") "shortest last with reverse"))
+  (print "✓ test-key-with-reverse"))
+
+;; =============================================================================
+;; Transient Tests
+;; =============================================================================
+
+(defn test-transient-conj []
+  (let [sv (sorted_vec [5 3 1])
+        t (transient sv)
+        _ (conj! t 4)
+        _ (conj! t 2)
+        result (persistent! t)]
+    (assert (= (vec sv) [1 3 5]) "original should be unchanged")
+    (assert (= (vec result) [1 2 3 4 5]) "transient modifications should apply"))
+  (print "✓ test-transient-conj"))
+
+(defn test-transient-disj []
+  (let [sv (sorted_vec [1 2 3 4 5])
+        t (transient sv)
+        _ (disj! t 3)
+        _ (disj! t 1)
+        result (persistent! t)]
+    (assert (= (vec sv) [1 2 3 4 5]) "original should be unchanged")
+    (assert (= (vec result) [2 4 5]) "transient removals should apply"))
+  (print "✓ test-transient-disj"))
+
+(defn test-with-mutable []
+  (let [result (with-mutable [sv (sorted_vec [5 2 8])]
+                 (conj! sv 1)
+                 (conj! sv 4)
+                 (conj! sv 9))]
+    (assert (= (vec result) [1 2 4 5 8 9]) "with-mutable should work with sorted vectors"))
+  (print "✓ test-with-mutable"))
+
+;; =============================================================================
+;; Equality and Hashing Tests
+;; =============================================================================
+
+(defn test-equality []
+  (let [sv1 (sorted_vec [3 1 2])
+        sv2 (sorted_vec [1 2 3])
+        sv3 (sorted_vec [1 2 3 4])]
+    (assert (= sv1 sv2) "same elements should be equal")
+    (assert (not= sv1 sv3) "different lengths should not be equal"))
+  (print "✓ test-equality"))
+
+(defn test-hash-consistency []
+  (let [sv1 (sorted_vec [1 2 3])
+        sv2 (sorted_vec [3 2 1])]
+    (assert (= (hash sv1) (hash sv2)) "equal sorted vecs should have same hash"))
+  (print "✓ test-hash-consistency"))
+
+;; =============================================================================
+;; Iteration Tests
+;; =============================================================================
+
+(defn test-iteration []
+  (let [sv (sorted_vec [5 2 8 1 9])
+        result (vec)]
+    (for [x sv]
+      (set! result (.conj result x)))
+    (assert (= result [1 2 5 8 9]) "iteration should be in sorted order"))
+  (print "✓ test-iteration"))
+
+;; =============================================================================
+;; Core Function Tests
+;; =============================================================================
+
+(defn test-core-functions []
+  (let [sv (sorted_vec [5 2 8 1 9])]
+    ;; first and last
+    (assert (= (first sv) 1) "first should return minimum")
+    (assert (= (last sv) 9) "last should return maximum")
+    ;; nth
+    (assert (= (nth sv 0) 1) "nth 0 should be 1")
+    (assert (= (nth sv 2) 5) "nth 2 should be 5")
+    (assert (= (nth sv 10 :default) :default) "nth with default")
+    ;; get
+    (assert (= (get sv 0) 1) "get 0 should be 1")
+    (assert (= (get sv -1) 9) "get -1 should be last")
+    ;; count
+    (assert (= (count sv) 5) "count should be 5")
+    ;; conj (persistent)
+    (assert (= (vec (conj sv 3)) [1 2 3 5 8 9]) "conj should add in sorted order")
+    ;; disj (persistent)
+    (assert (= (vec (disj sv 5)) [1 2 8 9]) "disj should remove element")
+    (assert (= (vec (disj sv 99)) [1 2 5 8 9]) "disj of missing should be no-op"))
+  (print "✓ test-core-functions"))
+
+(defn test-empty-and-into []
+  (let [sv (sorted_vec [1 2 3])
+        e (empty sv)]
+    (assert (= (count e) 0) "empty should return empty sorted vector")
+    ;; into
+    (let [result (into (sorted_vec) [3 1 4 1 5])]
+      (assert (= (vec result) [1 1 3 4 5]) "into should add elements in sorted order"))
+    ;; into with existing elements
+    (let [result (into (sorted_vec [10 20]) [5 15 25])]
+      (assert (= (vec result) [5 10 15 20 25]) "into should merge sorted")))
+  (print "✓ test-empty-and-into"))
+
+;; =============================================================================
+;; Edge Cases
+;; =============================================================================
+
+(defn test-single-element []
+  (let [sv (sorted_vec [42])]
+    (assert (= (len sv) 1) "length should be 1")
+    (assert (= (get sv 0) 42) "element should be 42")
+    (assert (= (.first sv) 42) "first should be 42")
+    (assert (= (.last sv) 42) "last should be 42"))
+  (print "✓ test-single-element"))
+
+(defn test-all-same-elements []
+  (let [sv (sorted_vec [5 5 5 5 5])]
+    (assert (= (len sv) 5) "should have 5 elements")
+    (assert (= (vec sv) [5 5 5 5 5]) "all elements should be 5")
+    (assert (= (.first sv) 5) "first should be 5")
+    (assert (= (.last sv) 5) "last should be 5"))
+  (print "✓ test-all-same-elements"))
+
+(defn test-large-sorted-vector []
+  (let [items (list (range 1000))
+        shuffled (sorted items *{:key (fn [_] (hash (id _)))})
+        sv (sorted_vec shuffled)]
+    (assert (= (len sv) 1000) "should have 1000 elements")
+    (assert (= (.first sv) 0) "first should be 0")
+    (assert (= (.last sv) 999) "last should be 999")
+    (assert (= (get sv 500) 500) "middle element should be correct"))
+  (print "✓ test-large-sorted-vector"))
+
+;; =============================================================================
+;; Run All Tests
+;; =============================================================================
+
+(defn run-all-tests []
+  (print "\n=== SortedVector Tests ===\n")
+
+  ;; Basic creation
+  (test-empty-sorted-vector)
+  (test-sorted-vec-from-list)
+  (test-sorted-vec-varargs)
+
+  ;; Indexing
+  (test-indexing)
+  (test-negative-indexing)
+  (test-nth-with-default)
+
+  ;; Conj
+  (test-conj)
+  (test-conj-duplicates)
+
+  ;; Disj
+  (test-disj)
+  (test-disj-nonexistent)
+  (test-disj-duplicates)
+
+  ;; First/Last
+  (test-first-last)
+
+  ;; Contains
+  (test-contains)
+
+  ;; Index-of and Rank
+  (test-index-of)
+  (test-rank)
+
+  ;; Reverse order
+  (test-reverse-order)
+  (test-reverse-conj)
+
+  ;; Key function
+  (test-key-function)
+  (test-key-function-with-dicts)
+  (test-key-with-reverse)
+
+  ;; Transients
+  (test-transient-conj)
+  (test-transient-disj)
+  (test-with-mutable)
+
+  ;; Equality and hashing
+  (test-equality)
+  (test-hash-consistency)
+
+  ;; Iteration
+  (test-iteration)
+
+  ;; Core functions
+  (test-core-functions)
+  (test-empty-and-into)
+
+  ;; Edge cases
+  (test-single-element)
+  (test-all-same-elements)
+  (test-large-sorted-vector)
+
+  (print "\n=== All SortedVector tests passed! ===\n"))
+
+(run-all-tests)

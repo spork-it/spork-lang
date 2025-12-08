@@ -4634,6 +4634,12 @@ def compile_let_stmt_with_return(args):
         pattern = items[i]
         value_form = items[i + 1]
         value = compile_expr(value_form)
+
+        # Inject any nested function definitions before the assignment
+        nested_funcs = get_compile_context().get_and_clear_functions()
+        if nested_funcs:
+            stmts.extend(nested_funcs)
+
         # Use destructuring for all patterns (handles both simple symbols and complex patterns)
         stmts.extend(compile_destructure(pattern, value))
 
@@ -5993,6 +5999,192 @@ def compile_vector_comprehension(for_form, body_expr, form):
     return copy_location(call_expr, form)
 
 
+def compile_sorted_vector_comprehension(for_form, body_expr, options, form):
+    """
+    Compile [sorted-for [x coll] expr :key key-fn :reverse bool] to sorted vector building.
+
+    Generates an IIFE that builds a sorted vector:
+        def _sorted_vec_comp():
+            _t = EMPTY_SORTED_VECTOR.transient()  # or with key/reverse
+            for x in coll:
+                _t.conj_mut(expr)
+            return _t.persistent()
+        _sorted_vec_comp()
+
+    Options:
+        :key <fn>      - Key function for sorting
+        :reverse <bool> - Whether to sort in reverse order
+    """
+    # Parse the for form: (sorted-for [var coll] ...)
+    if len(for_form) < 2:
+        raise SyntaxError("sorted-for in vector comprehension requires [var coll]")
+
+    bindings = for_form[1]
+    if not isinstance(bindings, VectorLiteral) or len(bindings.items) != 2:
+        raise SyntaxError("sorted-for binding must be [var coll]")
+
+    var_form = bindings.items[0]
+    coll_form = bindings.items[1]
+
+    iter_expr = compile_expr(coll_form)
+
+    # Parse options (:key and :reverse)
+    key_fn = None
+    reverse_val = None
+    i = 0
+    while i < len(options):
+        opt = options[i]
+        if is_keyword(opt, "key") and i + 1 < len(options):
+            key_fn = options[i + 1]
+            i += 2
+        elif is_keyword(opt, "reverse") and i + 1 < len(options):
+            reverse_val = options[i + 1]
+            i += 2
+        else:
+            raise SyntaxError(f"Unknown option in sorted-for: {opt}")
+
+    # Generate unique names
+    func_name = gensym("_sorted_vec_comp_")
+    transient_name = gensym("_t_")
+
+    # Save the current nested functions state so we can capture any new ones
+    ctx = get_compile_context()
+    saved_funcs_count = len(ctx.nested_functions)
+
+    # Build the function body
+    func_body = []
+
+    # Build the sorted_vec() call with options
+    # If no options, use EMPTY_SORTED_VECTOR.transient()
+    # If options, use sorted_vec(*{:key key_fn, :reverse reverse_val}).transient()
+    if key_fn is None and reverse_val is None:
+        # _t = EMPTY_SORTED_VECTOR.transient()
+        transient_init = ast.Assign(
+            targets=[ast.Name(id=transient_name, ctx=ast.Store())],
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id="EMPTY_SORTED_VECTOR", ctx=ast.Load()),
+                    attr="transient",
+                    ctx=ast.Load(),
+                ),
+                args=[],
+                keywords=[],
+            ),
+        )
+    else:
+        # _t = sorted_vec(*{:key ..., :reverse ...}).transient()
+        sorted_vec_keywords = []
+        if key_fn is not None:
+            sorted_vec_keywords.append(
+                ast.keyword(arg="key", value=compile_expr(key_fn))
+            )
+        if reverse_val is not None:
+            sorted_vec_keywords.append(
+                ast.keyword(arg="reverse", value=compile_expr(reverse_val))
+            )
+        transient_init = ast.Assign(
+            targets=[ast.Name(id=transient_name, ctx=ast.Store())],
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Call(
+                        func=ast.Name(id="sorted_vec", ctx=ast.Load()),
+                        args=[],
+                        keywords=sorted_vec_keywords,
+                    ),
+                    attr="transient",
+                    ctx=ast.Load(),
+                ),
+                args=[],
+                keywords=[],
+            ),
+        )
+    func_body.append(transient_init)
+
+    # Build the for loop body
+    loop_body = []
+
+    # Handle destructuring if needed
+    if isinstance(var_form, Symbol):
+        # Simple case
+        target = ast.Name(id=normalize_name(var_form.name), ctx=ast.Store())
+    else:
+        # Destructuring case
+        item_temp = gensym("_item_")
+        target = ast.Name(id=item_temp, ctx=ast.Store())
+        item_load = ast.Name(id=item_temp, ctx=ast.Load())
+        loop_body.extend(compile_destructure(var_form, item_load))
+
+    # Compile body expression INSIDE the loop context (after variable is bound)
+    body_compiled = compile_expr(body_expr)
+
+    # Capture any nested functions that were generated during body compilation
+    nested_funcs = ctx.nested_functions[saved_funcs_count:]
+    ctx.nested_functions = ctx.nested_functions[:saved_funcs_count]
+
+    # Add captured nested functions at the start of our function body
+    for nf in nested_funcs:
+        func_body.append(nf)
+
+    # _t.conj_mut(expr)
+    conj_call = ast.Expr(
+        value=ast.Call(
+            func=ast.Attribute(
+                value=ast.Name(id=transient_name, ctx=ast.Load()),
+                attr="conj_mut",
+                ctx=ast.Load(),
+            ),
+            args=[body_compiled],
+            keywords=[],
+        )
+    )
+    loop_body.append(conj_call)
+
+    # for var in coll: ...
+    for_loop = ast.For(target=target, iter=iter_expr, body=loop_body, orelse=[])
+    func_body.append(for_loop)
+
+    # return _t.persistent()
+    return_stmt = ast.Return(
+        value=ast.Call(
+            func=ast.Attribute(
+                value=ast.Name(id=transient_name, ctx=ast.Load()),
+                attr="persistent",
+                ctx=ast.Load(),
+            ),
+            args=[],
+            keywords=[],
+        )
+    )
+    func_body.append(return_stmt)
+
+    # Build the IIFE function definition
+    func_def = ast.FunctionDef(
+        name=func_name,
+        args=ast.arguments(
+            posonlyargs=[],
+            args=[],
+            vararg=None,
+            kwonlyargs=[],
+            kw_defaults=[],
+            kwarg=None,
+            defaults=[],
+        ),
+        body=func_body,
+        decorator_list=[],
+        returns=None,
+    )
+
+    # Register the function to be added at module/function level
+    ctx.add_function(func_def)
+
+    # Return a call to the function
+    call_expr = ast.Call(
+        func=ast.Name(id=func_name, ctx=ast.Load()), args=[], keywords=[]
+    )
+
+    return copy_location(call_expr, form)
+
+
 def compile_async_for(args, form_loc=None):
     """
     Compile (async-for [x xs] body...) to ast.AsyncFor.
@@ -7193,6 +7385,21 @@ def compile_expr(form):
             for_form = [items[0], items[1]]  # Reconstruct (for [x coll])
             body_expr = items[2]
             return compile_vector_comprehension(for_form, body_expr, form)
+
+        # Check for sorted vector comprehension: [sorted-for [x coll] expr :key fn :reverse bool]
+        if (
+            len(items) >= 3
+            and is_symbol(items[0], "sorted-for")
+            and isinstance(items[1], VectorLiteral)
+        ):
+            # Sorted vector comprehension: [sorted-for [x coll] expr ...]
+            # items[0] = 'sorted-for', items[1] = [x coll], items[2] = expr, items[3:] = options
+            for_form = [items[0], items[1]]
+            body_expr = items[2]
+            options = items[3:]  # Remaining items are :key/:reverse options
+            return compile_sorted_vector_comprehension(
+                for_form, body_expr, options, form
+            )
 
         elts = [compile_expr(x) for x in form.items]
         node = ast.Call(

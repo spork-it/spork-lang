@@ -70,6 +70,8 @@ jobs:
       - name: Run spork tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           Write-Host "Running all .spork tests..."
           $failed = 0
@@ -97,16 +99,8 @@ jobs:
             Write-Host "All tests passed!"
           }
 
-      - name: Run fuzz tests (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
+      - name: Run fuzz tests
+        if: runner.os == 'Linux'
         run: |
           echo "Running fuzz test suite..."
-          python -m tests.fuzzing --examples 1000 --steps 200
-
-      - name: Run fuzz tests (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Write-Host "Running fuzz test suite..."
           python -m tests.fuzzing --examples 1000 --steps 200

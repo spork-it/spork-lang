@@ -819,7 +819,7 @@ static PyObject *Vector_conj(Vector *self, PyObject *val) {
     VectorNode *new_root;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1 << self->shift)) {
+    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
         new_root = VectorNode_create(transient_id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -1168,7 +1168,6 @@ static PyObject *Vector_to_seq(Vector *self, PyObject *Py_UNUSED(ignored)) {
     // Uses Vector_node_for to avoid creating intermediate tuples
     Cons *result = NULL;
     Py_ssize_t i = self->cnt - 1;
-    Py_ssize_t tail_off = Vector_tail_off(self);
 
     while (i >= 0) {
         // Determine the chunk boundaries for this index
@@ -1905,7 +1904,7 @@ static PyObject *DoubleVector_conj(DoubleVector *self, PyObject *val) {
     DoubleVectorNode *new_root;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1 << self->shift)) {
+    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
         new_root = DoubleVectorNode_create(transient_id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -2273,7 +2272,7 @@ static PyObject *TransientDoubleVector_conj_mut(TransientDoubleVector *self, PyO
     self->tail_len = 1;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1 << self->shift)) {
+    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
         DoubleVectorNode *new_root = DoubleVectorNode_create(self->id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -2600,14 +2599,14 @@ typedef struct IntVector {
     Py_ssize_t cnt;
     int shift;
     IntVectorNode *root;
-    long *tail;
+    int64_t *tail;
     Py_ssize_t tail_len;
     Py_ssize_t tail_cap;
     Py_hash_t hash;
     int hash_computed;
     PyObject *transient_id;
     // Buffer protocol cache
-    long *flat_buffer_cache;
+    int64_t *flat_buffer_cache;
 } IntVector;
 
 static PyTypeObject IntVectorType;
@@ -2640,7 +2639,7 @@ static PyObject *IntVector_new(PyTypeObject *type, PyObject *args, PyObject *kwd
 }
 
 static IntVector *IntVector_create(Py_ssize_t cnt, int shift, IntVectorNode *root,
-                                       long *tail, Py_ssize_t tail_len, PyObject *transient_id) {
+                                       int64_t *tail, Py_ssize_t tail_len, PyObject *transient_id) {
     IntVector *vec = (IntVector *)IntVectorType.tp_alloc(&IntVectorType, 0);
     if (!vec) return NULL;
 
@@ -2650,13 +2649,13 @@ static IntVector *IntVector_create(Py_ssize_t cnt, int shift, IntVectorNode *roo
     Py_INCREF(vec->root);
 
     if (tail && tail_len > 0) {
-        vec->tail = (long *)malloc(tail_len * sizeof(long));
+        vec->tail = (int64_t *)malloc(tail_len * sizeof(int64_t));
         if (!vec->tail) {
             Py_DECREF(vec);
             PyErr_NoMemory();
             return NULL;
         }
-        memcpy(vec->tail, tail, tail_len * sizeof(long));
+        memcpy(vec->tail, tail, tail_len * sizeof(int64_t));
         vec->tail_len = tail_len;
         vec->tail_cap = tail_len;
     } else {
@@ -2685,7 +2684,7 @@ static Py_ssize_t IntVector_tail_off(IntVector *self) {
     return ((self->cnt - 1) >> BITS) << BITS;
 }
 
-static long *IntVector_array_for(IntVector *self, Py_ssize_t i) {
+static int64_t *IntVector_array_for(IntVector *self, Py_ssize_t i) {
     if (i < 0 || i >= self->cnt) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
         return NULL;
@@ -2700,11 +2699,11 @@ static long *IntVector_array_for(IntVector *self, Py_ssize_t i) {
         int idx = (i >> level) & MASK;
         node = node->data.children[idx];
     }
-    return node->data.values;
+    return (int64_t *)node->data.values;
 }
 
-static long IntVector_nth_raw(IntVector *self, Py_ssize_t i) {
-    long *arr = IntVector_array_for(self, i);
+static int64_t IntVector_nth_raw(IntVector *self, Py_ssize_t i) {
+    int64_t *arr = IntVector_array_for(self, i);
     if (!arr) return 0;
     return arr[i & MASK];
 }
@@ -2730,9 +2729,9 @@ static PyObject *IntVector_nth(IntVector *self, PyObject *args) {
         return NULL;
     }
 
-    long val = IntVector_nth_raw(self, i);
+    int64_t val = IntVector_nth_raw(self, i);
     if (PyErr_Occurred()) return NULL;
-    return PyLong_FromLong(val);
+    return PyLong_FromLongLong(val);
 }
 
 static PyObject *IntVector_getitem(IntVector *self, PyObject *key) {
@@ -2746,9 +2745,9 @@ static PyObject *IntVector_getitem(IntVector *self, PyObject *key) {
             return NULL;
         }
 
-        long val = IntVector_nth_raw(self, i);
+        int64_t val = IntVector_nth_raw(self, i);
         if (PyErr_Occurred()) return NULL;
-        return PyLong_FromLong(val);
+        return PyLong_FromLongLong(val);
     }
 
     if (PySlice_Check(key)) {
@@ -2761,12 +2760,12 @@ static PyObject *IntVector_getitem(IntVector *self, PyObject *key) {
         if (!result) return NULL;
 
         for (Py_ssize_t i = start, j = 0; j < slicelength; i += step, j++) {
-            long val = IntVector_nth_raw(self, i);
+            int64_t val = IntVector_nth_raw(self, i);
             if (PyErr_Occurred()) {
                 Py_DECREF(result);
                 return NULL;
             }
-            PyObject *boxed = PyLong_FromLong(val);
+            PyObject *boxed = PyLong_FromLongLong(val);
             if (!boxed) {
                 Py_DECREF(result);
                 return NULL;
@@ -2841,7 +2840,7 @@ static IntVectorNode *IntVector_push_tail(IntVector *self, int level, IntVectorN
 }
 
 static PyObject *IntVector_conj(IntVector *self, PyObject *val) {
-    long lval = PyLong_AsLong(val);
+    int64_t lval = PyLong_AsLongLong(val);
     if (lval == -1 && PyErr_Occurred()) {
         return NULL;
     }
@@ -2851,14 +2850,14 @@ static PyObject *IntVector_conj(IntVector *self, PyObject *val) {
     // Room in tail?
     if (self->cnt - IntVector_tail_off(self) < WIDTH) {
         Py_ssize_t new_tail_len = self->tail_len + 1;
-        long *new_tail = (long *)malloc(new_tail_len * sizeof(long));
+        int64_t *new_tail = (int64_t *)malloc(new_tail_len * sizeof(int64_t));
         if (!new_tail) {
             PyErr_NoMemory();
             return NULL;
         }
 
         if (self->tail && self->tail_len > 0) {
-            memcpy(new_tail, self->tail, self->tail_len * sizeof(long));
+            memcpy(new_tail, self->tail, self->tail_len * sizeof(int64_t));
         }
         new_tail[self->tail_len] = lval;
 
@@ -2881,7 +2880,7 @@ static PyObject *IntVector_conj(IntVector *self, PyObject *val) {
     IntVectorNode *new_root;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1 << self->shift)) {
+    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
         new_root = IntVectorNode_create(transient_id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -2910,7 +2909,7 @@ static PyObject *IntVector_conj(IntVector *self, PyObject *val) {
 
     Py_DECREF(tail_node);
 
-    long new_tail_arr[1] = { lval };
+    int64_t new_tail_arr[1] = { lval };
     IntVector *result = IntVector_create(self->cnt + 1, new_shift, new_root,
                                               new_tail_arr, 1, transient_id);
     Py_DECREF(new_root);
@@ -2922,7 +2921,7 @@ static PyObject *IntVector_repr(IntVector *self) {
     if (!result) return NULL;
 
     for (Py_ssize_t i = 0; i < self->cnt; i++) {
-        long val = IntVector_nth_raw(self, i);
+        int64_t val = IntVector_nth_raw(self, i);
         if (PyErr_Occurred()) {
             Py_DECREF(result);
             return NULL;
@@ -2942,8 +2941,8 @@ static PyObject *IntVector_repr(IntVector *self) {
             result = temp;
         }
 
-        // Convert long to Python int and get its repr
-        PyObject *long_obj = PyLong_FromLong(val);
+        // Convert int64 to Python int and get its repr
+        PyObject *long_obj = PyLong_FromLongLong(val);
         if (!long_obj) {
             Py_DECREF(result);
             return NULL;
@@ -2981,7 +2980,7 @@ static Py_hash_t IntVector_hash(IntVector *self) {
 
     Py_hash_t h = 0;
     for (Py_ssize_t i = 0; i < self->cnt; i++) {
-        long val = IntVector_nth_raw(self, i);
+        int64_t val = IntVector_nth_raw(self, i);
         Py_hash_t item_hash = (Py_hash_t)val;
         if (item_hash == -1) item_hash = -2;
         h = 31 * h + item_hash;
@@ -3003,7 +3002,7 @@ static int IntVector_flatten(IntVector *self) {
         return 0;
     }
 
-    long *buffer = (long *)malloc(self->cnt * sizeof(long));
+    int64_t *buffer = (int64_t *)malloc(self->cnt * sizeof(int64_t));
     if (!buffer) {
         PyErr_NoMemory();
         return -1;
@@ -3028,8 +3027,8 @@ static int IntVector_getbuffer(IntVector *self, Py_buffer *view, int flags) {
         Py_INCREF(self);
         view->len = 0;
         view->readonly = 1;
-        view->itemsize = sizeof(long);
-        view->format = "l";
+        view->itemsize = sizeof(int64_t);
+        view->format = "q";
         view->ndim = 1;
         view->shape = NULL;
         view->strides = NULL;
@@ -3045,10 +3044,10 @@ static int IntVector_getbuffer(IntVector *self, Py_buffer *view, int flags) {
     view->buf = self->flat_buffer_cache;
     view->obj = (PyObject *)self;
     Py_INCREF(self);
-    view->len = self->cnt * sizeof(long);
+    view->len = self->cnt * sizeof(int64_t);
     view->readonly = 1;
-    view->itemsize = sizeof(long);
-    view->format = "l";
+    view->itemsize = sizeof(int64_t);
+    view->format = "q";
     view->ndim = 1;
     view->shape = &self->cnt;
     view->strides = NULL;
@@ -3086,10 +3085,10 @@ static PyObject *IntVectorIterator_next(IntVectorIterator *self) {
         return NULL;
     }
 
-    long val = IntVector_nth_raw(self->vec, self->index);
+    int64_t val = IntVector_nth_raw(self->vec, self->index);
     if (PyErr_Occurred()) return NULL;
     self->index++;
-    return PyLong_FromLong(val);
+    return PyLong_FromLongLong(val);
 }
 
 static PyTypeObject IntVectorIteratorType = {
@@ -3117,7 +3116,7 @@ typedef struct TransientIntVector {
     Py_ssize_t cnt;
     int shift;
     IntVectorNode *root;
-    long *tail;
+    int64_t *tail;
     Py_ssize_t tail_len;
     Py_ssize_t tail_cap;
     PyObject *id;
@@ -3205,7 +3204,7 @@ static PyObject *TransientIntVector_conj_mut(TransientIntVector *self, PyObject 
     if (PyErr_Occurred()) return NULL;
 
     // Unbox the value
-    long lval = PyLong_AsLong(val);
+    int64_t lval = PyLong_AsLongLong(val);
     if (lval == -1 && PyErr_Occurred()) {
         return NULL;
     }
@@ -3216,7 +3215,7 @@ static PyObject *TransientIntVector_conj_mut(TransientIntVector *self, PyObject 
         if (self->tail_len >= self->tail_cap) {
             Py_ssize_t new_cap = self->tail_cap == 0 ? WIDTH : self->tail_cap * 2;
             if (new_cap > WIDTH) new_cap = WIDTH;
-            long *new_tail = (long *)realloc(self->tail, new_cap * sizeof(long));
+            int64_t *new_tail = (int64_t *)realloc(self->tail, new_cap * sizeof(int64_t));
             if (!new_tail) {
                 PyErr_NoMemory();
                 return NULL;
@@ -3244,7 +3243,7 @@ static PyObject *TransientIntVector_conj_mut(TransientIntVector *self, PyObject 
     self->tail_len = 1;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1 << self->shift)) {
+    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
         IntVectorNode *new_root = IntVectorNode_create(self->id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -3383,8 +3382,8 @@ static int IntVector_init(IntVector *self, PyObject *args, PyObject *kwds) {
                     self->root = nv->root;
                     Py_INCREF(self->root);
                     if (nv->tail && nv->tail_len > 0) {
-                        self->tail = (long *)malloc(nv->tail_len * sizeof(long));
-                        memcpy(self->tail, nv->tail, nv->tail_len * sizeof(long));
+                        self->tail = (int64_t *)malloc(nv->tail_len * sizeof(int64_t));
+                        memcpy(self->tail, nv->tail, nv->tail_len * sizeof(int64_t));
                         self->tail_len = nv->tail_len;
                         self->tail_cap = nv->tail_len;
                     } else {
@@ -3420,8 +3419,8 @@ static int IntVector_init(IntVector *self, PyObject *args, PyObject *kwds) {
         self->root = nv->root;
         Py_INCREF(self->root);
         if (nv->tail && nv->tail_len > 0) {
-            self->tail = (long *)malloc(nv->tail_len * sizeof(long));
-            memcpy(self->tail, nv->tail, nv->tail_len * sizeof(long));
+            self->tail = (int64_t *)malloc(nv->tail_len * sizeof(int64_t));
+            memcpy(self->tail, nv->tail, nv->tail_len * sizeof(int64_t));
             self->tail_len = nv->tail_len;
             self->tail_cap = nv->tail_len;
         } else {
@@ -3648,7 +3647,7 @@ static PyObject *TransientVector_conj_mut(TransientVector *self, PyObject *val) 
     PyList_SET_ITEM(self->tail, 0, val);
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1 << self->shift)) {
+    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
         VectorNode *new_root = VectorNode_create(self->id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -3834,7 +3833,6 @@ static PyObject *TransientVector_pop_mut(TransientVector *self, PyObject *Py_UNU
     }
 
     // Tail has only one element, need to get new tail from trie
-    Py_ssize_t new_tail_off = TransientVector_tail_off(self) - WIDTH;
 
     // Find the new tail in the trie
     VectorNode *node = self->root;
@@ -7996,13 +7994,6 @@ static RBNode *RBNode_rotate_right(RBNode *h, PyObject *edit) {
     RBNode_update_size(x);
 
     return x;
-}
-
-// Flip colors - only safe to call on nodes that are already editable
-static void RBNode_flip_colors_unsafe(RBNode *h) {
-    h->color = !h->color;
-    if (h->left) h->left->color = !h->left->color;
-    if (h->right) h->right->color = !h->right->color;
 }
 
 // Safe flip colors that ensures all nodes are editable first

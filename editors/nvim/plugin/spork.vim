@@ -1,7 +1,7 @@
 " Spork plugin for Neovim
 " Language: Spork (a Lisp that compiles to Python)
 " Maintainer: Spork Language Team
-" Latest Revision: 2024
+" Latest Revision: 2025
 
 if exists("g:loaded_spork")
   finish

@@ -1,0 +1,18 @@
+;; async - Core module
+(ns async.core
+  (:import [aiohttp] [asyncio]))
+
+;; Define an asynchronous function with the ^async metadata
+(defn ^async fetch-data [^str url]
+  (async-with [session (aiohttp.ClientSession)]
+    (async-with [resp (.get session url)]
+      (await (.json resp)))))
+
+;; Run it on the event loop
+(defn main []
+  (let [url "https://jsonplaceholder.typicode.com/todos/1"
+        data (asyncio.run (fetch-data url))]
+    (print "Received data:")
+    (print data)))
+
+;(main)

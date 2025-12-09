@@ -411,6 +411,7 @@ class SporkLanguageServer:
             "for",
             "while",
             "async-for",
+            "async-with",
             # Exception handling
             "try",
             "catch",

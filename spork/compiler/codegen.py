@@ -1093,6 +1093,8 @@ def compile_toplevel(form):
             return compile_let_stmt(form[1:], form_loc)
         if is_symbol(head, "with"):
             return compile_with(form[1:], form_loc)
+        if is_symbol(head, "async-with"):
+            return compile_async_with(form[1:], form_loc)
         if is_symbol(head, "set!"):
             return compile_set(form[1:], form_loc)
         if is_symbol(head, "do"):
@@ -4373,6 +4375,8 @@ def compile_stmt(form):
             return compile_loop(form[1:], form_loc)
         if is_symbol(head, "with"):
             return compile_with(form[1:], form_loc)
+        if is_symbol(head, "async-with"):
+            return compile_async_with(form[1:], form_loc)
         if is_symbol(head, "yield"):
             return compile_yield(form[1:], form_loc)
         if is_symbol(head, "yield-from"):
@@ -5045,7 +5049,11 @@ def compile_with_stmt_with_return(args):
                 # Nested with - compile with return
                 s = compile_with_stmt_with_return(last_form[1:])
                 body.append(s)
-            elif head_name in ("while", "for", "set!"):
+            elif head_name == "async-with":
+                # Nested async-with - compile with return
+                s = compile_async_with_stmt_with_return(last_form[1:])
+                body.append(s)
+            elif head_name in ("while", "for", "async-for", "set!"):
                 # Statement form - compile as statement, return None
                 s = compile_stmt(last_form)
                 body.extend(flatten_stmts([s]))
@@ -5181,6 +5189,281 @@ def compile_with_expr(args):
         func=ast.Name(id=wrapper_name, ctx=ast.Load()),
         args=[],
         keywords=[],
+    )
+
+
+def compile_async_with(args, form_loc=None):
+    """
+    Compile (async-with [bindings] body...) to ast.AsyncWith.
+
+    Supports:
+    - Simple binding: (async-with [session (aiohttp.ClientSession)] ...)
+    - Multiple bindings: (async-with [s1 (cm1) s2 (cm2)] ...)
+    - No binding: (async-with [(some-async-cm)] ...)
+    - Destructuring: (async-with [[a b] (some-async-context-manager)] ...)
+    """
+    if len(args) < 1:
+        raise SyntaxError("async-with requires bindings vector")
+
+    bindings = args[0]
+    if not isinstance(bindings, VectorLiteral):
+        raise SyntaxError("async-with bindings must be a vector")
+
+    body_forms = args[1:]
+
+    # Parse bindings
+    parsed = parse_with_bindings(bindings.items)
+    if not parsed:
+        raise SyntaxError("async-with requires at least one context manager")
+
+    # Build withitems
+    withitems = []
+    destructure_stmts = []
+
+    for pattern, cm_form in parsed:
+        cm_expr = compile_expr(cm_form)
+
+        if pattern is None:
+            # No binding
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=None))
+        elif isinstance(pattern, Symbol):
+            # Simple binding
+            target = ast.Name(id=normalize_name(pattern.name), ctx=ast.Store())
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=target))
+        else:
+            # Destructuring binding - use temp var and destructure in body
+            temp = gensym("__async_with_item_")
+            target = ast.Name(id=temp, ctx=ast.Store())
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=target))
+            temp_load = ast.Name(id=temp, ctx=ast.Load())
+            destructure_stmts.extend(compile_destructure(pattern, temp_load))
+
+    # Compile body
+    body = []
+    body.extend(destructure_stmts)
+
+    if not body_forms:
+        if not body:
+            body.append(ast.Pass())
+    else:
+        for f in body_forms:
+            s = compile_stmt(f)
+            body.extend(flatten_stmts([s]))
+        if not body:
+            body.append(ast.Pass())
+
+    node = ast.AsyncWith(items=withitems, body=body)
+    set_location(node, form_loc)
+    return node
+
+
+def compile_async_with_stmt_with_return(args):
+    """
+    Compile (async-with [bindings] body...) in tail position of function.
+    Like compile_async_with but the last body form is returned.
+    """
+    if len(args) < 1:
+        raise SyntaxError("async-with requires bindings vector")
+
+    bindings = args[0]
+    if not isinstance(bindings, VectorLiteral):
+        raise SyntaxError("async-with bindings must be a vector")
+
+    body_forms = args[1:]
+
+    # Parse bindings
+    parsed = parse_with_bindings(bindings.items)
+    if not parsed:
+        raise SyntaxError("async-with requires at least one context manager")
+
+    # Build withitems
+    withitems = []
+    destructure_stmts = []
+
+    for pattern, cm_form in parsed:
+        cm_expr = compile_expr(cm_form)
+
+        if pattern is None:
+            # No binding
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=None))
+        elif isinstance(pattern, Symbol):
+            # Simple binding
+            target = ast.Name(id=normalize_name(pattern.name), ctx=ast.Store())
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=target))
+        else:
+            # Destructuring binding - use temp var and destructure in body
+            temp = gensym("__async_with_item_")
+            target = ast.Name(id=temp, ctx=ast.Store())
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=target))
+            temp_load = ast.Name(id=temp, ctx=ast.Load())
+            destructure_stmts.extend(compile_destructure(pattern, temp_load))
+
+    # Compile body with return for last form
+    body = []
+    body.extend(destructure_stmts)
+
+    if not body_forms:
+        body.append(ast.Return(value=ast.Constant(value=None)))
+    else:
+        # Compile all but last as statements
+        for f in body_forms[:-1]:
+            s = compile_stmt(f)
+            body.extend(flatten_stmts([s]))
+
+        # Last form: check if it's a statement or expression
+        last_form = body_forms[-1]
+        if isinstance(last_form, list) and last_form and is_symbol(last_form[0]):
+            head_name = last_form[0].name
+            if head_name == "try":
+                # Try form - compile with return
+                s = compile_try_stmt_with_return(last_form[1:])
+                body.extend(flatten_stmts([s]))
+            elif head_name == "with":
+                # Nested with - compile with return
+                s = compile_with_stmt_with_return(last_form[1:])
+                body.append(s)
+            elif head_name == "async-with":
+                # Nested async-with - compile with return
+                s = compile_async_with_stmt_with_return(last_form[1:])
+                body.append(s)
+            elif head_name in ("while", "for", "async-for", "set!"):
+                # Statement form - compile as statement, return None
+                s = compile_stmt(last_form)
+                body.extend(flatten_stmts([s]))
+                body.append(ast.Return(value=ast.Constant(value=None)))
+            elif head_name == "return":
+                # Already a return
+                s = compile_stmt(last_form)
+                body.extend(flatten_stmts([s]))
+            else:
+                # Expression - return it
+                body.append(ast.Return(value=compile_expr(last_form)))
+        else:
+            # Simple expression - return it
+            body.append(ast.Return(value=compile_expr(last_form)))
+
+    return ast.AsyncWith(items=withitems, body=body)
+
+
+def compile_async_with_expr(args):
+    """
+    Compile (async-with [bindings] body...) as an expression.
+    Uses async IIFE (immediately invoked function expression) pattern.
+    """
+    if len(args) < 1:
+        raise SyntaxError("async-with requires bindings vector")
+
+    bindings = args[0]
+    if not isinstance(bindings, VectorLiteral):
+        raise SyntaxError("async-with bindings must be a vector")
+
+    body_forms = args[1:]
+
+    # Parse bindings
+    parsed = parse_with_bindings(bindings.items)
+    if not parsed:
+        raise SyntaxError("async-with requires at least one context manager")
+
+    # Build withitems
+    withitems = []
+    destructure_stmts = []
+
+    for pattern, cm_form in parsed:
+        cm_expr = compile_expr(cm_form)
+
+        if pattern is None:
+            # No binding
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=None))
+        elif isinstance(pattern, Symbol):
+            # Simple binding
+            target = ast.Name(id=normalize_name(pattern.name), ctx=ast.Store())
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=target))
+        else:
+            # Destructuring binding - use temp var and destructure in body
+            temp = gensym("__async_with_item_")
+            target = ast.Name(id=temp, ctx=ast.Store())
+            withitems.append(ast.withitem(context_expr=cm_expr, optional_vars=target))
+            temp_load = ast.Name(id=temp, ctx=ast.Load())
+            destructure_stmts.extend(compile_destructure(pattern, temp_load))
+
+    # Build async IIFE wrapper
+    ctx = get_compile_context()
+    saved_funcs = ctx.nested_functions[:]
+
+    ret_name = gensym("__async_with_ret_")
+
+    # Body of the async with statement
+    with_body = []
+    with_body.extend(destructure_stmts)
+
+    if not body_forms:
+        with_body.append(
+            ast.Assign(
+                targets=[ast.Name(id=ret_name, ctx=ast.Store())],
+                value=ast.Constant(value=None),
+            )
+        )
+    else:
+        # Compile all but last as statements
+        for f in body_forms[:-1]:
+            s = compile_stmt(f)
+            with_body.extend(flatten_stmts([s]))
+
+        # Last form: assign to ret_name
+        last_form = body_forms[-1]
+        with_body.append(
+            ast.Assign(
+                targets=[ast.Name(id=ret_name, ctx=ast.Store())],
+                value=compile_expr(last_form),
+            )
+        )
+
+    # Create the async with statement
+    with_stmt = ast.AsyncWith(items=withitems, body=with_body)
+
+    # Get any nested functions generated
+    nested_funcs = ctx.nested_functions[len(saved_funcs) :]
+    ctx.nested_functions = saved_funcs
+
+    # Generate async wrapper function
+    wrapper_name = gen_fn_name()
+
+    wrapper_body = []
+    wrapper_body.extend(nested_funcs)
+    wrapper_body.append(
+        ast.Assign(
+            targets=[ast.Name(id=ret_name, ctx=ast.Store())],
+            value=ast.Constant(value=None),
+        )
+    )
+    wrapper_body.append(with_stmt)
+    wrapper_body.append(ast.Return(value=ast.Name(id=ret_name, ctx=ast.Load())))
+
+    wrapper_def = ast.AsyncFunctionDef(
+        name=wrapper_name,
+        args=ast.arguments(
+            posonlyargs=[],
+            args=[],
+            vararg=None,
+            kwonlyargs=[],
+            kw_defaults=[],
+            kwarg=None,
+            defaults=[],
+        ),
+        body=wrapper_body,
+        decorator_list=[],
+    )
+
+    # Add wrapper to context for injection
+    get_compile_context().add_function(wrapper_def)
+
+    # Return await of call to async wrapper
+    return ast.Await(
+        value=ast.Call(
+            func=ast.Name(id=wrapper_name, ctx=ast.Load()),
+            args=[],
+            keywords=[],
+        )
     )
 
 
@@ -7508,6 +7791,10 @@ def compile_expr(form):
         # with as expression: uses IIFE pattern
         if is_symbol(head, "with"):
             return compile_with_expr(form[1:])
+
+        # async-with as expression: uses async IIFE pattern
+        if is_symbol(head, "async-with"):
+            return compile_async_with_expr(form[1:])
 
         # loop as expression: uses IIFE pattern
         if is_symbol(head, "loop"):

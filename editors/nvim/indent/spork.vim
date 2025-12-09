@@ -1,7 +1,7 @@
 " Vim indent file for Spork
 " Language: Spork (a Lisp that compiles to Python)
 " Maintainer: Spork Language Team
-" Latest Revision: 2024
+" Latest Revision: 2025
 
 if exists("b:did_indent")
   finish

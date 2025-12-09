@@ -6,7 +6,7 @@ This benchmark suite compares Spork's persistent data structures (Vector, Map, S
 
 ## Why Benchmark PDS?
 
-Persistent data structures are immutable—every "modification" returns a new version while preserving the original. The naive approach (copy everything) is O(n). Spork uses structural sharing via HAMTs and RRB trees to achieve O(log n) updates.
+Persistent data structures are immutable—every "modification" returns a new version while preserving the original. The naive approach (copy everything) is O(n). Spork uses structural sharing via HAMTs, RRB trees, and Bit-Partitioned Tries to achieve O(log n) updates.
 
 The benchmarks quantify:
 1. The overhead of persistence vs mutables

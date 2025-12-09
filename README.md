@@ -17,7 +17,6 @@ Spork adds features that Python natively lacks, such as:
 
 Spork is currently in alpha. The language, standard library, and tooling are all under active development. Breaking changes may occur between releases. We welcome feedback, issues, and contributions!
 
-
 ## What Spork Isn't
 
 To avoid any confusions, here's what Spork is not:
@@ -25,7 +24,8 @@ To avoid any confusions, here's what Spork is not:
 *  **Not a Python Replacement:** The runtime of Spork _is_ Python.
 *  **Not a new VM or JIT:** Spork compiles to Python AST and runs on CPython.
 *  **Not an abstraction over Python:** Spork embraces Python rather than hiding it.
-*  **Not a strict clone of Clojure:** Sporks ideas rhyme but we still try our best to be "Pythonic".
+*  **Not a strict clone of Clojure:** Spork's ideas rhyme but we still try our best to be "Pythonic".
+*  **Not a fork of Hy:** While both are Lisps on Python, Spork has a different design philosophy.
 
 ## Philosophy
 
@@ -36,6 +36,7 @@ Spork is built on a few core opinions:
 3.  **Unified Tooling:** Spork includes a unified toolchain to manage compilation, REPL, and testing, similar to `cargo` or `go`. It handles the bridge between Spork source and the Python environment so you don't have to configure build hooks manually.
 4.  **Pragmatism:** We believe a hosted language should not fight its host. Spork compiles directly to Python AST. When you need raw performance or side effects, the escape hatch to Python's native mutability and types is always open.
 
+> It's a philosophy that tries to balance expressiveness and restraint, plenty of room to create, while minimizing room to trip.
 
 ## Installation
 
@@ -47,17 +48,17 @@ The recommended way to install Spork is via the `install.sh` script or `pipx`. B
 
 **Using the `install.sh` script (Linux/MacOS/WSL):**
 
-Recommended for most users. Spork will be installed to `~/.local/bin/spork` and a virtual environment will be created at `~/.spork/venv`. Upgrading is as simple as re-running the script.
+Recommended for most users as it doesn't rely on anything but Python. Spork will be installed to `~/.local/bin/spork` and a virtual environment will be created at `~/.spork/venv`. Upgrading is as simple as re-running the script.
 
-```bash
+```bash title="Install Spork via install.sh"
 $ curl https://raw.githubusercontent.com/spork-it/spork-lang/refs/heads/main/install.sh | sh
 ```
 
 **Using Pipx (Linux/MacOS/Windows/WSL):**
 
-Recommended for most users to avoid dependency conflicts.
+Recommended if you already use `pipx` to manage your Python CLI tools.
 
-```bash
+```bash title="Install Spork via pipx"
 $ pipx install spork-lang
 ```
 
@@ -67,7 +68,7 @@ Continue to the [Quick Start](#quick-start) section for details.
 
 Recommended when you are embedding Spork in an existing Python project.
 
-```bash
+```bash title="Install Spork via pip"
 $ pip install spork-lang
 ```
 
@@ -79,7 +80,7 @@ If you wish to contribute to Spork or modify the compiler:
 
 You'll first need to clone the repository and setup the virtual environment.
 
-```bash
+```bash title="Setup Spork Development Environment"
 $ git clone https://github.com/spork-it/spork-lang.git
 
 $ cd spork-lang
@@ -113,7 +114,7 @@ user> (map inc [1 2 3])
 
 Create a file named `hello.spork`:
 
-```clojure
+```clojure title="hello.spork"
 ;; hello.spork
 (defn greet [name]
   (print (fmt "Hello, {}!" name)))
@@ -123,7 +124,7 @@ Create a file named `hello.spork`:
 
 Run it with:
 
-```bash
+```bash title="Run hello.spork"
 $ spork hello.spork
 Hello, Spork!
 ```
@@ -186,11 +187,23 @@ Spork compiles to Python, so interop is seamless.
 
 > Python objects and Spork objects interoperate freely, no wrappers or FFI layers.
 
-### Pattern Matching
+### Async/Await
 
-Spork includes structural pattern matching out of the box.
+Spork has first-class support for Python's async/await ecosystem.
 
 ```clojure
+;; a simple async function to fetch JSON data
+(defn ^async fetch-data [^str url]
+  (async-with [session (aiohttp.ClientSession)]
+    (async-with [resp (.get session url)]
+      (await (.json resp)))))
+```
+
+### Pattern Matching
+
+Spork includes structural pattern matching out of the box. With `match`, you can destructure and branch on data shapes concisely.
+
+```clojure 
 (defn describe [x]
   (match x
     0 "zero"
@@ -251,7 +264,7 @@ Math still works
 
 > Below is a complete Spork program that demonstrates macros, Python interop, pattern matching, type annotations, and persistent data structures while fetching data from the GitHub API. [GitHub Stars Project](examples/stars)
 
-```clojure
+```clojure title="stars/core.spork"
 (ns stars.core
   (:import
     [requests]
@@ -269,7 +282,7 @@ Math still works
 ;; Fetch the star count for a given GitHub repo full name
 (defn ^int fetch-stars [^str full-name]
   (let [resp (requests.get (+ "https://api.github.com/repos/" full-name))]
-    (match resp.status_code
+  title="examples/async.spork"   (match resp.status_code
       200 (get (resp.json) "stargazers_count")
       404 0                                     ; missing repo → 0 stars
       _   (throw (RuntimeError "GitHub API error")))))
@@ -310,7 +323,7 @@ Spork provides source-mapped error reporting, meaning that runtime errors point 
 
 Given this Spork file:
 
-```clojure
+```clojure title="math.spork"
 ;; math.spork
 (defn divide [a b]
   (/ a b))
@@ -391,7 +404,7 @@ This generates a `spork.it` configuration file (the Spork equivalent of pyprojec
 
 Spork aims to unify the fragmented Python tooling ecosystem. A project is defined by a `spork.it` file:
 
-```clojure
+```clojure title="spork.it"
 {:name "my-project"
  :version "0.1.0"
  :dependencies ["requests" "numpy>=1.20"]
@@ -421,6 +434,7 @@ $ pip install spork-lang
 # e.g. in your app's __init__.py or main.py
 import spork
 ```
+> This uses a standard `importlib` hook to allow importing `.spork` files as if they were Python modules.
 
 3. Create a Spork module:
 
@@ -453,11 +467,13 @@ print(v2)  # Vector([1, 2, 3, 4])
 
 ## Why Lisp?
 
-Spork is a Lisp because we believe in **Homoiconicity**: the code is represented by the language's own data structures.
+Spork is a Lisp because we believe in Homoiconicity: the code is represented by the language's own data structures.
 
 1.  **Metaprogramming:** Because code is data, you can write code that writes code (Macros). This allows you to add features that look like language primitives (like the `match` or `unless` examples above) without waiting for the compiler developers to implement them.
 2.  **Structural Editing:** Tools like Parinfer or Paredit make editing code structurally (moving entire blocks, expressions, or function bodies) significantly faster and less error-prone than editing line-based languages like Python.
 3.  **Expression Oriented:** In Spork, almost everything is an expression that returns a value. `if`, `let`, and `do` blocks all return values, reducing the need for temporary variables and side effects.
+
+> Lisp's superpower is treating code as data, which means Spork can grow with you, not just run what you write. It's like having a language that politely asks: "Would you like to customize the universe today?"
 
 
 ## Under the Hood
@@ -466,10 +482,28 @@ Spork is not just a syntax skin; it is a runtime system optimized for the Python
 
 *   **Native Persistence:** Spork's data structures are not wrappers. They are custom C extensions.
     *   **Vectors:** 32-way Bit-Partitioned Tries (similar to Clojure/Rust im-rs).
+    *   **SortedVector:** Persistant Red Black Tree built for sorted collections.
     *   **Maps & Sets:** Hash Array Mapped Tries (HAMT).
 *   **Transient Internals:** The runtime utilizes mutable "Transients" internally to construct immutable results. This ensures that Spork remains performant at the boundary between mutation and persistence, giving you safety without the typical "copy-everything" penalty.
 *   **Source Mapping:** We track every AST node back to its origin. When an error happens, Spork points to *your* code, not the generated Python.
 
+### Performance
+
+Spork prioritizes safety over raw mutation speed. 
+
+*  **Reads:** Comparable to native Python collections 
+*  **Updates:** Slower than raw mutation, but significantly faster than defensive copying.
+*  **Snapshots:** Orders of magnitude faster. Because of structural sharing, "copyping" a Spork Vector is effectively free.
+
+Comparison of Spork Persistent Vector vs Native Python List for common operations:
+
+| Operation (N=100k) | Python (Native) | Spork (PDS) | Difference |
+| :--- | :--- | :--- | :--- |
+| **Read** (Random Index) | ~0.8 ms | ~2.2 ms | ~2.8x Slower |
+| **Write** (Append) | ~5.8 ms | ~8.2 ms | ~1.4x Slower |
+| **Copy & Update** | 143.13 µs | **1.44 µs** | **~100x Faster** |
+
+> Note: Spork includes specialized `IntVector` and `DoubleVector` types. These support the Buffer Protocol but need further testing and benchmarking to verify zero-copy interop performance (promissing early results).
 
 ## Roots
 
@@ -478,9 +512,56 @@ Spork is not just a syntax skin; it is a runtime system optimized for the Python
 *   **Python:** The host we love to live in. Spork is designed to be a good citizen of the Python ecosystem.
 
 
+## Editor Support
+
+Spork ships with early Neovim and Emacs modes located in the repository (`editors/` directory). These provide basic syntax highlighting and are useful for experimentation, but are not yet feature-complete. We recommend Parinfer or similar structural editing tools, these are not a replacement for them.
+
+We have plans to author and maintain the core editor modes/plugins as first-class projects in the Spork ecosystem because we believe that editor support is essential for a great developer experience.
+
+### Current support includes:
+*  [Emacs](editors/emacs): major mode, syntax rules, REPL integration with symbol lookup and evaluation.
+    -  REPL server can be started within Emacs using `C-c C-j` or `M-x spork-jack-in RET`
+    -  Evaluate buffer, region, or current expression with `C-c C-b`, `C-c C-r`, and `C-c C-c` respectively.
+        * The output will be displayed in a separate REPL buffer.
+    -  Documentation and type information available via `C-c C-d` on a symbol and `C-c i` for the inspector (currently basic).
+    -  bug with `rainbow-delimiters-mode` incorrectly highlighting on closing `]` with spork-mode.
+    -  `parinfer-rust-mode` seems to work well with spork-mode for structural editing.
+*  [Neovim](editors/nvim): syntax highlighting, basic indentation, and LSP integration
+    -  LSP server implementation with:
+        *  Completion (builtins and symbols)
+        *  Go-to-Definition
+        *  Diagnostics (line errors, error reporting needs improved)
+        *  Hover support
+    -  Currently using Vim scripts for syntax highlighting and indentation rules once tree sitter grammar is available we will migrate to that.
+
+Emacs `spork-mode` is currently more feature complete than the LSP mode, but both are under active development.
+
+### Currently missing:
+*  **Tree Sitter Grammar:** A Tree Sitter grammar for Spork would enable advanced syntax highlighting, code folding, and structural navigation in editors that support Tree Sitter.
+*  **LSP Features:** The Spork LSP server needs testing and additional features to feel like a solid experience.
+    -  Refactoring support (rename symbol, extract function)
+    -  Static analysis and type checking (call out to python based tools or build our own?)
+    -  Code formatting support
+    -  Code actions and quick fixes
+    -  Better diagnostics and error reporting
+    -  Macro expansion view
+*  **Neovim:**
+    -  Planned network REPL integration for evaluation and interactive development.
+    -  Inspector integration for drilling into data structures.
+*  **VSCode:** No official support yet, but planned via LSP once the server is more mature.
+
+These modes are evolving quickly and will improve over time. Contributions are welcome!
+
+## Roadmap
+
+*  **Language Features:**
+    -  Additional persistent data structures
+    -  Error reporting improvments in codegen and macro expansion
+    
+
 ## Documentation
 
-Checkout the [docs](docs) folder for more detailed documentation on language features, the standard library, and some benchmarks of the persistent data structures.
+Checkout the [docs](docs) folder for more detailed documentation on language features, the standard library, and benchmarks of the persistent data structures.
 
 
 ## License

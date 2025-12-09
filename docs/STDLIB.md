@@ -231,9 +231,9 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 (def sv (sorted_vec [1 3 5]))
 (def tsv (.transient sv))
 
-(.conj_mut tsv 2)           ; mutates in place
-(.conj_mut tsv 4)
-(.disj_mut tsv 3)
+(conj! tsv 2)           ; mutates in place
+(conj! tsv 4)
+(disj! tsv 3)
 (def result (.persistent tsv))  ; => sorted_vec(1, 2, 4, 5)
 
 ; Transient preserves key and reverse settings
@@ -515,13 +515,13 @@ SortedVector has its own transient type with methods that maintain sorted order:
 (def tsv (.transient sv))
 
 ; Add elements (maintains sorted order)
-(.conj_mut tsv 2)    ; now contains 1, 2, 3, 5, 7
-(.conj_mut tsv 4)    ; now contains 1, 2, 3, 4, 5, 7
-(.conj_mut tsv 6)    ; now contains 1, 2, 3, 4, 5, 6, 7
+(conj! tsv 2)    ; now contains 1, 2, 3, 5, 7
+(conj! tsv 4)    ; now contains 1, 2, 3, 4, 5, 7
+(conj! tsv 6)    ; now contains 1, 2, 3, 4, 5, 6, 7
 
 ; Remove elements
-(.disj_mut tsv 3)    ; now contains 1, 2, 4, 5, 6, 7
-(.disj_mut tsv 99)   ; no-op, element not present
+(disj! tsv 3)    ; now contains 1, 2, 4, 5, 6, 7
+(disj! tsv 99)   ; no-op, element not present
 
 ; Convert back to persistent
 (def result (.persistent tsv))  ; => sorted_vec(1, 2, 4, 5, 6, 7)
@@ -529,7 +529,7 @@ SortedVector has its own transient type with methods that maintain sorted order:
 ; Transient preserves key function and reverse settings
 (def sv (sorted_vec items :key :score :reverse true))
 (def tsv (.transient sv))
-(.conj_mut tsv new-item)  ; still sorted by :score in reverse
+(conj! tsv new-item)  ; still sorted by :score in reverse
 ```
 
 Note: After calling `.persistent`, the transient can no longer be used.

@@ -1,6 +1,6 @@
 # spork-mode.el
 
-A major mode for [Spork](https://github.com/spork-it/spork) with full nREPL integration. Provides a CIDER-like development experience for Spork, a Lisp dialect that compiles to Python.
+A major mode for [Spork](https://github.com/spork-it/spork-lang) with full nREPL integration. Provides a CIDER-like development experience for Spork, a Lisp dialect that compiles to Python.
 
 ## Requirements
 

@@ -1,0 +1,14 @@
+;; Spork Project Manifest
+;; See https://spork.it.com for more information
+
+{:name "async"
+ :version "0.1.0"
+
+ ;; Dependencies (pip-style specifications)
+ :dependencies ["aiohttp"]
+
+ ;; Source code locations
+ :source-paths ["src"]
+
+ ;; Entry point for 'spork run'
+ :main "async.core:main"}

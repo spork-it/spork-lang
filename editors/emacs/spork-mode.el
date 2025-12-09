@@ -1,6 +1,6 @@
 ;;; spork-mode.el --- Major mode for Spork with nREPL integration  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024
+;; Copyright (C) 2025
 
 ;; Author: Spork Contributors
 ;; Version: 0.1.0

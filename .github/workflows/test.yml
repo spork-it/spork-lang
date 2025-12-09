@@ -63,3 +63,10 @@ jobs:
           else
             echo "All tests passed!"
           fi
+
+      - name: Run fuzz tests
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "Running fuzz test suite..."
+          python -m tests.fuzzing --examples 1000 --steps 200

@@ -1,4 +1,4 @@
-.PHONY: help venv build install install-dev clean test test-one repl lsp verify \
+.PHONY: help venv build install install-dev clean test test-one fuzz fuzz-long repl lsp verify \
         dist sdist wheel upload-test upload check-dist \
         clean-build clean-pyc clean-venv clean-all \
         pipx-install pipx-uninstall
@@ -20,6 +20,8 @@ help:
 	@echo "Testing:"
 	@echo "  test           - Run all .spork test files"
 	@echo "  test-one       - Run a single test (usage: make test-one TEST=tests/test_pds.spork)"
+	@echo "  fuzz           - Run fuzz tests (1000 examples)"
+	@echo "  fuzz-long      - Run long fuzz tests (50000 examples)"
 	@echo "  repl           - Start the Spork REPL"
 	@echo "  lsp            - Start the Language Server Protocol server"
 	@echo ""
@@ -48,7 +50,7 @@ $(VENV):
 	@echo "Creating virtual environment..."
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
-	$(PIP) install build twine setuptools wheel numpy
+	$(PIP) install build twine setuptools wheel numpy pytest hypothesis
 	$(PIP) install -e .
 	@echo "✓ Virtual environment ready"
 
@@ -114,6 +116,14 @@ repl: build
 
 lsp: build
 	$(PYTHON) -m spork lsp
+
+fuzz: build
+	@echo "Running fuzz tests..."
+	$(PYTHON) -m tests.fuzzing --examples 1000 --steps 200
+
+fuzz-long: build
+	@echo "Running long fuzz tests..."
+	$(PYTHON) -m tests.fuzzing --examples 50000 --steps 200
 
 # ============================================================================
 # Packaging

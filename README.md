@@ -555,6 +555,7 @@ These modes are evolving quickly and will improve over time. Contributions are w
     -  Additional persistent data structures (deque anyone?)
     -  Error reporting improvments in codegen and macro expansion
     -  Expand the Spork standard library with more utilities and data structures
+    -  Testing needs a major overhaul (right now it's asserts in spork files)
 *  **Tooling:**
     -  Expand `spork` CLI with testing, linting, and formatting commands
     -  Improve build process and packaging options

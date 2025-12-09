@@ -50,7 +50,7 @@ dependencies = [
 dev = [
     "build",
     "twine",
-    "numpy"
+    "numpy",
 ]
 
 [project.urls]

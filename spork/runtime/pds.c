@@ -345,8 +345,21 @@ static PyObject *Cons_conj(Cons *self, PyObject *val) {
     return (PyObject *)new_cons;
 }
 
+static PyObject *Cons_reduce(Cons *self, PyObject *Py_UNUSED(ignored)) {
+    // Convert Cons to a tuple of (first, rest)
+    PyObject *args = PyTuple_Pack(2, self->first, self->rest ? self->rest : Py_None);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
+    Py_DECREF(args);
+    return result;
+}
+
 static PyMethodDef Cons_methods[] = {
     {"conj", (PyCFunction)Cons_conj, METH_O, "Add an element to the front"},
+    {"__reduce__", (PyCFunction)Cons_reduce, METH_NOARGS, "Pickle support"},
     {"__class_getitem__", (PyCFunction)Generic_class_getitem, METH_O | METH_CLASS,
      "Return a generic alias for type annotations (e.g., Cons[int])"},
     {NULL}
@@ -388,7 +401,7 @@ static PyObject *ConsIterator_next(ConsIterator *self) {
 
 static PyTypeObject ConsIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.ConsIterator",
+    .tp_name = "spork.runtime.pds.ConsIterator",
     .tp_basicsize = sizeof(ConsIterator),
     .tp_dealloc = (destructor)ConsIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -407,7 +420,7 @@ static PyObject *Cons_iter(Cons *self) {
 
 static PyTypeObject ConsType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.Cons",
+    .tp_name = "spork.runtime.pds.Cons",
     .tp_doc = "Immutable cons cell for persistent linked lists",
     .tp_basicsize = sizeof(Cons),
     .tp_itemsize = 0,
@@ -470,7 +483,7 @@ static int VectorNode_is_editable(VectorNode *self, PyObject *transient_id) {
 
 static PyTypeObject VectorNodeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.VectorNode",
+    .tp_name = "spork.runtime.pds.VectorNode",
     .tp_basicsize = sizeof(VectorNode),
     .tp_dealloc = (destructor)VectorNode_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -1279,6 +1292,19 @@ static PyObject *Vector_count(Vector *self, PyObject *value) {
     return PyLong_FromSsize_t(count);
 }
 
+static PyObject *Vector_reduce(Vector *self, PyObject *Py_UNUSED(ignored)) {
+    // Convert Vector to a tuple using the sequence protocol
+    PyObject *args = PySequence_Tuple((PyObject *)self);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    // Return (type, args_tuple) - pickle will call type(*args_tuple)
+    PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
+    Py_DECREF(args);
+    return result;
+}
+
 static PyMethodDef Vector_methods[] = {
     {"nth", (PyCFunction)Vector_nth, METH_VARARGS, "Get element at index"},
     {"conj", (PyCFunction)Vector_conj, METH_O, "Add element to end"},
@@ -1290,6 +1316,7 @@ static PyMethodDef Vector_methods[] = {
     {"index", (PyCFunction)Vector_index, METH_VARARGS, "Return index of first occurrence of value"},
     {"count", (PyCFunction)Vector_count, METH_O, "Return number of occurrences of value"},
     {"sort", (PyCFunction)Vector_sort, METH_VARARGS | METH_KEYWORDS, "Return a new sorted vector"},
+    {"__reduce__", (PyCFunction)Vector_reduce, METH_NOARGS, "Pickle support"},
     {"__class_getitem__", (PyCFunction)Generic_class_getitem, METH_O | METH_CLASS,
      "Return a generic alias for type annotations (e.g., Vector[int])"},
     {NULL}
@@ -1375,7 +1402,7 @@ static PyObject *VectorIterator_next(VectorIterator *self) {
 
 static PyTypeObject VectorIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.VectorIterator",
+    .tp_name = "spork.runtime.pds.VectorIterator",
     .tp_basicsize = sizeof(VectorIterator),
     .tp_dealloc = (destructor)VectorIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -1397,34 +1424,57 @@ static PyObject *Vector_iter(Vector *self) {
 }
 
 static int Vector_init(Vector *self, PyObject *args, PyObject *kwds) {
-    PyObject *iterable = NULL;
+    Py_ssize_t n = PyTuple_Size(args);
 
-    if (!PyArg_ParseTuple(args, "|O", &iterable)) {
-        return -1;
-    }
-
-    if (iterable == NULL) {
+    if (n == 0) {
         return 0;  // Empty vector already set up in __new__
     }
 
-    // Build from iterable
-    PyObject *iter = PyObject_GetIter(iterable);
-    if (!iter) return -1;
+    // Check if single argument that's an iterable (but not a string)
+    if (n == 1) {
+        PyObject *arg = PyTuple_GET_ITEM(args, 0);
+        // If it's a string, treat it as a single element, not an iterable
+        if (!PyUnicode_Check(arg) && !PyBytes_Check(arg)) {
+            // Try to iterate over it
+            PyObject *iter = PyObject_GetIter(arg);
+            if (iter != NULL) {
+                // It's iterable - use its elements
+                PyObject *item;
+                while ((item = PyIter_Next(iter)) != NULL) {
+                    PyObject *new_vec = Vector_conj(self, item);
+                    Py_DECREF(item);
+                    if (!new_vec) {
+                        Py_DECREF(iter);
+                        return -1;
+                    }
 
-    // Use transient for efficiency
-    PyObject *transient_id = PyObject_New(PyObject, &PyBaseObject_Type);
-    if (!transient_id) {
-        Py_DECREF(iter);
-        return -1;
+                    // Update self from new_vec
+                    Vector *nv = (Vector *)new_vec;
+                    Py_DECREF(self->root);
+                    Py_DECREF(self->tail);
+                    self->cnt = nv->cnt;
+                    self->shift = nv->shift;
+                    self->root = nv->root;
+                    Py_INCREF(self->root);
+                    self->tail = nv->tail;
+                    Py_INCREF(self->tail);
+                    Py_DECREF(new_vec);
+                }
+                Py_DECREF(iter);
+
+                if (PyErr_Occurred()) return -1;
+                return 0;
+            }
+            // Not iterable - clear error and treat as single element
+            PyErr_Clear();
+        }
     }
 
-    PyObject *item;
-    while ((item = PyIter_Next(iter)) != NULL) {
+    // Multiple arguments or single non-iterable: treat as varargs
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *item = PyTuple_GET_ITEM(args, i);
         PyObject *new_vec = Vector_conj(self, item);
-        Py_DECREF(item);
         if (!new_vec) {
-            Py_DECREF(iter);
-            Py_DECREF(transient_id);
             return -1;
         }
 
@@ -1440,16 +1490,13 @@ static int Vector_init(Vector *self, PyObject *args, PyObject *kwds) {
         Py_INCREF(self->tail);
         Py_DECREF(new_vec);
     }
-    Py_DECREF(iter);
-    Py_DECREF(transient_id);
 
-    if (PyErr_Occurred()) return -1;
     return 0;
 }
 
 static PyTypeObject VectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.Vector",
+    .tp_name = "spork.runtime.pds.Vector",
     .tp_doc = "Persistent Vector using a bit-partitioned trie",
     .tp_basicsize = sizeof(Vector),
     .tp_itemsize = 0,
@@ -1525,7 +1572,7 @@ static int DoubleVectorNode_is_editable(DoubleVectorNode *self, PyObject *transi
 
 static PyTypeObject DoubleVectorNodeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.DoubleVectorNode",
+    .tp_name = "spork.runtime.pds.DoubleVectorNode",
     .tp_basicsize = sizeof(DoubleVectorNode),
     .tp_dealloc = (destructor)DoubleVectorNode_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -2046,7 +2093,7 @@ static PyObject *DoubleVectorIterator_next(DoubleVectorIterator *self) {
 
 static PyTypeObject DoubleVectorIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.DoubleVectorIterator",
+    .tp_name = "spork.runtime.pds.DoubleVectorIterator",
     .tp_basicsize = sizeof(DoubleVectorIterator),
     .tp_dealloc = (destructor)DoubleVectorIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -2254,7 +2301,7 @@ static PyMethodDef TransientDoubleVector_methods[] = {
 
 static PyTypeObject TransientDoubleVectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.TransientDoubleVector",
+    .tp_name = "spork.runtime.pds.TransientDoubleVector",
     .tp_doc = "Transient double vector for batch operations",
     .tp_basicsize = sizeof(TransientDoubleVector),
     .tp_dealloc = (destructor)TransientDoubleVector_dealloc,
@@ -2304,10 +2351,107 @@ static PyObject *DoubleVector_transient(DoubleVector *self, PyObject *Py_UNUSED(
     return (PyObject *)t;
 }
 
+static int DoubleVector_init(DoubleVector *self, PyObject *args, PyObject *kwds) {
+    Py_ssize_t n = PyTuple_Size(args);
+
+    if (n == 0) {
+        return 0;  // Empty vector already set up in __new__
+    }
+
+    // Check if single argument that's an iterable (but not a string)
+    if (n == 1) {
+        PyObject *arg = PyTuple_GET_ITEM(args, 0);
+        if (!PyUnicode_Check(arg) && !PyBytes_Check(arg)) {
+            PyObject *iter = PyObject_GetIter(arg);
+            if (iter != NULL) {
+                PyObject *item;
+                while ((item = PyIter_Next(iter)) != NULL) {
+                    PyObject *new_vec = DoubleVector_conj(self, item);
+                    Py_DECREF(item);
+                    if (!new_vec) {
+                        Py_DECREF(iter);
+                        return -1;
+                    }
+
+                    // Update self from new_vec
+                    DoubleVector *nv = (DoubleVector *)new_vec;
+                    Py_DECREF(self->root);
+                    if (self->tail) free(self->tail);
+                    self->cnt = nv->cnt;
+                    self->shift = nv->shift;
+                    self->root = nv->root;
+                    Py_INCREF(self->root);
+                    if (nv->tail && nv->tail_len > 0) {
+                        self->tail = (double *)malloc(nv->tail_len * sizeof(double));
+                        memcpy(self->tail, nv->tail, nv->tail_len * sizeof(double));
+                        self->tail_len = nv->tail_len;
+                        self->tail_cap = nv->tail_len;
+                    } else {
+                        self->tail = NULL;
+                        self->tail_len = 0;
+                        self->tail_cap = 0;
+                    }
+                    Py_DECREF(new_vec);
+                }
+                Py_DECREF(iter);
+
+                if (PyErr_Occurred()) return -1;
+                return 0;
+            }
+            PyErr_Clear();
+        }
+    }
+
+    // Multiple arguments or single non-iterable: treat as varargs
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *item = PyTuple_GET_ITEM(args, i);
+        PyObject *new_vec = DoubleVector_conj(self, item);
+        if (!new_vec) {
+            return -1;
+        }
+
+        // Update self from new_vec
+        DoubleVector *nv = (DoubleVector *)new_vec;
+        Py_DECREF(self->root);
+        if (self->tail) free(self->tail);
+        self->cnt = nv->cnt;
+        self->shift = nv->shift;
+        self->root = nv->root;
+        Py_INCREF(self->root);
+        if (nv->tail && nv->tail_len > 0) {
+            self->tail = (double *)malloc(nv->tail_len * sizeof(double));
+            memcpy(self->tail, nv->tail, nv->tail_len * sizeof(double));
+            self->tail_len = nv->tail_len;
+            self->tail_cap = nv->tail_len;
+        } else {
+            self->tail = NULL;
+            self->tail_len = 0;
+            self->tail_cap = 0;
+        }
+        Py_DECREF(new_vec);
+    }
+
+    return 0;
+}
+
+static PyObject *DoubleVector_reduce(DoubleVector *self, PyObject *Py_UNUSED(ignored)) {
+    // Convert DoubleVector to a tuple using the sequence protocol
+    PyObject *args = PySequence_Tuple((PyObject *)self);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    // Return (type, args_tuple) - pickle will call type(*args_tuple)
+    PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
+    Py_DECREF(args);
+    return result;
+}
+
 static PyMethodDef DoubleVector_methods[] = {
     {"nth", (PyCFunction)DoubleVector_nth, METH_VARARGS, "Get element at index"},
     {"conj", (PyCFunction)DoubleVector_conj, METH_O, "Add element to end"},
     {"transient", (PyCFunction)DoubleVector_transient, METH_NOARGS, "Return transient version for batch operations"},
+    {"__reduce__", (PyCFunction)DoubleVector_reduce, METH_NOARGS, "Pickle support"},
     {"__class_getitem__", (PyCFunction)Generic_class_getitem, METH_O | METH_CLASS,
      "Return a generic alias for type annotations"},
     {NULL}
@@ -2340,7 +2484,7 @@ static PySequenceMethods DoubleVector_as_sequence = {
 
 static PyTypeObject DoubleVectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.DoubleVector",
+    .tp_name = "spork.runtime.pds.DoubleVector",
     .tp_doc = "Persistent Vector of doubles (float64) with buffer protocol support",
     .tp_basicsize = sizeof(DoubleVector),
     .tp_itemsize = 0,
@@ -2353,6 +2497,7 @@ static PyTypeObject DoubleVectorType = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_iter = (getiterfunc)DoubleVector_iter,
     .tp_methods = DoubleVector_methods,
+    .tp_init = (initproc)DoubleVector_init,
     .tp_new = DoubleVector_new,
 };
 
@@ -2410,7 +2555,7 @@ static int IntVectorNode_is_editable(IntVectorNode *self, PyObject *transient_id
 
 static PyTypeObject IntVectorNodeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.IntVectorNode",
+    .tp_name = "spork.runtime.pds.IntVectorNode",
     .tp_basicsize = sizeof(IntVectorNode),
     .tp_dealloc = (destructor)IntVectorNode_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -2919,7 +3064,7 @@ static PyObject *IntVectorIterator_next(IntVectorIterator *self) {
 
 static PyTypeObject IntVectorIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.IntVectorIterator",
+    .tp_name = "spork.runtime.pds.IntVectorIterator",
     .tp_basicsize = sizeof(IntVectorIterator),
     .tp_dealloc = (destructor)IntVectorIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -3127,7 +3272,7 @@ static PyMethodDef TransientIntVector_methods[] = {
 
 static PyTypeObject TransientIntVectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.TransientIntVector",
+    .tp_name = "spork.runtime.pds.TransientIntVector",
     .tp_doc = "Transient long vector for batch operations",
     .tp_basicsize = sizeof(TransientIntVector),
     .tp_dealloc = (destructor)TransientIntVector_dealloc,
@@ -3177,10 +3322,107 @@ static PyObject *IntVector_transient(IntVector *self, PyObject *Py_UNUSED(ignore
     return (PyObject *)t;
 }
 
+static int IntVector_init(IntVector *self, PyObject *args, PyObject *kwds) {
+    Py_ssize_t n = PyTuple_Size(args);
+
+    if (n == 0) {
+        return 0;  // Empty vector already set up in __new__
+    }
+
+    // Check if single argument that's an iterable (but not a string)
+    if (n == 1) {
+        PyObject *arg = PyTuple_GET_ITEM(args, 0);
+        if (!PyUnicode_Check(arg) && !PyBytes_Check(arg)) {
+            PyObject *iter = PyObject_GetIter(arg);
+            if (iter != NULL) {
+                PyObject *item;
+                while ((item = PyIter_Next(iter)) != NULL) {
+                    PyObject *new_vec = IntVector_conj(self, item);
+                    Py_DECREF(item);
+                    if (!new_vec) {
+                        Py_DECREF(iter);
+                        return -1;
+                    }
+
+                    // Update self from new_vec
+                    IntVector *nv = (IntVector *)new_vec;
+                    Py_DECREF(self->root);
+                    if (self->tail) free(self->tail);
+                    self->cnt = nv->cnt;
+                    self->shift = nv->shift;
+                    self->root = nv->root;
+                    Py_INCREF(self->root);
+                    if (nv->tail && nv->tail_len > 0) {
+                        self->tail = (long *)malloc(nv->tail_len * sizeof(long));
+                        memcpy(self->tail, nv->tail, nv->tail_len * sizeof(long));
+                        self->tail_len = nv->tail_len;
+                        self->tail_cap = nv->tail_len;
+                    } else {
+                        self->tail = NULL;
+                        self->tail_len = 0;
+                        self->tail_cap = 0;
+                    }
+                    Py_DECREF(new_vec);
+                }
+                Py_DECREF(iter);
+
+                if (PyErr_Occurred()) return -1;
+                return 0;
+            }
+            PyErr_Clear();
+        }
+    }
+
+    // Multiple arguments or single non-iterable: treat as varargs
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *item = PyTuple_GET_ITEM(args, i);
+        PyObject *new_vec = IntVector_conj(self, item);
+        if (!new_vec) {
+            return -1;
+        }
+
+        // Update self from new_vec
+        IntVector *nv = (IntVector *)new_vec;
+        Py_DECREF(self->root);
+        if (self->tail) free(self->tail);
+        self->cnt = nv->cnt;
+        self->shift = nv->shift;
+        self->root = nv->root;
+        Py_INCREF(self->root);
+        if (nv->tail && nv->tail_len > 0) {
+            self->tail = (long *)malloc(nv->tail_len * sizeof(long));
+            memcpy(self->tail, nv->tail, nv->tail_len * sizeof(long));
+            self->tail_len = nv->tail_len;
+            self->tail_cap = nv->tail_len;
+        } else {
+            self->tail = NULL;
+            self->tail_len = 0;
+            self->tail_cap = 0;
+        }
+        Py_DECREF(new_vec);
+    }
+
+    return 0;
+}
+
+static PyObject *IntVector_reduce(IntVector *self, PyObject *Py_UNUSED(ignored)) {
+    // Convert IntVector to a tuple using the sequence protocol
+    PyObject *args = PySequence_Tuple((PyObject *)self);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    // Return (type, args_tuple) - pickle will call type(*args_tuple)
+    PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
+    Py_DECREF(args);
+    return result;
+}
+
 static PyMethodDef IntVector_methods[] = {
     {"nth", (PyCFunction)IntVector_nth, METH_VARARGS, "Get element at index"},
     {"conj", (PyCFunction)IntVector_conj, METH_O, "Add element to end"},
     {"transient", (PyCFunction)IntVector_transient, METH_NOARGS, "Return transient version for batch operations"},
+    {"__reduce__", (PyCFunction)IntVector_reduce, METH_NOARGS, "Pickle support"},
     {"__class_getitem__", (PyCFunction)Generic_class_getitem, METH_O | METH_CLASS,
      "Return a generic alias for type annotations"},
     {NULL}
@@ -3213,7 +3455,7 @@ static PySequenceMethods IntVector_as_sequence = {
 
 static PyTypeObject IntVectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.IntVector",
+    .tp_name = "spork.runtime.pds.IntVector",
     .tp_doc = "Persistent Vector of longs (int64) with buffer protocol support",
     .tp_basicsize = sizeof(IntVector),
     .tp_itemsize = 0,
@@ -3226,6 +3468,7 @@ static PyTypeObject IntVectorType = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_iter = (getiterfunc)IntVector_iter,
     .tp_methods = IntVector_methods,
+    .tp_init = (initproc)IntVector_init,
     .tp_new = IntVector_new,
 };
 
@@ -3791,7 +4034,7 @@ static PyObject *TransientVectorIterator_next(TransientVectorIterator *self) {
 
 static PyTypeObject TransientVectorIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.TransientVectorIterator",
+    .tp_name = "spork.runtime.pds.TransientVectorIterator",
     .tp_basicsize = sizeof(TransientVectorIterator),
     .tp_dealloc = (destructor)TransientVectorIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -3961,7 +4204,7 @@ static PyMappingMethods TransientVector_as_mapping = {
 
 static PyTypeObject TransientVectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.TransientVector",
+    .tp_name = "spork.runtime.pds.TransientVector",
     .tp_doc = "Transient vector for batch operations",
     .tp_basicsize = sizeof(TransientVector),
     .tp_dealloc = (destructor)TransientVector_dealloc,
@@ -4166,7 +4409,7 @@ static PyObject *HashCollisionNode_iter_kv(HashCollisionNode *self);
 // Node type definitions
 static PyTypeObject BitmapIndexedNodeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.BitmapIndexedNode",
+    .tp_name = "spork.runtime.pds.BitmapIndexedNode",
     .tp_basicsize = sizeof(BitmapIndexedNode),
     .tp_dealloc = (destructor)BitmapIndexedNode_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -4174,7 +4417,7 @@ static PyTypeObject BitmapIndexedNodeType = {
 
 static PyTypeObject ArrayNodeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.ArrayNode",
+    .tp_name = "spork.runtime.pds.ArrayNode",
     .tp_basicsize = sizeof(ArrayNode),
     .tp_dealloc = (destructor)ArrayNode_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -4182,7 +4425,7 @@ static PyTypeObject ArrayNodeType = {
 
 static PyTypeObject HashCollisionNodeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.HashCollisionNode",
+    .tp_name = "spork.runtime.pds.HashCollisionNode",
     .tp_basicsize = sizeof(HashCollisionNode),
     .tp_dealloc = (destructor)HashCollisionNode_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -4595,7 +4838,7 @@ static PyObject *BitmapIndexedNodeIterator_next(BitmapIndexedNodeIterator *self)
 
 static PyTypeObject BitmapIndexedNodeIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.BitmapIndexedNodeIterator",
+    .tp_name = "spork.runtime.pds.BitmapIndexedNodeIterator",
     .tp_basicsize = sizeof(BitmapIndexedNodeIterator),
     .tp_dealloc = (destructor)BitmapIndexedNodeIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -4822,7 +5065,7 @@ static PyObject *ArrayNodeIterator_next(ArrayNodeIterator *self) {
 
 static PyTypeObject ArrayNodeIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.ArrayNodeIterator",
+    .tp_name = "spork.runtime.pds.ArrayNodeIterator",
     .tp_basicsize = sizeof(ArrayNodeIterator),
     .tp_dealloc = (destructor)ArrayNodeIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -4997,7 +5240,7 @@ static PyObject *HashCollisionNodeIterator_next(HashCollisionNodeIterator *self)
 
 static PyTypeObject HashCollisionNodeIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.HashCollisionNodeIterator",
+    .tp_name = "spork.runtime.pds.HashCollisionNodeIterator",
     .tp_basicsize = sizeof(HashCollisionNodeIterator),
     .tp_dealloc = (destructor)HashCollisionNodeIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -5723,6 +5966,63 @@ static PyObject *Map_copy(Map *self, PyObject *Py_UNUSED(ignored)) {
     return (PyObject *)self;
 }
 
+// Forward declaration for hash_map function used by Map_reduce
+static PyObject *pds_hash_map(PyObject *self, PyObject *args);
+
+static PyObject *Map_reduce(Map *self, PyObject *Py_UNUSED(ignored)) {
+    // Build a tuple of (k1, v1, k2, v2, ...) for hash_map reconstructor
+    PyObject *args = PyTuple_New(self->cnt * 2);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    // Iterate over items and flatten into the args tuple
+    PyObject *items_iter = Map_items(self, NULL);
+    if (items_iter == NULL) {
+        Py_DECREF(args);
+        return NULL;
+    }
+    
+    Py_ssize_t i = 0;
+    PyObject *item;
+    while ((item = PyIter_Next(items_iter)) != NULL) {
+        PyObject *key = PyTuple_GET_ITEM(item, 0);
+        PyObject *val = PyTuple_GET_ITEM(item, 1);
+        Py_INCREF(key);
+        Py_INCREF(val);
+        PyTuple_SET_ITEM(args, i * 2, key);
+        PyTuple_SET_ITEM(args, i * 2 + 1, val);
+        Py_DECREF(item);
+        i++;
+    }
+    Py_DECREF(items_iter);
+    
+    if (PyErr_Occurred()) {
+        Py_DECREF(args);
+        return NULL;
+    }
+    
+    // Get the hash_map function from the pds module
+    PyObject *pds_module = PyImport_ImportModule("spork.runtime.pds");
+    if (pds_module == NULL) {
+        Py_DECREF(args);
+        return NULL;
+    }
+    
+    PyObject *hash_map_func = PyObject_GetAttrString(pds_module, "hash_map");
+    Py_DECREF(pds_module);
+    if (hash_map_func == NULL) {
+        Py_DECREF(args);
+        return NULL;
+    }
+    
+    // Return (hash_map, args_tuple) - pickle will call hash_map(*args_tuple)
+    PyObject *result = PyTuple_Pack(2, hash_map_func, args);
+    Py_DECREF(hash_map_func);
+    Py_DECREF(args);
+    return result;
+}
+
 static PyMethodDef Map_methods[] = {
     {"get", (PyCFunction)Map_get, METH_VARARGS, "Get value for key"},
     {"assoc", (PyCFunction)Map_assoc, METH_VARARGS, "Set key to value"},
@@ -5733,6 +6033,7 @@ static PyMethodDef Map_methods[] = {
     {"transient", (PyCFunction)Map_transient, METH_NOARGS, "Get transient version"},
     {"to_seq", (PyCFunction)Map_to_seq, METH_NOARGS, "Convert to Cons sequence"},
     {"copy", (PyCFunction)Map_copy, METH_NOARGS, "Return self (immutable maps don't need copying)"},
+    {"__reduce__", (PyCFunction)Map_reduce, METH_NOARGS, "Pickle support"},
     {"__class_getitem__", (PyCFunction)Generic_class_getitem, METH_O | METH_CLASS,
      "Return a generic alias for type annotations (e.g., Map[str, int])"},
     {NULL}
@@ -5749,7 +6050,7 @@ static PyMappingMethods Map_as_mapping = {
 
 static PyTypeObject MapType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.Map",
+    .tp_name = "spork.runtime.pds.Map",
     .tp_doc = "Persistent Hash Map using HAMT",
     .tp_basicsize = sizeof(Map),
     .tp_itemsize = 0,
@@ -6154,7 +6455,7 @@ static PyMappingMethods TransientMap_as_mapping = {
 
 static PyTypeObject TransientMapType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.TransientMap",
+    .tp_name = "spork.runtime.pds.TransientMap",
     .tp_doc = "Transient map for batch operations",
     .tp_basicsize = sizeof(TransientMap),
     .tp_dealloc = (destructor)TransientMap_dealloc,
@@ -6196,6 +6497,38 @@ static PyObject *Set_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
         self->transient_id = NULL;
     }
     return (PyObject *)self;
+}
+
+// Forward declarations for Set_init
+static PyObject *Set_conj(Set *self, PyObject *val);
+
+static int Set_init(Set *self, PyObject *args, PyObject *kwds) {
+    Py_ssize_t n = PyTuple_Size(args);
+    
+    if (n == 0) {
+        return 0;  // Empty set, already initialized by tp_new
+    }
+    
+    // Build set by conj'ing each element
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *item = PyTuple_GET_ITEM(args, i);
+        PyObject *new_set = Set_conj(self, item);
+        if (!new_set) {
+            return -1;
+        }
+        
+        // Update self from new_set
+        Set *ns = (Set *)new_set;
+        Py_XDECREF(self->root);
+        self->cnt = ns->cnt;
+        self->root = ns->root;
+        Py_XINCREF(self->root);
+        self->hash = 0;
+        self->hash_computed = 0;
+        Py_DECREF(new_set);
+    }
+    
+    return 0;
 }
 
 static Set *Set_create(Py_ssize_t cnt, PyObject *root, PyObject *transient_id) {
@@ -6343,7 +6676,7 @@ static PyObject *SetIterator_next(SetIterator *self) {
 
 static PyTypeObject SetIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.SetIterator",
+    .tp_name = "spork.runtime.pds.SetIterator",
     .tp_basicsize = sizeof(SetIterator),
     .tp_dealloc = (destructor)SetIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -7105,6 +7438,19 @@ static PyObject *Set_isdisjoint(Set *self, PyObject *other) {
     Py_RETURN_TRUE;
 }
 
+static PyObject *Set_reduce(Set *self, PyObject *Py_UNUSED(ignored)) {
+    // Convert Set to a tuple using the sequence protocol (iteration)
+    PyObject *args = PySequence_Tuple((PyObject *)self);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    // Return (type, args_tuple) - pickle will call type(*args_tuple)
+    PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
+    Py_DECREF(args);
+    return result;
+}
+
 static PyMethodDef Set_methods[] = {
     {"conj", (PyCFunction)Set_conj, METH_O, "Add element to set"},
     {"disj", (PyCFunction)Set_disj, METH_O, "Remove element from set"},
@@ -7112,6 +7458,7 @@ static PyMethodDef Set_methods[] = {
     {"to_seq", (PyCFunction)Set_to_seq, METH_NOARGS, "Convert to Cons sequence"},
     {"copy", (PyCFunction)Set_copy, METH_NOARGS, "Return self (immutable sets don't need copying)"},
     {"isdisjoint", (PyCFunction)Set_isdisjoint, METH_O, "Return True if no common elements with other"},
+    {"__reduce__", (PyCFunction)Set_reduce, METH_NOARGS, "Pickle support"},
     {"__class_getitem__", (PyCFunction)Generic_class_getitem, METH_O | METH_CLASS,
      "Return a generic alias for type annotations (e.g., Set[int])"},
     {NULL}
@@ -7131,7 +7478,7 @@ static PyNumberMethods Set_as_number = {
 
 static PyTypeObject SetType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.Set",
+    .tp_name = "spork.runtime.pds.Set",
     .tp_doc = "Persistent Hash Set using HAMT",
     .tp_basicsize = sizeof(Set),
     .tp_itemsize = 0,
@@ -7144,6 +7491,7 @@ static PyTypeObject SetType = {
     .tp_richcompare = (richcmpfunc)Set_richcompare,
     .tp_iter = (getiterfunc)Set_iter,
     .tp_methods = Set_methods,
+    .tp_init = (initproc)Set_init,
     .tp_new = Set_new,
 };
 
@@ -7434,7 +7782,7 @@ static PySequenceMethods TransientSet_as_sequence = {
 
 static PyTypeObject TransientSetType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.TransientSet",
+    .tp_name = "spork.runtime.pds.TransientSet",
     .tp_doc = "Transient set for batch operations",
     .tp_basicsize = sizeof(TransientSet),
     .tp_dealloc = (destructor)TransientSet_dealloc,
@@ -7543,7 +7891,7 @@ static RBNode *RBNode_ensure_editable(RBNode *node, PyObject *edit) {
 
 static PyTypeObject RBNodeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.RBNode",
+    .tp_name = "spork.runtime.pds.RBNode",
     .tp_doc = "Red-Black Tree Node (internal)",
     .tp_basicsize = sizeof(RBNode),
     .tp_dealloc = (destructor)RBNode_dealloc,
@@ -8040,7 +8388,7 @@ static PyObject *SortedVectorIterator_next(SortedVectorIterator *self) {
 
 static PyTypeObject SortedVectorIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.SortedVectorIterator",
+    .tp_name = "spork.runtime.pds.SortedVectorIterator",
     .tp_basicsize = sizeof(SortedVectorIterator),
     .tp_dealloc = (destructor)SortedVectorIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -8615,7 +8963,7 @@ static PySequenceMethods TransientSortedVector_as_sequence = {
 
 static PyTypeObject TransientSortedVectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.TransientSortedVector",
+    .tp_name = "spork.runtime.pds.TransientSortedVector",
     .tp_doc = "Transient sorted vector for batch operations",
     .tp_basicsize = sizeof(TransientSortedVector),
     .tp_dealloc = (destructor)TransientSortedVector_dealloc,
@@ -8626,6 +8974,133 @@ static PyTypeObject TransientSortedVectorType = {
 
 // === SortedVector methods table ===
 
+static PyObject *SortedVector_reduce(SortedVector *self, PyObject *Py_UNUSED(ignored)) {
+    // Convert SortedVector to a tuple for the iterable argument
+    PyObject *contents = PySequence_Tuple((PyObject *)self);
+    if (contents == NULL) {
+        return NULL;
+    }
+    
+    // Build args tuple: (contents_tuple,)
+    PyObject *args = PyTuple_Pack(1, contents);
+    Py_DECREF(contents);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    // Build kwargs dict with key and reverse
+    PyObject *kwargs = PyDict_New();
+    if (kwargs == NULL) {
+        Py_DECREF(args);
+        return NULL;
+    }
+    
+    // Add key function if present
+    if (self->key_fn != NULL) {
+        if (PyDict_SetItemString(kwargs, "key", self->key_fn) < 0) {
+            Py_DECREF(args);
+            Py_DECREF(kwargs);
+            return NULL;
+        }
+    }
+    
+    // Add reverse if True
+    if (self->reverse) {
+        if (PyDict_SetItemString(kwargs, "reverse", Py_True) < 0) {
+            Py_DECREF(args);
+            Py_DECREF(kwargs);
+            return NULL;
+        }
+    }
+    
+    // Get functools.partial to create a callable with kwargs
+    PyObject *functools = PyImport_ImportModule("functools");
+    if (functools == NULL) {
+        Py_DECREF(args);
+        Py_DECREF(kwargs);
+        return NULL;
+    }
+    
+    PyObject *partial = PyObject_GetAttrString(functools, "partial");
+    Py_DECREF(functools);
+    if (partial == NULL) {
+        Py_DECREF(args);
+        Py_DECREF(kwargs);
+        return NULL;
+    }
+    
+    // Create partial(SortedVector, **kwargs)
+    PyObject *partial_args = PyTuple_Pack(1, (PyObject *)Py_TYPE(self));
+    if (partial_args == NULL) {
+        Py_DECREF(partial);
+        Py_DECREF(args);
+        Py_DECREF(kwargs);
+        return NULL;
+    }
+    
+    PyObject *reconstructor = PyObject_Call(partial, partial_args, kwargs);
+    Py_DECREF(partial);
+    Py_DECREF(partial_args);
+    Py_DECREF(kwargs);
+    
+    if (reconstructor == NULL) {
+        Py_DECREF(args);
+        return NULL;
+    }
+    
+    // Return (partial(SortedVector, **kwargs), (contents_tuple,))
+    PyObject *result = PyTuple_Pack(2, reconstructor, args);
+    Py_DECREF(reconstructor);
+    Py_DECREF(args);
+    return result;
+}
+
+static PyObject *SortedVector_getnewargs_ex(SortedVector *self, PyObject *Py_UNUSED(ignored)) {
+    // Convert SortedVector to a tuple for the iterable argument
+    PyObject *contents = PySequence_Tuple((PyObject *)self);
+    if (contents == NULL) {
+        return NULL;
+    }
+    
+    // Build args tuple: (contents_tuple,)
+    PyObject *args = PyTuple_Pack(1, contents);
+    Py_DECREF(contents);
+    if (args == NULL) {
+        return NULL;
+    }
+    
+    // Build kwargs dict with key and reverse
+    PyObject *kwargs = PyDict_New();
+    if (kwargs == NULL) {
+        Py_DECREF(args);
+        return NULL;
+    }
+    
+    // Add key function if present
+    if (self->key_fn != NULL) {
+        if (PyDict_SetItemString(kwargs, "key", self->key_fn) < 0) {
+            Py_DECREF(args);
+            Py_DECREF(kwargs);
+            return NULL;
+        }
+    }
+    
+    // Add reverse if True
+    if (self->reverse) {
+        if (PyDict_SetItemString(kwargs, "reverse", Py_True) < 0) {
+            Py_DECREF(args);
+            Py_DECREF(kwargs);
+            return NULL;
+        }
+    }
+    
+    // Return (args, kwargs) tuple
+    PyObject *result = PyTuple_Pack(2, args, kwargs);
+    Py_DECREF(args);
+    Py_DECREF(kwargs);
+    return result;
+}
+
 static PyMethodDef SortedVector_methods[] = {
     {"nth", (PyCFunction)SortedVector_nth, METH_VARARGS, "Get element at index"},
     {"conj", (PyCFunction)SortedVector_conj, METH_O, "Add element maintaining sorted order"},
@@ -8635,6 +9110,8 @@ static PyMethodDef SortedVector_methods[] = {
     {"index_of", (PyCFunction)SortedVector_index_of, METH_O, "Find index of element"},
     {"rank", (PyCFunction)SortedVector_rank, METH_O, "Count of elements less than value"},
     {"transient", (PyCFunction)SortedVector_transient, METH_NOARGS, "Get transient version"},
+    {"__reduce__", (PyCFunction)SortedVector_reduce, METH_NOARGS, "Pickle support"},
+    {"__getnewargs_ex__", (PyCFunction)SortedVector_getnewargs_ex, METH_NOARGS, "Pickle support with keyword args"},
     {"__class_getitem__", (PyCFunction)Generic_class_getitem, METH_O | METH_CLASS,
      "Return a generic alias for type annotations"},
     {NULL}
@@ -8652,7 +9129,7 @@ static PyMappingMethods SortedVector_as_mapping = {
 
 static PyTypeObject SortedVectorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pds.SortedVector",
+    .tp_name = "spork.runtime.pds.SortedVector",
     .tp_doc = "Persistent sorted vector (Red-Black Tree)",
     .tp_basicsize = sizeof(SortedVector),
     .tp_dealloc = (destructor)SortedVector_dealloc,
@@ -8660,7 +9137,7 @@ static PyTypeObject SortedVectorType = {
     .tp_as_sequence = &SortedVector_as_sequence,
     .tp_as_mapping = &SortedVector_as_mapping,
     .tp_hash = (hashfunc)SortedVector_hash,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_iter = (getiterfunc)SortedVector_iter,
     .tp_richcompare = (richcmpfunc)SortedVector_richcompare,
     .tp_methods = SortedVector_methods,

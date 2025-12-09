@@ -1,0 +1,99 @@
+(ns test-pickle
+  (:import [pickle]
+           [operator]))
+
+(print "=== Testing Pickle Support for Persistent Data Structures ===\n")
+
+; Helper to test pickle round-trip
+(defn test-pickle [name value]
+  (let [pickled (pickle.dumps value)
+        restored (pickle.loads pickled)
+        equal (= value restored)]
+    (print (fmt "Testing {}: {}" name (if equal "✓" "✗")))
+    (when (not equal)
+      (print (fmt "  Original: {}" value))
+      (print (fmt "  Restored: {}" restored)))
+    equal))
+
+; === Test Vector ===
+(print "--- Vector ---")
+(assert (test-pickle "empty vector" []))
+(assert (test-pickle "vector with integers" [1 2 3 4 5]))
+(assert (test-pickle "vector with mixed types" [1 "hello" 3.14 :keyword]))
+(assert (test-pickle "nested vectors" [[1 2] [3 4] [5 6]]))
+(assert (test-pickle "large vector" (vec (range 100))))
+
+; === Test Map ===
+(print "\n--- Map ---")
+(assert (test-pickle "empty map" {}))
+(assert (test-pickle "simple map" {:a 1 :b 2 :c 3}))
+(assert (test-pickle "map with string keys" {"name" "Alice" "age" 30}))
+(assert (test-pickle "nested map" {:outer {:inner 42}}))
+(assert (test-pickle "map with vector values" {:nums [1 2 3] :chars ["a" "b"]}))
+
+; === Test Set ===
+(print "\n--- Set ---")
+(assert (test-pickle "empty set" #{}))
+(assert (test-pickle "set with integers" #{1 2 3 4 5}))
+(assert (test-pickle "set with mixed types" #{1 "hello" :keyword}))
+
+; === Test Cons (quoted list) ===
+(print "\n--- Cons ---")
+(assert (test-pickle "simple cons" '(1 2 3)))
+(assert (test-pickle "nested cons" '(1 (2 3) 4)))
+(assert (test-pickle "cons with symbols" '(a b c)))
+
+; === Test DoubleVector (vec_f64) ===
+(print "\n--- DoubleVector ---")
+(def dv (vec_f64 1.0 2.5 3.14 4.0 5.5))
+(let [pickled (pickle.dumps dv)
+      restored (pickle.loads pickled)]
+  (print (fmt "vec_f64: {} -> {}" dv restored))
+  ; DoubleVector doesn't have == so check manually
+  (assert (= (len dv) (len restored)) "DoubleVector length mismatch")
+  (print "  DoubleVector pickle: ✓"))
+
+; === Test IntVector (vec_i64) ===
+(print "\n--- IntVector ---")
+(def iv (vec_i64 10 20 30 40 50))
+(let [pickled (pickle.dumps iv)
+      restored (pickle.loads pickled)]
+  (print (fmt "vec_i64: {} -> {}" iv restored))
+  (assert (= (len iv) (len restored)) "IntVector length mismatch")
+  (print "  IntVector pickle: ✓"))
+
+; === Test SortedVector ===
+(print "\n--- SortedVector ---")
+(def sv (sorted_vec [5 3 1 4 2]))
+(assert (test-pickle "sorted vector" sv))
+
+; Test with reverse
+(def sv-rev (sorted_vec [5 3 1 4 2] *{:reverse true}))
+(assert (test-pickle "sorted vector (reverse)" sv-rev))
+
+; Test with key function (using operator.neg which is picklable)
+(def sv-key (sorted_vec [1 2 3 4 5] *{:key operator.neg}))
+(assert (test-pickle "sorted vector (key=neg)" sv-key))
+
+; Test with both key and reverse
+(def sv-both (sorted_vec [1 2 3 4 5] *{:key operator.neg :reverse true}))
+(assert (test-pickle "sorted vector (key+reverse)" sv-both))
+
+; === Test complex nested structures ===
+(print "\n--- Complex Nested Structures ---")
+(def complex-data
+  {:users [{:name "Alice" :scores [95 87 92]}
+           {:name "Bob" :scores [88 91 85]}]
+   :metadata {:version 1 :tags #{"important" "test"}}})
+(assert (test-pickle "complex nested structure" complex-data))
+
+; === Test pickle protocols (check that protocol is >= 2 for efficiency) ===
+(print "\n--- Pickle Protocols ---")
+(def v [1 2 3])
+(for [protocol [0 1 2 3 4]]
+  (let [pickled (pickle.dumps v *{:protocol protocol})
+        restored (pickle.loads pickled)]
+    (assert (= v restored) (fmt "Protocol {} failed" protocol))
+    (print (fmt "  Protocol {}: ✓ (size: {} bytes)" protocol (len pickled)))))
+
+(print "\n=== All Pickle Tests Passed! ===")

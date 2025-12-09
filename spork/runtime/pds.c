@@ -3328,17 +3328,17 @@ static PyObject *IntVector_transient(IntVector *self, PyObject *Py_UNUSED(ignore
     }
 
     if (self->tail && self->tail_len > 0) {
-        t->tail = (long *)malloc(WIDTH * sizeof(long));
+        t->tail = (int64_t *)malloc(WIDTH * sizeof(int64_t));
         if (!t->tail) {
             Py_DECREF(t);
             PyErr_NoMemory();
             return NULL;
         }
-        memcpy(t->tail, self->tail, self->tail_len * sizeof(long));
+        memcpy(t->tail, self->tail, self->tail_len * sizeof(int64_t));
         t->tail_len = self->tail_len;
         t->tail_cap = WIDTH;
     } else {
-        t->tail = (long *)malloc(WIDTH * sizeof(long));
+        t->tail = (int64_t *)malloc(WIDTH * sizeof(int64_t));
         if (!t->tail) {
             Py_DECREF(t);
             PyErr_NoMemory();
@@ -3472,9 +3472,9 @@ static PyObject *IntVector_sq_item(IntVector *self, Py_ssize_t i) {
         return NULL;
     }
 
-    long val = IntVector_nth_raw(self, i);
+    int64_t val = IntVector_nth_raw(self, i);
     if (PyErr_Occurred()) return NULL;
-    return PyLong_FromLong(val);
+    return PyLong_FromLongLong(val);
 }
 
 static PySequenceMethods IntVector_as_sequence = {

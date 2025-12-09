@@ -7,9 +7,9 @@ Usage:
     python -m tests.fuzzing.fuzz [--examples N] [--steps N] [--seed N] [pattern...]
 
 Example:
-    python -m tests.fuzzing.fuzz                    # Run all fuzz tests
-    python -m tests.fuzzing.fuzz vector             # Run tests matching 'vector'
-    python -m tests.fuzzing.fuzz --examples 5000    # Run with custom params
+    .venv/bin/python -m tests.fuzzing                    # Run all fuzz tests
+    .venv/bin/python -m tests.fuzzing vector             # Run tests matching 'vector'
+    .venv/bin/python -m tests.fuzzing --examples 5000    # Run with custom params
 """
 
 import abc

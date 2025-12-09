@@ -819,7 +819,7 @@ static PyObject *Vector_conj(Vector *self, PyObject *val) {
     VectorNode *new_root;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
         new_root = VectorNode_create(transient_id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -1904,7 +1904,7 @@ static PyObject *DoubleVector_conj(DoubleVector *self, PyObject *val) {
     DoubleVectorNode *new_root;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
         new_root = DoubleVectorNode_create(transient_id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -2272,7 +2272,7 @@ static PyObject *TransientDoubleVector_conj_mut(TransientDoubleVector *self, PyO
     self->tail_len = 1;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
         DoubleVectorNode *new_root = DoubleVectorNode_create(self->id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -2880,7 +2880,7 @@ static PyObject *IntVector_conj(IntVector *self, PyObject *val) {
     IntVectorNode *new_root;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
         new_root = IntVectorNode_create(transient_id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -3243,7 +3243,7 @@ static PyObject *TransientIntVector_conj_mut(TransientIntVector *self, PyObject 
     self->tail_len = 1;
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
         IntVectorNode *new_root = IntVectorNode_create(self->id);
         if (!new_root) {
             Py_DECREF(tail_node);
@@ -3647,7 +3647,7 @@ static PyObject *TransientVector_conj_mut(TransientVector *self, PyObject *val) 
     PyList_SET_ITEM(self->tail, 0, val);
 
     // Overflow root?
-    if ((self->cnt >> BITS) > (1ULL << self->shift)) {
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
         VectorNode *new_root = VectorNode_create(self->id);
         if (!new_root) {
             Py_DECREF(tail_node);

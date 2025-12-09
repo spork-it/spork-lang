@@ -554,11 +554,24 @@ These modes are evolving quickly and will improve over time. Contributions are w
 
 ## Roadmap
 
-*  **Language Features:**
-    -  Additional persistent data structures
+*  **Language:**
+    -  Additional persistent data structures (deque anyone?)
     -  Error reporting improvments in codegen and macro expansion
+    -  Expand the Spork standard library with more utilities and data structures
+*  **Tooling:**
+    -  Expand `spork` CLI with testing, linting, and formatting commands
+    -  Improve build process and packaging options
+    -  Setup integrations with the Python packaging ecosystem and static analysis tools
+    -  REPL/nREPL improvements (multi-line editing, auto completion, history search)
+*  **Editor Support:**
+    -  Complete and polish Emacs and Neovim modes
+    -  Add VSCode support via LSP and textmate grammar extension
+    -  Tree Sitter grammar for advanced syntax features
+*  **Presense:**
+    -  Tutorials and guides
+    -  Example projects and libraries
+    -  Website with documenation and resources
     
-
 ## Documentation
 
 Checkout the [docs](docs) folder for more detailed documentation on language features, the standard library, and benchmarks of the persistent data structures.

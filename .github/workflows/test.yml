@@ -33,6 +33,9 @@ jobs:
       - name: Build C extension
         run: python setup.py build_ext --inplace
 
+      - name: Print host info
+        run: python tools/host_info.py
+
       - name: Verify C extension loads
         run: python -c "from spork.runtime import pds; print('C extension loaded successfully')"
 
@@ -64,9 +67,46 @@ jobs:
             echo "All tests passed!"
           fi
 
-      - name: Run fuzz tests
+      - name: Run spork tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Running all .spork tests..."
+          $failed = 0
+          $passed = 0
+          $tests = Get-ChildItem -Path "tests/test_*.spork"
+          foreach ($test in $tests) {
+            Write-Host ""
+            Write-Host "=== Running $($test.Name) ==="
+            python -m spork $test.FullName
+            if ($LASTEXITCODE -eq 0) {
+              $passed++
+            } else {
+              $failed++
+              Write-Host "FAILED: $($test.Name)"
+            }
+          }
+          Write-Host ""
+          Write-Host "=== Test Summary ==="
+          Write-Host "Passed: $passed"
+          Write-Host "Failed: $failed"
+          if ($failed -gt 0) {
+            Write-Host "Some tests failed!"
+            exit 1
+          } else {
+            Write-Host "All tests passed!"
+          }
+
+      - name: Run fuzz tests (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
           echo "Running fuzz test suite..."
+          python -m tests.fuzzing --examples 1000 --steps 200
+
+      - name: Run fuzz tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Running fuzz test suite..."
           python -m tests.fuzzing --examples 1000 --steps 200

@@ -18,9 +18,29 @@ Legacy flags are still supported for backwards compatibility:
 
 import argparse
 import os
+import platform
 import sys
 import traceback
 from typing import Optional
+
+
+def cmd_version(args: argparse.Namespace) -> int:
+    """Print Spork version and Python host information."""
+    import spork
+
+    print(f"Spork {spork.__version__}")
+    print()
+    print("Python Host:")
+    print(f"  Version:        {platform.python_version()}")
+    print(f"  Implementation: {platform.python_implementation()}")
+    print(f"  Compiler:       {platform.python_compiler()}")
+    print(f"  Executable:     {sys.executable}")
+    print()
+    print("System:")
+    print(f"  OS:             {platform.system()} {platform.release()}")
+    print(f"  Architecture:   {platform.machine()}")
+    print(f"  Platform:       {platform.platform()}")
+    return 0
 
 
 def cmd_repl(args: argparse.Namespace) -> int:
@@ -493,7 +513,7 @@ def cmd_nrepl_client(host: str, port: int) -> int:
 
 
 # Known subcommands - used to differentiate from file arguments
-SUBCOMMANDS = {"repl", "new", "sync", "run", "build", "dist", "clean", "lsp"}
+SUBCOMMANDS = {"repl", "new", "sync", "run", "build", "dist", "clean", "lsp", "version"}
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -673,6 +693,11 @@ examples:
         help="Log file for debugging LSP communication",
     )
 
+    # version subcommand
+    subparsers.add_parser(
+        "version", help="Print Spork version and Python host information"
+    )
+
     return parser
 
 
@@ -714,6 +739,8 @@ def _main(argv: Optional[list[str]] = None) -> int:
         return cmd_clean(args)
     elif args.subcommand == "lsp":
         return cmd_lsp(args)
+    elif args.subcommand == "version":
+        return cmd_version(args)
 
     # Handle legacy flags
     if args.nrepl:

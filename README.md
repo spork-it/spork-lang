@@ -213,7 +213,7 @@ Spork includes structural pattern matching out of the box. With `match`, you can
     _ "something else"))
 ```
 
-### Type Annotations
+### Annotations & Decorators (Metadata)
 
 Spork supports Python type hints using metadata syntax. These compile down to standard Python type annotations.
 
@@ -229,6 +229,16 @@ def add(x: int, y: int) -> int:
     return x + y
 ```
 
+This also applies to decorators in Python like @staticmethod or @classmethod.
+
+```clojure
+(defclass MyClass []
+  (defn ^staticmethod static-method [^str msg]
+    (print msg)))
+
+(MyClass.static-method "Hello from static method") 
+```
+
 ### Macros
 
 As a Lisp, Spork allows you to extend the compiler via macros.
@@ -241,23 +251,6 @@ As a Lisp, Spork allows you to extend the compiler via macros.
 
 (unless (= (add 1 1) 3)
   (print "Math still works"))
-```
-
-### Output from all of the above examples
-
-```sh
-$ spork readme.spork
-[1 2 3]
-[1 2 3 4]
-{:name 'Spork' :version 1}
-{:name 'Spork' :version 2}
-#{1 2 3}
-#{1 3}
-posix
-py-list before: [1, 2, 3]
-py-list after: [1, 2, 3, 4]
-Json: {"name": "Spork", "version": 1.0}
-Math still works
 ```
 
 ### Examples
@@ -359,7 +352,11 @@ ZeroDivisionError: division by zero
 ```
 
 
-## Project Management
+## Spork Project Management
+
+For standalone Spork projects, `spork.it` files provide a unified manifest similar to `cargo.toml` or `package.json`. Saving you from managing virtual environments, dependencies, and build scripts manually.
+
+Note: If you are just adding Spork files to an existing Python application, you don't need a `spork.it` file. See [Using Spork in an existing Python project](#using-spork-in-an-existing-python-project) for details.
 
 ### Creating a Project
 

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import spork
 from spork.project.build import build_project, find_project_root
 from spork.project.config import ProjectConfig
 
@@ -49,11 +50,13 @@ def generate_dist_pyproject(
     # Get description
     description = config.description or f"Spork project: {config.name}"
 
-    # Build dependencies list
-    deps_str = ""
+    # Build dependencies list - always include spork-lang runtime pinned to current version
+    spork_version = spork.__version__
+    all_deps = [f"spork-lang=={spork_version}"]
     if config.dependencies:
-        deps_list = ",\n    ".join(f'"{dep}"' for dep in config.dependencies)
-        deps_str = f"""
+        all_deps.extend(config.dependencies)
+    deps_list = ",\n    ".join(f'"{dep}"' for dep in all_deps)
+    deps_str = f"""
 dependencies = [
     {deps_list}
 ]"""

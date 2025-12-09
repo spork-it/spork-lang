@@ -1,6 +1,7 @@
 # Spork
 
-[![Tests](https://github.com/spork-it/spork-lang/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/spork-it/spork-lang/actions/workflows/test.yml)
+[![Tests](https://github.com/spork-it/spork-lang/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/spork-it/spork-lang/actions/workflows/test.yml) 
+![PyPI - Version](https://img.shields.io/pypi/v/spork-lang)
 
 Spork is a Lisp that runs on Python. It gives you the expressive power of macros, immutable data structures, and a modern REPL driven development experience.
 

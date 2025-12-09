@@ -20,6 +20,7 @@ import random
 import resource
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,14 @@ from typing import Any
 def get_mem_mb() -> float:
     """Get current RSS memory in MB."""
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+
+
+def force_gc() -> float:
+    """Force full garbage collection and return memory after."""
+    gc.collect()
+    gc.collect()
+    gc.collect()
+    return get_mem_mb()
 
 
 def random_value() -> Any:
@@ -46,6 +55,82 @@ def random_value() -> Any:
         return (random.randint(0, 100), random.randint(0, 100))
 
 
+@dataclass
+class MemoryStats:
+    """Statistics about memory behavior during fuzzing."""
+
+    initial_mem: float = 0.0
+    warmup_mem: float = 0.0
+    final_mem: float = 0.0
+    peak_mem: float = 0.0
+
+    # Steady-state tracking
+    steady_state_samples: list[tuple[int, float]] = field(default_factory=list)
+
+    # Cleanup verification
+    cleanup_checks: list[tuple[float, float, float]] = field(
+        default_factory=list
+    )  # (before, after_release, after_gc)
+
+    def warmup_overhead(self) -> float:
+        """Memory allocated during warmup (globals, caches, etc.)."""
+        return self.warmup_mem - self.initial_mem
+
+    def steady_state_growth(self) -> float:
+        """Memory growth during steady-state phase."""
+        return self.final_mem - self.warmup_mem
+
+    def total_growth(self) -> float:
+        """Total memory growth."""
+        return self.final_mem - self.initial_mem
+
+    def growth_rate_per_1k_ops(self) -> float | None:
+        """Calculate memory growth rate per 1000 operations during steady-state.
+
+        Returns None if insufficient data points.
+        A truly leaking implementation will have a positive, consistent rate.
+        A healthy implementation will have a rate near zero.
+        """
+        if len(self.steady_state_samples) < 3:
+            return None
+
+        # Use linear regression to find the growth rate
+        samples = self.steady_state_samples
+        n = len(samples)
+        sum_x = sum(ops for ops, _ in samples)
+        sum_y = sum(mem for _, mem in samples)
+        sum_xy = sum(ops * mem for ops, mem in samples)
+        sum_xx = sum(ops * ops for ops, _ in samples)
+
+        denominator = n * sum_xx - sum_x * sum_x
+        if denominator == 0:
+            return None
+
+        slope = (n * sum_xy - sum_x * sum_y) / denominator
+        # Convert to per-1000-ops rate
+        return slope * 1000
+
+    def cleanup_efficiency(self) -> float | None:
+        """Calculate how well memory is freed during cleanup checks.
+
+        Returns the average percentage of memory recovered after GC.
+        100% means all allocated memory was freed.
+        Returns None if no cleanup checks were performed.
+        """
+        if not self.cleanup_checks:
+            return None
+
+        efficiencies = []
+        for before, after_release, after_gc in self.cleanup_checks:
+            allocated = after_release - before
+            if allocated > 1.0:  # Only count if significant allocation
+                recovered = after_release - after_gc
+                efficiency = (recovered / allocated) * 100 if allocated > 0 else 100
+                efficiencies.append(min(100, max(0, efficiency)))
+
+        return sum(efficiencies) / len(efficiencies) if efficiencies else None
+
+
 class Fuzzer(abc.ABC):
     """Base class for fuzz tests.
 
@@ -59,6 +144,7 @@ class Fuzzer(abc.ABC):
         - setup(): called once before running
         - teardown(): called once after running
         - get_stats(): return dict of stats to display
+        - release_all(): explicitly release all held references for cleanup checks
     """
 
     name: str = "unnamed"
@@ -79,6 +165,15 @@ class Fuzzer(abc.ABC):
     def teardown(self):
         """Called once after running. Override if needed."""
         pass
+
+    def release_all(self):
+        """Release all references to allow GC. Override if needed.
+
+        This is called during cleanup verification checks to ensure
+        memory is properly freed when objects are released.
+        Default implementation just calls reset().
+        """
+        self.reset()
 
     @abc.abstractmethod
     def reset(self):
@@ -103,6 +198,34 @@ class Fuzzer(abc.ABC):
         return {}
 
 
+@dataclass
+class LeakCheckConfig:
+    """Configuration for memory leak detection."""
+
+    # Warmup: ignore memory growth during first N% of examples
+    # This accounts for global allocations, caches, etc.
+    warmup_fraction: float = 0.1
+
+    # Maximum allowed steady-state memory growth rate (MB per 1000 ops)
+    # A truly leaking implementation grows linearly with operations
+    max_growth_rate_per_1k_ops: float = 0.5
+
+    # Minimum cleanup efficiency (percentage of memory freed after release)
+    # If objects are properly reference counted, memory should be freed
+    min_cleanup_efficiency: float = 50.0
+
+    # Maximum absolute steady-state growth (MB)
+    # Even with zero leak rate, cap absolute growth
+    max_steady_state_growth_mb: float = 200.0
+
+    # How often to sample memory for growth rate calculation (in examples)
+    sample_interval: int = 50
+
+    # How often to do cleanup verification checks (in examples)
+    # Set to 0 to disable
+    cleanup_check_interval: int = 200
+
+
 class FuzzRunner:
     """Runs fuzz tests and reports results."""
 
@@ -111,17 +234,25 @@ class FuzzRunner:
         examples: int = 1000,
         steps: int = 200,
         seed: int | None = None,
-        memory_limit_mb: float = 100,
+        leak_config: LeakCheckConfig | None = None,
     ):
         self.examples = examples
         self.steps = steps
-        self.memory_limit_mb = memory_limit_mb
+        self.leak_config = leak_config or LeakCheckConfig()
 
         if seed is not None:
             self.seed = seed
         else:
             self.seed = random.randint(0, 2**32)
         random.seed(self.seed)
+
+    def _do_cleanup_check(self, fuzzer: Fuzzer, mem_stats: MemoryStats) -> None:
+        """Perform a cleanup verification check."""
+        before = get_mem_mb()
+        fuzzer.release_all()
+        after_release = get_mem_mb()
+        after_gc = force_gc()
+        mem_stats.cleanup_checks.append((before, after_release, after_gc))
 
     def run(self, fuzzer: Fuzzer) -> bool:
         """Run a fuzzer. Returns True if passed, False if failed."""
@@ -131,7 +262,14 @@ class FuzzRunner:
         print(f"  Seed: {self.seed}")
         print()
 
-        initial_mem = get_mem_mb()
+        # Initialize memory tracking
+        mem_stats = MemoryStats()
+        mem_stats.initial_mem = force_gc()
+        mem_stats.peak_mem = mem_stats.initial_mem
+
+        warmup_examples = int(self.examples * self.leak_config.warmup_fraction)
+        in_warmup = True
+
         start_time = time.time()
         last_print = start_time
         example = 0
@@ -141,11 +279,39 @@ class FuzzRunner:
 
         try:
             for example in range(self.examples):
+                # Transition from warmup to steady-state
+                if in_warmup and example >= warmup_examples:
+                    in_warmup = False
+                    mem_stats.warmup_mem = force_gc()
+
                 fuzzer.reset()
 
                 for step in range(self.steps):
                     fuzzer.do_random_operation()
                     fuzzer.check_invariants()
+
+                # Track peak memory
+                current_mem = get_mem_mb()
+                mem_stats.peak_mem = max(mem_stats.peak_mem, current_mem)
+
+                # Sample memory for growth rate calculation (steady-state only)
+                if (
+                    not in_warmup
+                    and self.leak_config.sample_interval > 0
+                    and example % self.leak_config.sample_interval == 0
+                ):
+                    mem_after_gc = force_gc()
+                    mem_stats.steady_state_samples.append(
+                        (fuzzer.operations, mem_after_gc)
+                    )
+
+                # Periodic cleanup verification
+                if (
+                    self.leak_config.cleanup_check_interval > 0
+                    and example > 0
+                    and example % self.leak_config.cleanup_check_interval == 0
+                ):
+                    self._do_cleanup_check(fuzzer, mem_stats)
 
                 # Progress output every second
                 now = time.time()
@@ -153,21 +319,23 @@ class FuzzRunner:
                     elapsed = now - start_time
                     rate = (example + 1) / elapsed
                     current_mem = get_mem_mb()
-                    delta_mem = current_mem - initial_mem
+                    delta_mem = current_mem - mem_stats.initial_mem
+                    phase = "warmup" if in_warmup else "steady"
 
                     print(
                         f"[{elapsed:6.1f}s] "
                         f"ex:{example + 1:>6,} | "
                         f"ops:{fuzzer.operations:>8,} | "
                         f"{rate:>5.1f}/s | "
-                        f"rss:{current_mem:.0f}MB ({delta_mem:+.0f}MB)"
+                        f"rss:{current_mem:.0f}MB ({delta_mem:+.0f}MB) [{phase}]"
                     )
                     last_print = now
 
+            # Final memory measurement
+            mem_stats.final_mem = force_gc()
+
             # Final stats
             elapsed = time.time() - start_time
-            final_mem = get_mem_mb()
-            delta_mem = final_mem - initial_mem
 
             print()
             print(
@@ -181,20 +349,66 @@ class FuzzRunner:
             for key, value in custom_stats.items():
                 print(f"  {key}: {value}")
 
+            # Memory analysis
+            print()
+            print("Memory Analysis:")
             print(
-                f"  Memory: {initial_mem:.0f}MB -> {final_mem:.0f}MB "
-                f"({delta_mem:+.0f}MB)"
+                f"  Initial: {mem_stats.initial_mem:.1f}MB | "
+                f"After warmup: {mem_stats.warmup_mem:.1f}MB | "
+                f"Final: {mem_stats.final_mem:.1f}MB | "
+                f"Peak: {mem_stats.peak_mem:.1f}MB"
             )
+            print(
+                f"  Warmup overhead: {mem_stats.warmup_overhead():+.1f}MB "
+                f"(globals, caches, etc. - ignored)"
+            )
+            print(f"  Steady-state growth: {mem_stats.steady_state_growth():+.1f}MB")
+
+            growth_rate = mem_stats.growth_rate_per_1k_ops()
+            if growth_rate is not None:
+                print(f"  Growth rate: {growth_rate:+.3f}MB per 1000 ops")
+
+            cleanup_eff = mem_stats.cleanup_efficiency()
+            if cleanup_eff is not None:
+                print(f"  Cleanup efficiency: {cleanup_eff:.1f}%")
 
             fuzzer.teardown()
 
-            if delta_mem > self.memory_limit_mb:
-                print(
-                    f"  FAILED: Memory grew by {delta_mem:.0f}MB "
-                    f"(limit: {self.memory_limit_mb}MB)"
+            # Evaluate pass/fail based on multiple criteria
+            failures = []
+
+            # Check 1: Growth rate during steady-state
+            if growth_rate is not None:
+                if growth_rate > self.leak_config.max_growth_rate_per_1k_ops:
+                    failures.append(
+                        f"Growth rate {growth_rate:.3f}MB/1k ops exceeds limit "
+                        f"{self.leak_config.max_growth_rate_per_1k_ops:.3f}MB/1k ops"
+                    )
+
+            # Check 2: Absolute steady-state growth
+            steady_growth = mem_stats.steady_state_growth()
+            if steady_growth > self.leak_config.max_steady_state_growth_mb:
+                failures.append(
+                    f"Steady-state growth {steady_growth:.1f}MB exceeds limit "
+                    f"{self.leak_config.max_steady_state_growth_mb:.1f}MB"
                 )
+
+            # Check 3: Cleanup efficiency
+            if cleanup_eff is not None:
+                if cleanup_eff < self.leak_config.min_cleanup_efficiency:
+                    failures.append(
+                        f"Cleanup efficiency {cleanup_eff:.1f}% below minimum "
+                        f"{self.leak_config.min_cleanup_efficiency:.1f}%"
+                    )
+
+            if failures:
+                print()
+                print("  FAILED - Memory leak detected:")
+                for failure in failures:
+                    print(f"    - {failure}")
                 return False
             else:
+                print()
                 print("  PASSED")
                 return True
 
@@ -246,7 +460,7 @@ def run_suite(
     steps: int = 200,
     seed: int | None = None,
     patterns: list[str] | None = None,
-    memory_limit_mb: float = 100,
+    leak_config: LeakCheckConfig | None = None,
 ) -> int:
     """Run the fuzz test suite.
 
@@ -255,7 +469,7 @@ def run_suite(
         steps: Steps per example
         seed: Random seed (None for random)
         patterns: Optional list of patterns to filter fuzzers by name
-        memory_limit_mb: Memory growth limit before failing
+        leak_config: Configuration for memory leak detection
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -289,7 +503,7 @@ def run_suite(
         examples=examples,
         steps=steps,
         seed=seed,
-        memory_limit_mb=memory_limit_mb,
+        leak_config=leak_config,
     )
 
     for fuzzer_cls in fuzzers:
@@ -343,10 +557,28 @@ def main():
         help="Random seed for reproducibility",
     )
     parser.add_argument(
-        "--memory-limit",
+        "--max-growth-rate",
         type=float,
-        default=100,
-        help="Memory growth limit in MB (default: 100)",
+        default=0.5,
+        help="Max memory growth rate in MB per 1000 ops (default: 0.5)",
+    )
+    parser.add_argument(
+        "--max-steady-growth",
+        type=float,
+        default=200,
+        help="Max absolute steady-state memory growth in MB (default: 200)",
+    )
+    parser.add_argument(
+        "--min-cleanup-efficiency",
+        type=float,
+        default=50,
+        help="Min cleanup efficiency percentage (default: 50)",
+    )
+    parser.add_argument(
+        "--warmup-fraction",
+        type=float,
+        default=0.1,
+        help="Fraction of examples to use as warmup (default: 0.1)",
     )
     parser.add_argument(
         "patterns",
@@ -355,13 +587,20 @@ def main():
     )
     args = parser.parse_args()
 
+    leak_config = LeakCheckConfig(
+        warmup_fraction=args.warmup_fraction,
+        max_growth_rate_per_1k_ops=args.max_growth_rate,
+        max_steady_state_growth_mb=args.max_steady_growth,
+        min_cleanup_efficiency=args.min_cleanup_efficiency,
+    )
+
     sys.exit(
         run_suite(
             examples=args.examples,
             steps=args.steps,
             seed=args.seed,
             patterns=args.patterns if args.patterns else None,
-            memory_limit_mb=args.memory_limit,
+            leak_config=leak_config,
         )
     )
 

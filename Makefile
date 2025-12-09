@@ -1,4 +1,4 @@
-.PHONY: help venv build install install-dev clean test test-one fuzz fuzz-long repl lsp verify \
+.PHONY: help venv build build-debug install install-dev clean test test-debug test-one fuzz fuzz-debug fuzz-long repl lsp verify \
         dist sdist wheel upload-test upload check-dist \
         clean-build clean-pyc clean-venv clean-all \
         pipx-install pipx-uninstall
@@ -15,12 +15,15 @@ help:
 	@echo "Setup:"
 	@echo "  venv           - Create virtual environment with build tools"
 	@echo "  build          - Build C extension in-place"
+	@echo "  build-debug    - Build C extension with ASan/UBSan and low optimization"
 	@echo "  install-dev    - Install package in development mode (editable)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  test           - Run all .spork test files"
+	@echo "  test-debug     - Run all tests with ASan/UBSan (requires build-debug first)"
 	@echo "  test-one       - Run a single test (usage: make test-one TEST=tests/test_pds.spork)"
 	@echo "  fuzz           - Run fuzz tests (1000 examples)"
+	@echo "  fuzz-debug     - Run fuzz tests with ASan/UBSan (requires build-debug first)"
 	@echo "  fuzz-long      - Run long fuzz tests (50000 examples)"
 	@echo "  repl           - Start the Spork REPL"
 	@echo "  lsp            - Start the Language Server Protocol server"
@@ -69,6 +72,38 @@ build: $(VENV)
 	else \
 		echo "C extension is up to date."; \
 	fi
+
+# Build with AddressSanitizer and UndefinedBehaviorSanitizer for debugging
+build-debug: $(VENV) clean-build
+	@echo "Building C extension with sanitizers..."
+	@# Check if compiler supports sanitizers
+	@if $(CC) -fsanitize=address -fsanitize=undefined -x c -E - < /dev/null > /dev/null 2>&1; then \
+		echo "  ASan and UBSan enabled"; \
+		DEBUG_BUILD=1 \
+		CFLAGS="-O1 -g -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined" \
+		LDFLAGS="-fsanitize=address -fsanitize=undefined" \
+		$(PYTHON) setup.py build_ext --inplace 2>&1 | grep -v "toml section missing"; \
+	elif $(CC) -fsanitize=address -x c -E - < /dev/null > /dev/null 2>&1; then \
+		echo "  ASan enabled (UBSan not available)"; \
+		DEBUG_BUILD=1 \
+		CFLAGS="-O1 -g -fno-omit-frame-pointer -fsanitize=address" \
+		LDFLAGS="-fsanitize=address" \
+		$(PYTHON) setup.py build_ext --inplace 2>&1 | grep -v "toml section missing"; \
+	elif $(CC) -fsanitize=undefined -x c -E - < /dev/null > /dev/null 2>&1; then \
+		echo "  UBSan enabled (ASan not available)"; \
+		DEBUG_BUILD=1 \
+		CFLAGS="-O1 -g -fno-omit-frame-pointer -fsanitize=undefined" \
+		LDFLAGS="-fsanitize=undefined" \
+		$(PYTHON) setup.py build_ext --inplace 2>&1 | grep -v "toml section missing"; \
+	else \
+		echo "  Warning: No sanitizers available, building with debug flags only"; \
+		DEBUG_BUILD=1 \
+		CFLAGS="-O1 -g -fno-omit-frame-pointer" \
+		$(PYTHON) setup.py build_ext --inplace 2>&1 | grep -v "toml section missing"; \
+	fi
+	@echo "✓ Debug C extension built"
+	@echo ""
+	@echo "Note: Run 'make test-debug' or 'make fuzz-debug' to test with sanitizers"
 
 install-dev: $(VENV) build
 	$(PIP) install -e .
@@ -124,6 +159,46 @@ fuzz: build
 fuzz-long: build
 	@echo "Running long fuzz tests..."
 	$(PYTHON) -m tests.fuzzing --examples 50000 --steps 200
+
+# Find the ASan runtime library for LD_PRELOAD
+ASAN_LIB := $(shell $(CC) -print-file-name=libasan.so 2>/dev/null)
+
+test-debug:
+	@echo "Running all tests with sanitizers..."
+	@if [ ! -f "$(ASAN_LIB)" ]; then \
+		echo "Error: Could not find libasan.so. Make sure gcc/clang with ASan support is installed."; \
+		exit 1; \
+	fi
+	@failed=0; \
+	passed=0; \
+	for test in tests/test_*.spork; do \
+		echo ""; \
+		echo "=== Running $$test ==="; \
+		if LD_PRELOAD=$(ASAN_LIB) ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 $(PYTHON) -m spork "$$test"; then \
+			passed=$$((passed + 1)); \
+		else \
+			failed=$$((failed + 1)); \
+			echo "FAILED: $$test"; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "=== Test Summary (with sanitizers) ==="; \
+	echo "Passed: $$passed"; \
+	echo "Failed: $$failed"; \
+	if [ $$failed -gt 0 ]; then \
+		echo "Some tests failed!"; \
+		exit 1; \
+	else \
+		echo "All tests passed!"; \
+	fi
+
+fuzz-debug:
+	@echo "Running fuzz tests with sanitizers..."
+	@if [ ! -f "$(ASAN_LIB)" ]; then \
+		echo "Error: Could not find libasan.so. Make sure gcc/clang with ASan support is installed."; \
+		exit 1; \
+	fi
+	LD_PRELOAD=$(ASAN_LIB) ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 $(PYTHON) -m tests.fuzzing --examples 1000 --steps 200
 
 # ============================================================================
 # Packaging

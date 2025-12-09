@@ -95,11 +95,9 @@ Generic_class_getitem(PyObject *cls, PyObject *args)
 
 // === Utility functions ===
 static inline int ctpop(unsigned int i) {
-    // Population count using compiler builtin if available
 #ifdef __GNUC__
     return __builtin_popcount(i);
 #elif defined(_MSC_VER)
-    // Add this for Windows/MSVC support
     return __popcnt(i);
 #else
     int count = 0;
@@ -150,6 +148,38 @@ typedef struct SortedVectorIterator SortedVectorIterator;
 
 // Sentinel for missing values
 static PyObject *_MISSING = NULL;
+
+// =============================================================================
+// MODULE STATE FOR MULTI-PHASE INITIALIZATION
+// =============================================================================
+//
+// Per-module state struct holds singletons that were previously globals.
+// This enables proper GC integration and future subinterpreter support.
+
+typedef struct {
+    PyObject *_MISSING;
+
+    PyObject *EMPTY_VECTOR;
+    PyObject *EMPTY_DOUBLE_VECTOR;
+    PyObject *EMPTY_LONG_VECTOR;
+
+    PyObject *EMPTY_MAP;
+    PyObject *EMPTY_SET;
+
+    PyObject *EMPTY_SORTED_VECTOR;
+
+    // Internal nodes (not exposed to Python, but needed for cleanup)
+    PyObject *EMPTY_NODE;
+    PyObject *EMPTY_DOUBLE_NODE;
+    PyObject *EMPTY_LONG_NODE;
+    PyObject *EMPTY_BIN;
+} PdsState;
+
+static inline PdsState *
+pds_get_state(PyObject *module)
+{
+    return (PdsState *)PyModule_GetState(module);
+}
 
 // === Cons ===
 typedef struct Cons {
@@ -351,7 +381,7 @@ static PyObject *Cons_reduce(Cons *self, PyObject *Py_UNUSED(ignored)) {
     if (args == NULL) {
         return NULL;
     }
-    
+
     PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
     Py_DECREF(args);
     return result;
@@ -1298,7 +1328,7 @@ static PyObject *Vector_reduce(Vector *self, PyObject *Py_UNUSED(ignored)) {
     if (args == NULL) {
         return NULL;
     }
-    
+
     // Return (type, args_tuple) - pickle will call type(*args_tuple)
     PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
     Py_DECREF(args);
@@ -2440,7 +2470,7 @@ static PyObject *DoubleVector_reduce(DoubleVector *self, PyObject *Py_UNUSED(ign
     if (args == NULL) {
         return NULL;
     }
-    
+
     // Return (type, args_tuple) - pickle will call type(*args_tuple)
     PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
     Py_DECREF(args);
@@ -3411,7 +3441,7 @@ static PyObject *IntVector_reduce(IntVector *self, PyObject *Py_UNUSED(ignored))
     if (args == NULL) {
         return NULL;
     }
-    
+
     // Return (type, args_tuple) - pickle will call type(*args_tuple)
     PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
     Py_DECREF(args);
@@ -5975,14 +6005,14 @@ static PyObject *Map_reduce(Map *self, PyObject *Py_UNUSED(ignored)) {
     if (args == NULL) {
         return NULL;
     }
-    
+
     // Iterate over items and flatten into the args tuple
     PyObject *items_iter = Map_items(self, NULL);
     if (items_iter == NULL) {
         Py_DECREF(args);
         return NULL;
     }
-    
+
     Py_ssize_t i = 0;
     PyObject *item;
     while ((item = PyIter_Next(items_iter)) != NULL) {
@@ -5996,26 +6026,26 @@ static PyObject *Map_reduce(Map *self, PyObject *Py_UNUSED(ignored)) {
         i++;
     }
     Py_DECREF(items_iter);
-    
+
     if (PyErr_Occurred()) {
         Py_DECREF(args);
         return NULL;
     }
-    
+
     // Get the hash_map function from the pds module
     PyObject *pds_module = PyImport_ImportModule("spork.runtime.pds");
     if (pds_module == NULL) {
         Py_DECREF(args);
         return NULL;
     }
-    
+
     PyObject *hash_map_func = PyObject_GetAttrString(pds_module, "hash_map");
     Py_DECREF(pds_module);
     if (hash_map_func == NULL) {
         Py_DECREF(args);
         return NULL;
     }
-    
+
     // Return (hash_map, args_tuple) - pickle will call hash_map(*args_tuple)
     PyObject *result = PyTuple_Pack(2, hash_map_func, args);
     Py_DECREF(hash_map_func);
@@ -6504,11 +6534,11 @@ static PyObject *Set_conj(Set *self, PyObject *val);
 
 static int Set_init(Set *self, PyObject *args, PyObject *kwds) {
     Py_ssize_t n = PyTuple_Size(args);
-    
+
     if (n == 0) {
         return 0;  // Empty set, already initialized by tp_new
     }
-    
+
     // Build set by conj'ing each element
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *item = PyTuple_GET_ITEM(args, i);
@@ -6516,7 +6546,7 @@ static int Set_init(Set *self, PyObject *args, PyObject *kwds) {
         if (!new_set) {
             return -1;
         }
-        
+
         // Update self from new_set
         Set *ns = (Set *)new_set;
         Py_XDECREF(self->root);
@@ -6527,7 +6557,7 @@ static int Set_init(Set *self, PyObject *args, PyObject *kwds) {
         self->hash_computed = 0;
         Py_DECREF(new_set);
     }
-    
+
     return 0;
 }
 
@@ -7444,7 +7474,7 @@ static PyObject *Set_reduce(Set *self, PyObject *Py_UNUSED(ignored)) {
     if (args == NULL) {
         return NULL;
     }
-    
+
     // Return (type, args_tuple) - pickle will call type(*args_tuple)
     PyObject *result = PyTuple_Pack(2, (PyObject *)Py_TYPE(self), args);
     Py_DECREF(args);
@@ -7833,7 +7863,7 @@ static void RBNode_update_size(RBNode *node) {
 static RBNode *RBNode_create(PyObject *value, PyObject *sort_key, unsigned char color, PyObject *edit) {
     RBNode *node = PyObject_New(RBNode, &RBNodeType);
     if (!node) return NULL;
-    
+
     Py_INCREF(value);
     node->value = value;
     Py_INCREF(sort_key);
@@ -7844,17 +7874,17 @@ static RBNode *RBNode_create(PyObject *value, PyObject *sort_key, unsigned char 
     node->color = color;
     node->edit = edit;
     Py_XINCREF(edit);
-    
+
     return node;
 }
 
 // Clone a node (for persistent operations)
 static RBNode *RBNode_clone(RBNode *node, PyObject *edit) {
     if (!node) return NULL;
-    
+
     RBNode *new_node = PyObject_New(RBNode, &RBNodeType);
     if (!new_node) return NULL;
-    
+
     Py_INCREF(node->value);
     new_node->value = node->value;
     Py_INCREF(node->sort_key);
@@ -7867,7 +7897,7 @@ static RBNode *RBNode_clone(RBNode *node, PyObject *edit) {
     new_node->color = node->color;
     new_node->edit = edit;
     Py_XINCREF(edit);
-    
+
     return new_node;
 }
 
@@ -7904,11 +7934,11 @@ static int SortedVector_compare_keys(PyObject *a, PyObject *b, int reverse) {
     int cmp = PyObject_RichCompareBool(a, b, Py_LT);
     if (cmp < 0) return -2;  // Error
     if (cmp) return reverse ? 1 : -1;
-    
+
     cmp = PyObject_RichCompareBool(a, b, Py_GT);
     if (cmp < 0) return -2;  // Error
     if (cmp) return reverse ? -1 : 1;
-    
+
     return 0;  // Equal
 }
 
@@ -7917,54 +7947,54 @@ static int SortedVector_compare_keys(PyObject *a, PyObject *b, int reverse) {
 static RBNode *RBNode_rotate_left(RBNode *h, PyObject *edit) {
     RBNode *x = RBNode_ensure_editable(h->right, edit);
     if (!x) return NULL;
-    
+
     RBNode *new_h = RBNode_ensure_editable(h, edit);
     if (!new_h) {
         Py_DECREF(x);
         return NULL;
     }
-    
+
     Py_XDECREF(new_h->right);
     new_h->right = x->left;
     Py_XINCREF(new_h->right);
-    
+
     Py_XDECREF(x->left);
     x->left = new_h;
     // new_h reference is now owned by x->left
-    
+
     x->color = new_h->color;
     new_h->color = RB_RED;
-    
+
     RBNode_update_size(new_h);
     RBNode_update_size(x);
-    
+
     return x;
 }
 
 static RBNode *RBNode_rotate_right(RBNode *h, PyObject *edit) {
     RBNode *x = RBNode_ensure_editable(h->left, edit);
     if (!x) return NULL;
-    
+
     RBNode *new_h = RBNode_ensure_editable(h, edit);
     if (!new_h) {
         Py_DECREF(x);
         return NULL;
     }
-    
+
     Py_XDECREF(new_h->left);
     new_h->left = x->right;
     Py_XINCREF(new_h->left);
-    
+
     Py_XDECREF(x->right);
     x->right = new_h;
     // new_h reference is now owned by x->right
-    
+
     x->color = new_h->color;
     new_h->color = RB_RED;
-    
+
     RBNode_update_size(new_h);
     RBNode_update_size(x);
-    
+
     return x;
 }
 
@@ -7979,9 +8009,9 @@ static void RBNode_flip_colors_unsafe(RBNode *h) {
 static RBNode *RBNode_flip_colors(RBNode *h, PyObject *edit) {
     RBNode *new_h = RBNode_ensure_editable(h, edit);
     if (!new_h) return NULL;
-    
+
     new_h->color = !new_h->color;
-    
+
     if (new_h->left) {
         RBNode *new_left = RBNode_ensure_editable(new_h->left, edit);
         if (!new_left) {
@@ -7992,7 +8022,7 @@ static RBNode *RBNode_flip_colors(RBNode *h, PyObject *edit) {
         Py_XDECREF(new_h->left);
         new_h->left = new_left;
     }
-    
+
     if (new_h->right) {
         RBNode *new_right = RBNode_ensure_editable(new_h->right, edit);
         if (!new_right) {
@@ -8003,32 +8033,32 @@ static RBNode *RBNode_flip_colors(RBNode *h, PyObject *edit) {
         Py_XDECREF(new_h->right);
         new_h->right = new_right;
     }
-    
+
     return new_h;
 }
 
 // Balance after insertion
 static RBNode *RBNode_balance(RBNode *h, PyObject *edit) {
     if (!h) return NULL;
-    
+
     // Right-leaning red link -> rotate left
     if (RBNode_is_red(h->right) && !RBNode_is_red(h->left)) {
         h = RBNode_rotate_left(h, edit);
         if (!h) return NULL;
     }
-    
+
     // Two consecutive left red links -> rotate right
     if (RBNode_is_red(h->left) && RBNode_is_red(h->left->left)) {
         h = RBNode_rotate_right(h, edit);
         if (!h) return NULL;
     }
-    
+
     // Both children red -> flip colors
     if (RBNode_is_red(h->left) && RBNode_is_red(h->right)) {
         h = RBNode_flip_colors(h, edit);
         if (!h) return NULL;
     }
-    
+
     RBNode_update_size(h);
     return h;
 }
@@ -8076,13 +8106,13 @@ static RBNode *RBNode_insert(RBNode *h, PyObject *value, PyObject *sort_key, int
     if (!h) {
         return RBNode_create(value, sort_key, RB_RED, edit);
     }
-    
+
     int cmp = SortedVector_compare_keys(sort_key, h->sort_key, reverse);
     if (cmp == -2) return NULL;  // Error
-    
+
     RBNode *new_h = RBNode_ensure_editable(h, edit);
     if (!new_h) return NULL;
-    
+
     if (cmp < 0) {
         RBNode *new_left = RBNode_insert(new_h->left, value, sort_key, reverse, edit);
         if (!new_left && PyErr_Occurred()) {
@@ -8101,7 +8131,7 @@ static RBNode *RBNode_insert(RBNode *h, PyObject *value, PyObject *sort_key, int
         Py_XDECREF(new_h->right);
         new_h->right = new_right;
     }
-    
+
     return RBNode_balance(new_h, edit);
 }
 
@@ -8109,12 +8139,12 @@ static RBNode *RBNode_insert(RBNode *h, PyObject *value, PyObject *sort_key, int
 static PyObject *SortedVector_conj(SortedVector *self, PyObject *value) {
     PyObject *sort_key = SortedVector_get_sort_key(self, value);
     if (!sort_key) return NULL;
-    
+
     RBNode *new_root = RBNode_insert(self->root, value, sort_key, self->reverse, NULL);
     Py_DECREF(sort_key);
-    
+
     if (!new_root && PyErr_Occurred()) return NULL;
-    
+
     // Make root black
     if (new_root && new_root->color == RB_RED) {
         RBNode *black_root = RBNode_clone(new_root, NULL);
@@ -8123,20 +8153,20 @@ static PyObject *SortedVector_conj(SortedVector *self, PyObject *value) {
         black_root->color = RB_BLACK;
         new_root = black_root;
     }
-    
+
     // Create new SortedVector
     SortedVector *result = PyObject_New(SortedVector, &SortedVectorType);
     if (!result) {
         Py_XDECREF(new_root);
         return NULL;
     }
-    
+
     result->root = new_root;
     result->cnt = self->cnt + 1;
     result->key_fn = self->key_fn;
     Py_XINCREF(result->key_fn);
     result->reverse = self->reverse;
-    
+
     return (PyObject *)result;
 }
 
@@ -8146,9 +8176,9 @@ static PyObject *RBNode_nth(RBNode *node, Py_ssize_t index) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
         return NULL;
     }
-    
+
     Py_ssize_t left_size = RBNode_size(node->left);
-    
+
     if (index < left_size) {
         return RBNode_nth(node->left, index);
     } else if (index == left_size) {
@@ -8162,16 +8192,16 @@ static PyObject *RBNode_nth(RBNode *node, Py_ssize_t index) {
 static PyObject *SortedVector_nth(SortedVector *self, PyObject *args) {
     Py_ssize_t index;
     PyObject *default_val = NULL;
-    
+
     if (!PyArg_ParseTuple(args, "n|O", &index, &default_val)) {
         return NULL;
     }
-    
+
     // Handle negative indices
     if (index < 0) {
         index += self->cnt;
     }
-    
+
     if (index < 0 || index >= self->cnt) {
         if (default_val) {
             Py_INCREF(default_val);
@@ -8180,7 +8210,7 @@ static PyObject *SortedVector_nth(SortedVector *self, PyObject *args) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
         return NULL;
     }
-    
+
     return RBNode_nth(self->root, index);
 }
 
@@ -8188,17 +8218,17 @@ static PyObject *SortedVector_getitem(SortedVector *self, PyObject *key) {
     if (PyLong_Check(key)) {
         Py_ssize_t index = PyLong_AsSsize_t(key);
         if (index == -1 && PyErr_Occurred()) return NULL;
-        
+
         if (index < 0) index += self->cnt;
-        
+
         if (index < 0 || index >= self->cnt) {
             PyErr_SetString(PyExc_IndexError, "index out of range");
             return NULL;
         }
-        
+
         return RBNode_nth(self->root, index);
     }
-    
+
     PyErr_SetString(PyExc_TypeError, "indices must be integers");
     return NULL;
 }
@@ -8212,12 +8242,12 @@ static PyObject *SortedVector_first(SortedVector *self, PyObject *Py_UNUSED(igno
     if (self->cnt == 0) {
         Py_RETURN_NONE;
     }
-    
+
     RBNode *node = self->root;
     while (node->left) {
         node = node->left;
     }
-    
+
     Py_INCREF(node->value);
     return node->value;
 }
@@ -8227,12 +8257,12 @@ static PyObject *SortedVector_last(SortedVector *self, PyObject *Py_UNUSED(ignor
     if (self->cnt == 0) {
         Py_RETURN_NONE;
     }
-    
+
     RBNode *node = self->root;
     while (node->right) {
         node = node->right;
     }
-    
+
     Py_INCREF(node->value);
     return node->value;
 }
@@ -8240,12 +8270,12 @@ static PyObject *SortedVector_last(SortedVector *self, PyObject *Py_UNUSED(ignor
 // Binary search for a value, returns index or -1 if not found
 static Py_ssize_t RBNode_index_of(RBNode *node, PyObject *sort_key, int reverse, Py_ssize_t offset) {
     if (!node) return -1;
-    
+
     int cmp = SortedVector_compare_keys(sort_key, node->sort_key, reverse);
     if (cmp == -2) return -2;  // Error
-    
+
     Py_ssize_t left_size = RBNode_size(node->left);
-    
+
     if (cmp < 0) {
         return RBNode_index_of(node->left, sort_key, reverse, offset);
     } else if (cmp > 0) {
@@ -8262,22 +8292,22 @@ static Py_ssize_t RBNode_index_of(RBNode *node, PyObject *sort_key, int reverse,
 static PyObject *SortedVector_index_of(SortedVector *self, PyObject *value) {
     PyObject *sort_key = SortedVector_get_sort_key(self, value);
     if (!sort_key) return NULL;
-    
+
     Py_ssize_t index = RBNode_index_of(self->root, sort_key, self->reverse, 0);
     Py_DECREF(sort_key);
-    
+
     if (index == -2) return NULL;  // Error occurred
-    
+
     return PyLong_FromSsize_t(index);
 }
 
 // contains: Check if element exists
 static int RBNode_contains(RBNode *node, PyObject *sort_key, PyObject *value, int reverse) {
     if (!node) return 0;
-    
+
     int cmp = SortedVector_compare_keys(sort_key, node->sort_key, reverse);
     if (cmp == -2) return -1;  // Error
-    
+
     if (cmp < 0) {
         return RBNode_contains(node->left, sort_key, value, reverse);
     } else if (cmp > 0) {
@@ -8287,7 +8317,7 @@ static int RBNode_contains(RBNode *node, PyObject *sort_key, PyObject *value, in
         int eq = PyObject_RichCompareBool(value, node->value, Py_EQ);
         if (eq < 0) return -1;
         if (eq) return 1;
-        
+
         // Check both subtrees for equal keys
         int left_result = RBNode_contains(node->left, sort_key, value, reverse);
         if (left_result != 0) return left_result;
@@ -8297,25 +8327,25 @@ static int RBNode_contains(RBNode *node, PyObject *sort_key, PyObject *value, in
 
 static int SortedVector_contains(SortedVector *self, PyObject *value) {
     if (self->cnt == 0) return 0;
-    
+
     PyObject *sort_key = SortedVector_get_sort_key(self, value);
     if (!sort_key) return -1;
-    
+
     int result = RBNode_contains(self->root, sort_key, value, self->reverse);
     Py_DECREF(sort_key);
-    
+
     return result;
 }
 
 // rank: Count of elements less than given value
 static Py_ssize_t RBNode_rank(RBNode *node, PyObject *sort_key, int reverse) {
     if (!node) return 0;
-    
+
     int cmp = SortedVector_compare_keys(sort_key, node->sort_key, reverse);
     if (cmp == -2) return -1;  // Error
-    
+
     Py_ssize_t left_size = RBNode_size(node->left);
-    
+
     if (cmp <= 0) {
         return RBNode_rank(node->left, sort_key, reverse);
     } else {
@@ -8328,10 +8358,10 @@ static Py_ssize_t RBNode_rank(RBNode *node, PyObject *sort_key, int reverse) {
 static PyObject *SortedVector_rank(SortedVector *self, PyObject *value) {
     PyObject *sort_key = SortedVector_get_sort_key(self, value);
     if (!sort_key) return NULL;
-    
+
     Py_ssize_t r = RBNode_rank(self->root, sort_key, self->reverse);
     Py_DECREF(sort_key);
-    
+
     if (r < 0) return NULL;
     return PyLong_FromSsize_t(r);
 }
@@ -8374,14 +8404,14 @@ static PyObject *SortedVectorIterator_next(SortedVectorIterator *self) {
     if (self->stack_size == 0) {
         return NULL;  // StopIteration
     }
-    
+
     RBNode *node = self->stack[--self->stack_size];
     PyObject *value = node->value;
     Py_INCREF(value);
-    
+
     // Push left spine of right subtree
     SortedVectorIterator_push_left(self, node->right);
-    
+
     Py_DECREF(node);
     return value;
 }
@@ -8399,7 +8429,7 @@ static PyTypeObject SortedVectorIteratorType = {
 static PyObject *SortedVector_iter(SortedVector *self) {
     SortedVectorIterator *iter = PyObject_New(SortedVectorIterator, &SortedVectorIteratorType);
     if (!iter) return NULL;
-    
+
     // Initial capacity based on expected tree depth
     iter->stack_capacity = 32;
     iter->stack = PyMem_Malloc(iter->stack_capacity * sizeof(RBNode *));
@@ -8408,9 +8438,9 @@ static PyObject *SortedVector_iter(SortedVector *self) {
         return PyErr_NoMemory();
     }
     iter->stack_size = 0;
-    
+
     SortedVectorIterator_push_left(iter, self->root);
-    
+
     return (PyObject *)iter;
 }
 
@@ -8420,16 +8450,16 @@ static PyObject *SortedVector_repr(SortedVector *self) {
     if (self->cnt == 0) {
         return PyUnicode_FromString("sorted_vec()");
     }
-    
+
     PyObject *items = PyList_New(0);
     if (!items) return NULL;
-    
+
     PyObject *iter = SortedVector_iter(self);
     if (!iter) {
         Py_DECREF(items);
         return NULL;
     }
-    
+
     PyObject *item;
     while ((item = SortedVectorIterator_next((SortedVectorIterator *)iter)) != NULL) {
         PyObject *repr = PyObject_Repr(item);
@@ -8448,18 +8478,18 @@ static PyObject *SortedVector_repr(SortedVector *self) {
         Py_DECREF(repr);
     }
     Py_DECREF(iter);
-    
+
     PyObject *sep = PyUnicode_FromString(", ");
     if (!sep) {
         Py_DECREF(items);
         return NULL;
     }
-    
+
     PyObject *joined = PyUnicode_Join(sep, items);
     Py_DECREF(sep);
     Py_DECREF(items);
     if (!joined) return NULL;
-    
+
     PyObject *result = PyUnicode_FromFormat("sorted_vec(%U)", joined);
     Py_DECREF(joined);
     return result;
@@ -8470,10 +8500,10 @@ static PyObject *SortedVector_repr(SortedVector *self) {
 static Py_hash_t SortedVector_hash(SortedVector *self) {
     Py_hash_t hash = 0x345678;
     Py_hash_t mult = 1000003;
-    
+
     PyObject *iter = SortedVector_iter(self);
     if (!iter) return -1;
-    
+
     PyObject *item;
     while ((item = SortedVectorIterator_next((SortedVectorIterator *)iter)) != NULL) {
         Py_hash_t item_hash = PyObject_Hash(item);
@@ -8486,7 +8516,7 @@ static Py_hash_t SortedVector_hash(SortedVector *self) {
         mult += 82520 + 2 * self->cnt;
     }
     Py_DECREF(iter);
-    
+
     hash += 97531;
     if (hash == -1) hash = -2;
     return hash;
@@ -8498,19 +8528,19 @@ static PyObject *SortedVector_richcompare(SortedVector *self, PyObject *other, i
     if (op != Py_EQ && op != Py_NE) {
         Py_RETURN_NOTIMPLEMENTED;
     }
-    
+
     if (!PyObject_TypeCheck(other, &SortedVectorType)) {
         if (op == Py_EQ) Py_RETURN_FALSE;
         Py_RETURN_TRUE;
     }
-    
+
     SortedVector *other_sv = (SortedVector *)other;
-    
+
     if (self->cnt != other_sv->cnt) {
         if (op == Py_EQ) Py_RETURN_FALSE;
         Py_RETURN_TRUE;
     }
-    
+
     // Compare elements in order
     PyObject *iter1 = SortedVector_iter(self);
     PyObject *iter2 = SortedVector_iter(other_sv);
@@ -8519,7 +8549,7 @@ static PyObject *SortedVector_richcompare(SortedVector *self, PyObject *other, i
         Py_XDECREF(iter2);
         return NULL;
     }
-    
+
     int equal = 1;
     PyObject *item1, *item2;
     while ((item1 = SortedVectorIterator_next((SortedVectorIterator *)iter1)) != NULL) {
@@ -8529,11 +8559,11 @@ static PyObject *SortedVector_richcompare(SortedVector *self, PyObject *other, i
             equal = 0;
             break;
         }
-        
+
         int cmp = PyObject_RichCompareBool(item1, item2, Py_EQ);
         Py_DECREF(item1);
         Py_DECREF(item2);
-        
+
         if (cmp < 0) {
             Py_DECREF(iter1);
             Py_DECREF(iter2);
@@ -8544,10 +8574,10 @@ static PyObject *SortedVector_richcompare(SortedVector *self, PyObject *other, i
             break;
         }
     }
-    
+
     Py_DECREF(iter1);
     Py_DECREF(iter2);
-    
+
     if (op == Py_EQ) {
         if (equal) Py_RETURN_TRUE;
         Py_RETURN_FALSE;
@@ -8563,7 +8593,7 @@ static PyObject *SortedVector_richcompare(SortedVector *self, PyObject *other, i
 static RBNode *RBNode_move_red_left(RBNode *h, PyObject *edit) {
     h = RBNode_flip_colors(h, edit);
     if (!h) return NULL;
-    
+
     if (h->right && RBNode_is_red(h->right->left)) {
         RBNode *new_right = RBNode_rotate_right(h->right, edit);
         if (!new_right) {
@@ -8572,7 +8602,7 @@ static RBNode *RBNode_move_red_left(RBNode *h, PyObject *edit) {
         }
         Py_XDECREF(h->right);
         h->right = new_right;
-        
+
         h = RBNode_rotate_left(h, edit);
         if (!h) return NULL;
         h = RBNode_flip_colors(h, edit);
@@ -8584,7 +8614,7 @@ static RBNode *RBNode_move_red_left(RBNode *h, PyObject *edit) {
 static RBNode *RBNode_move_red_right(RBNode *h, PyObject *edit) {
     h = RBNode_flip_colors(h, edit);
     if (!h) return NULL;
-    
+
     if (h->left && RBNode_is_red(h->left->left)) {
         h = RBNode_rotate_right(h, edit);
         if (!h) return NULL;
@@ -8603,18 +8633,18 @@ static RBNode *RBNode_delete_min(RBNode *h, PyObject *edit) {
     // First ensure we have an editable copy before any modifications
     RBNode *new_h = RBNode_ensure_editable(h, edit);
     if (!new_h) return NULL;
-    
+
     // Now check if this is the min node (no left child)
     if (!new_h->left) {
         Py_DECREF(new_h);
         return NULL;
     }
-    
+
     if (!RBNode_is_red(new_h->left) && !RBNode_is_red(new_h->left->left)) {
         new_h = RBNode_move_red_left(new_h, edit);
         if (!new_h) return NULL;
     }
-    
+
     RBNode *new_left = RBNode_delete_min(new_h->left, edit);
     if (new_h->left && !new_left && PyErr_Occurred()) {
         Py_DECREF(new_h);
@@ -8622,7 +8652,7 @@ static RBNode *RBNode_delete_min(RBNode *h, PyObject *edit) {
     }
     Py_XDECREF(new_h->left);
     new_h->left = new_left;
-    
+
     return RBNode_balance(new_h, edit);
 }
 
@@ -8632,13 +8662,13 @@ static RBNode *RBNode_delete(RBNode *h, PyObject *sort_key, PyObject *value, int
         *deleted = 0;
         return NULL;
     }
-    
+
     int cmp = SortedVector_compare_keys(sort_key, h->sort_key, reverse);
     if (cmp == -2) return NULL;  // Error
-    
+
     RBNode *new_h = RBNode_ensure_editable(h, edit);
     if (!new_h) return NULL;
-    
+
     if (cmp < 0) {
         if (new_h->left && !RBNode_is_red(new_h->left) && !RBNode_is_red(new_h->left->left)) {
             new_h = RBNode_move_red_left(new_h, edit);
@@ -8656,27 +8686,27 @@ static RBNode *RBNode_delete(RBNode *h, PyObject *sort_key, PyObject *value, int
             new_h = RBNode_rotate_right(new_h, edit);
             if (!new_h) return NULL;
         }
-        
+
         // Check if this is the node to delete
         int eq = PyObject_RichCompareBool(value, new_h->value, Py_EQ);
         if (eq < 0) {
             Py_DECREF(new_h);
             return NULL;
         }
-        
+
         int key_eq = (SortedVector_compare_keys(sort_key, new_h->sort_key, reverse) == 0);
-        
+
         if (key_eq && eq && !new_h->right) {
             *deleted = 1;
             Py_DECREF(new_h);
             return NULL;
         }
-        
+
         if (new_h->right && !RBNode_is_red(new_h->right) && !RBNode_is_red(new_h->right->left)) {
             new_h = RBNode_move_red_right(new_h, edit);
             if (!new_h) return NULL;
         }
-        
+
         // Re-check after rotation
         eq = PyObject_RichCompareBool(value, new_h->value, Py_EQ);
         if (eq < 0) {
@@ -8684,19 +8714,19 @@ static RBNode *RBNode_delete(RBNode *h, PyObject *sort_key, PyObject *value, int
             return NULL;
         }
         key_eq = (SortedVector_compare_keys(sort_key, new_h->sort_key, reverse) == 0);
-        
+
         if (key_eq && eq) {
             // Replace with successor
             RBNode *min_node = RBNode_min(new_h->right);
-            
+
             Py_DECREF(new_h->value);
             new_h->value = min_node->value;
             Py_INCREF(new_h->value);
-            
+
             Py_DECREF(new_h->sort_key);
             new_h->sort_key = min_node->sort_key;
             Py_INCREF(new_h->sort_key);
-            
+
             RBNode *new_right = RBNode_delete_min(new_h->right, edit);
             if (new_h->right && !new_right && PyErr_Occurred()) {
                 Py_DECREF(new_h);
@@ -8704,7 +8734,7 @@ static RBNode *RBNode_delete(RBNode *h, PyObject *sort_key, PyObject *value, int
             }
             Py_XDECREF(new_h->right);
             new_h->right = new_right;
-            
+
             *deleted = 1;
         } else {
             RBNode *new_right = RBNode_delete(new_h->right, sort_key, value, reverse, deleted, edit);
@@ -8716,7 +8746,7 @@ static RBNode *RBNode_delete(RBNode *h, PyObject *sort_key, PyObject *value, int
             new_h->right = new_right;
         }
     }
-    
+
     return RBNode_balance(new_h, edit);
 }
 
@@ -8725,39 +8755,39 @@ static PyObject *SortedVector_disj(SortedVector *self, PyObject *value) {
         Py_INCREF(self);
         return (PyObject *)self;
     }
-    
+
     PyObject *sort_key = SortedVector_get_sort_key(self, value);
     if (!sort_key) return NULL;
-    
+
     int deleted = 0;
     RBNode *new_root = RBNode_delete(self->root, sort_key, value, self->reverse, &deleted, NULL);
     Py_DECREF(sort_key);
-    
+
     if (self->root && !new_root && PyErr_Occurred()) return NULL;
-    
+
     if (!deleted) {
         Py_XDECREF(new_root);
         Py_INCREF(self);
         return (PyObject *)self;
     }
-    
+
     // Make root black
     if (new_root && new_root->color == RB_RED) {
         new_root->color = RB_BLACK;
     }
-    
+
     SortedVector *result = PyObject_New(SortedVector, &SortedVectorType);
     if (!result) {
         Py_XDECREF(new_root);
         return NULL;
     }
-    
+
     result->root = new_root;
     result->cnt = self->cnt - 1;
     result->key_fn = self->key_fn;
     Py_XINCREF(result->key_fn);
     result->reverse = self->reverse;
-    
+
     return (PyObject *)result;
 }
 
@@ -8768,27 +8798,27 @@ static int SortedVector_init(SortedVector *self, PyObject *args, PyObject *kwds)
     PyObject *iterable = NULL;
     PyObject *key_fn = Py_None;
     int reverse = 0;
-    
+
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O$Op", kwlist,
                                      &iterable, &key_fn, &reverse)) {
         return -1;
     }
-    
+
     self->root = NULL;
     self->cnt = 0;
     self->reverse = reverse;
-    
+
     if (key_fn != Py_None) {
         self->key_fn = key_fn;
         Py_INCREF(key_fn);
     } else {
         self->key_fn = NULL;
     }
-    
+
     if (iterable && iterable != Py_None) {
         PyObject *iter = PyObject_GetIter(iterable);
         if (!iter) return -1;
-        
+
         PyObject *item;
         while ((item = PyIter_Next(iter)) != NULL) {
             PyObject *new_sv = SortedVector_conj(self, item);
@@ -8797,7 +8827,7 @@ static int SortedVector_init(SortedVector *self, PyObject *args, PyObject *kwds)
                 Py_DECREF(iter);
                 return -1;
             }
-            
+
             // Move data from new_sv to self
             Py_XDECREF(self->root);
             self->root = ((SortedVector *)new_sv)->root;
@@ -8806,10 +8836,10 @@ static int SortedVector_init(SortedVector *self, PyObject *args, PyObject *kwds)
             Py_DECREF(new_sv);
         }
         Py_DECREF(iter);
-        
+
         if (PyErr_Occurred()) return -1;
     }
-    
+
     return 0;
 }
 
@@ -8842,20 +8872,20 @@ static void TransientSortedVector_ensure_editable(TransientSortedVector *self) {
 static PyObject *SortedVector_transient(SortedVector *self, PyObject *Py_UNUSED(ignored)) {
     TransientSortedVector *t = PyObject_New(TransientSortedVector, &TransientSortedVectorType);
     if (!t) return NULL;
-    
+
     t->id = PyObject_New(PyObject, &PyBaseObject_Type);
     if (!t->id) {
         Py_DECREF(t);
         return NULL;
     }
-    
+
     t->root = self->root;
     Py_XINCREF(t->root);
     t->cnt = self->cnt;
     t->key_fn = self->key_fn;
     Py_XINCREF(t->key_fn);
     t->reverse = self->reverse;
-    
+
     return (PyObject *)t;
 }
 
@@ -8871,24 +8901,24 @@ static PyObject *TransientSortedVector_get_sort_key(TransientSortedVector *self,
 static PyObject *TransientSortedVector_conj_mut(TransientSortedVector *self, PyObject *value) {
     TransientSortedVector_ensure_editable(self);
     if (PyErr_Occurred()) return NULL;
-    
+
     PyObject *sort_key = TransientSortedVector_get_sort_key(self, value);
     if (!sort_key) return NULL;
-    
+
     RBNode *new_root = RBNode_insert(self->root, value, sort_key, self->reverse, self->id);
     Py_DECREF(sort_key);
-    
+
     if (!new_root && PyErr_Occurred()) return NULL;
-    
+
     // Make root black
     if (new_root && new_root->color == RB_RED) {
         new_root->color = RB_BLACK;
     }
-    
+
     Py_XDECREF(self->root);
     self->root = new_root;
     self->cnt++;
-    
+
     Py_INCREF(self);
     return (PyObject *)self;
 }
@@ -8896,21 +8926,21 @@ static PyObject *TransientSortedVector_conj_mut(TransientSortedVector *self, PyO
 static PyObject *TransientSortedVector_disj_mut(TransientSortedVector *self, PyObject *value) {
     TransientSortedVector_ensure_editable(self);
     if (PyErr_Occurred()) return NULL;
-    
+
     if (self->cnt == 0) {
         Py_INCREF(self);
         return (PyObject *)self;
     }
-    
+
     PyObject *sort_key = TransientSortedVector_get_sort_key(self, value);
     if (!sort_key) return NULL;
-    
+
     int deleted = 0;
     RBNode *new_root = RBNode_delete(self->root, sort_key, value, self->reverse, &deleted, self->id);
     Py_DECREF(sort_key);
-    
+
     if (self->root && !new_root && PyErr_Occurred()) return NULL;
-    
+
     if (deleted) {
         if (new_root && new_root->color == RB_RED) {
             new_root->color = RB_BLACK;
@@ -8921,7 +8951,7 @@ static PyObject *TransientSortedVector_disj_mut(TransientSortedVector *self, PyO
     } else {
         Py_XDECREF(new_root);
     }
-    
+
     Py_INCREF(self);
     return (PyObject *)self;
 }
@@ -8929,20 +8959,20 @@ static PyObject *TransientSortedVector_disj_mut(TransientSortedVector *self, PyO
 static PyObject *TransientSortedVector_persistent(TransientSortedVector *self, PyObject *Py_UNUSED(ignored)) {
     TransientSortedVector_ensure_editable(self);
     if (PyErr_Occurred()) return NULL;
-    
+
     SortedVector *result = PyObject_New(SortedVector, &SortedVectorType);
     if (!result) return NULL;
-    
+
     result->root = self->root;
     Py_XINCREF(result->root);
     result->cnt = self->cnt;
     result->key_fn = self->key_fn;
     Py_XINCREF(result->key_fn);
     result->reverse = self->reverse;
-    
+
     // Invalidate transient
     Py_CLEAR(self->id);
-    
+
     return (PyObject *)result;
 }
 
@@ -8980,21 +9010,21 @@ static PyObject *SortedVector_reduce(SortedVector *self, PyObject *Py_UNUSED(ign
     if (contents == NULL) {
         return NULL;
     }
-    
+
     // Build args tuple: (contents_tuple,)
     PyObject *args = PyTuple_Pack(1, contents);
     Py_DECREF(contents);
     if (args == NULL) {
         return NULL;
     }
-    
+
     // Build kwargs dict with key and reverse
     PyObject *kwargs = PyDict_New();
     if (kwargs == NULL) {
         Py_DECREF(args);
         return NULL;
     }
-    
+
     // Add key function if present
     if (self->key_fn != NULL) {
         if (PyDict_SetItemString(kwargs, "key", self->key_fn) < 0) {
@@ -9003,7 +9033,7 @@ static PyObject *SortedVector_reduce(SortedVector *self, PyObject *Py_UNUSED(ign
             return NULL;
         }
     }
-    
+
     // Add reverse if True
     if (self->reverse) {
         if (PyDict_SetItemString(kwargs, "reverse", Py_True) < 0) {
@@ -9012,7 +9042,7 @@ static PyObject *SortedVector_reduce(SortedVector *self, PyObject *Py_UNUSED(ign
             return NULL;
         }
     }
-    
+
     // Get functools.partial to create a callable with kwargs
     PyObject *functools = PyImport_ImportModule("functools");
     if (functools == NULL) {
@@ -9020,7 +9050,7 @@ static PyObject *SortedVector_reduce(SortedVector *self, PyObject *Py_UNUSED(ign
         Py_DECREF(kwargs);
         return NULL;
     }
-    
+
     PyObject *partial = PyObject_GetAttrString(functools, "partial");
     Py_DECREF(functools);
     if (partial == NULL) {
@@ -9028,7 +9058,7 @@ static PyObject *SortedVector_reduce(SortedVector *self, PyObject *Py_UNUSED(ign
         Py_DECREF(kwargs);
         return NULL;
     }
-    
+
     // Create partial(SortedVector, **kwargs)
     PyObject *partial_args = PyTuple_Pack(1, (PyObject *)Py_TYPE(self));
     if (partial_args == NULL) {
@@ -9037,17 +9067,17 @@ static PyObject *SortedVector_reduce(SortedVector *self, PyObject *Py_UNUSED(ign
         Py_DECREF(kwargs);
         return NULL;
     }
-    
+
     PyObject *reconstructor = PyObject_Call(partial, partial_args, kwargs);
     Py_DECREF(partial);
     Py_DECREF(partial_args);
     Py_DECREF(kwargs);
-    
+
     if (reconstructor == NULL) {
         Py_DECREF(args);
         return NULL;
     }
-    
+
     // Return (partial(SortedVector, **kwargs), (contents_tuple,))
     PyObject *result = PyTuple_Pack(2, reconstructor, args);
     Py_DECREF(reconstructor);
@@ -9061,21 +9091,21 @@ static PyObject *SortedVector_getnewargs_ex(SortedVector *self, PyObject *Py_UNU
     if (contents == NULL) {
         return NULL;
     }
-    
+
     // Build args tuple: (contents_tuple,)
     PyObject *args = PyTuple_Pack(1, contents);
     Py_DECREF(contents);
     if (args == NULL) {
         return NULL;
     }
-    
+
     // Build kwargs dict with key and reverse
     PyObject *kwargs = PyDict_New();
     if (kwargs == NULL) {
         Py_DECREF(args);
         return NULL;
     }
-    
+
     // Add key function if present
     if (self->key_fn != NULL) {
         if (PyDict_SetItemString(kwargs, "key", self->key_fn) < 0) {
@@ -9084,7 +9114,7 @@ static PyObject *SortedVector_getnewargs_ex(SortedVector *self, PyObject *Py_UNU
             return NULL;
         }
     }
-    
+
     // Add reverse if True
     if (self->reverse) {
         if (PyDict_SetItemString(kwargs, "reverse", Py_True) < 0) {
@@ -9093,7 +9123,7 @@ static PyObject *SortedVector_getnewargs_ex(SortedVector *self, PyObject *Py_UNU
             return NULL;
         }
     }
-    
+
     // Return (args, kwargs) tuple
     PyObject *result = PyTuple_Pack(2, args, kwargs);
     Py_DECREF(args);
@@ -9417,28 +9447,28 @@ static PyObject *pds_sorted_vec(PyObject *self, PyObject *args, PyObject *kwargs
     PyObject *iterable = NULL;
     PyObject *key_fn = Py_None;
     int reverse = 0;
-    
+
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|O$Op", kwlist,
                                      &iterable, &key_fn, &reverse)) {
         return NULL;
     }
-    
+
     SortedVector *sv = (SortedVector *)SortedVector_new(&SortedVectorType, NULL, NULL);
     if (!sv) return NULL;
-    
+
     sv->reverse = reverse;
     if (key_fn != Py_None) {
         sv->key_fn = key_fn;
         Py_INCREF(key_fn);
     }
-    
+
     if (iterable && iterable != Py_None) {
         PyObject *iter = PyObject_GetIter(iterable);
         if (!iter) {
             Py_DECREF(sv);
             return NULL;
         }
-        
+
         PyObject *item;
         while ((item = PyIter_Next(iter)) != NULL) {
             PyObject *new_sv = SortedVector_conj(sv, item);
@@ -9452,13 +9482,13 @@ static PyObject *pds_sorted_vec(PyObject *self, PyObject *args, PyObject *kwargs
             sv = (SortedVector *)new_sv;
         }
         Py_DECREF(iter);
-        
+
         if (PyErr_Occurred()) {
             Py_DECREF(sv);
             return NULL;
         }
     }
-    
+
     return (PyObject *)sv;
 }
 
@@ -9473,237 +9503,296 @@ static PyMethodDef pds_methods[] = {
     {NULL, NULL, 0, NULL}
 };
 
-static struct PyModuleDef pdsmodule = {
-    PyModuleDef_HEAD_INIT,
-    "pds",
-    "Persistent Data Structures - C implementation",
-    -1,
-    pds_methods
+// =============================================================================
+// MODULE STATE MANAGEMENT (GC integration)
+// =============================================================================
+
+static int pds_traverse(PyObject *m, visitproc visit, void *arg) {
+    PdsState *st = pds_get_state(m);
+    if (st == NULL) return 0;
+
+    Py_VISIT(st->_MISSING);
+    Py_VISIT(st->EMPTY_VECTOR);
+    Py_VISIT(st->EMPTY_DOUBLE_VECTOR);
+    Py_VISIT(st->EMPTY_LONG_VECTOR);
+    Py_VISIT(st->EMPTY_MAP);
+    Py_VISIT(st->EMPTY_SET);
+    Py_VISIT(st->EMPTY_SORTED_VECTOR);
+    Py_VISIT(st->EMPTY_NODE);
+    Py_VISIT(st->EMPTY_DOUBLE_NODE);
+    Py_VISIT(st->EMPTY_LONG_NODE);
+    Py_VISIT(st->EMPTY_BIN);
+
+    return 0;
+}
+
+static int pds_clear(PyObject *m) {
+    PdsState *st = pds_get_state(m);
+    if (st == NULL) return 0;
+
+    Py_CLEAR(st->_MISSING);
+    Py_CLEAR(st->EMPTY_VECTOR);
+    Py_CLEAR(st->EMPTY_DOUBLE_VECTOR);
+    Py_CLEAR(st->EMPTY_LONG_VECTOR);
+    Py_CLEAR(st->EMPTY_MAP);
+    Py_CLEAR(st->EMPTY_SET);
+    Py_CLEAR(st->EMPTY_SORTED_VECTOR);
+    Py_CLEAR(st->EMPTY_NODE);
+    Py_CLEAR(st->EMPTY_DOUBLE_NODE);
+    Py_CLEAR(st->EMPTY_LONG_NODE);
+    Py_CLEAR(st->EMPTY_BIN);
+
+    return 0;
+}
+
+static void pds_free(void *m) {
+    // Call pds_clear to release Python objects before module is freed.
+    pds_clear((PyObject *)m);
+}
+
+static int pds_exec(PyObject *m);
+
+static PyModuleDef_Slot pds_slots[] = {
+    {Py_mod_exec, pds_exec},
+    {0, NULL}
 };
 
-PyMODINIT_FUNC PyInit_pds(void) {
+static struct PyModuleDef pdsmodule = {
+    PyModuleDef_HEAD_INIT,
+    .m_name = "pds",
+    .m_doc = "Persistent Data Structures - C implementation",
+    .m_size = sizeof(PdsState),
+    .m_methods = pds_methods,
+    .m_slots = pds_slots,
+    .m_traverse = pds_traverse,
+    .m_clear = pds_clear,
+    .m_free = pds_free,
+};
+
+static int pds_exec(PyObject *m) {
+    PdsState *st = pds_get_state(m);
+    if (st == NULL) {
+        return -1;
+    }
+
     // Initialize types
-    if (PyType_Ready(&ConsType) < 0) return NULL;
-    if (PyType_Ready(&ConsIteratorType) < 0) return NULL;
-    if (PyType_Ready(&VectorNodeType) < 0) return NULL;
-    if (PyType_Ready(&VectorType) < 0) return NULL;
-    if (PyType_Ready(&VectorIteratorType) < 0) return NULL;
-    if (PyType_Ready(&TransientVectorType) < 0) return NULL;
-    if (PyType_Ready(&TransientVectorIteratorType) < 0) return NULL;
+    if (PyType_Ready(&ConsType) < 0) return -1;
+    if (PyType_Ready(&ConsIteratorType) < 0) return -1;
+    if (PyType_Ready(&VectorNodeType) < 0) return -1;
+    if (PyType_Ready(&VectorType) < 0) return -1;
+    if (PyType_Ready(&VectorIteratorType) < 0) return -1;
+    if (PyType_Ready(&TransientVectorType) < 0) return -1;
+    if (PyType_Ready(&TransientVectorIteratorType) < 0) return -1;
 
     // Initialize SortedVector types
-    if (PyType_Ready(&RBNodeType) < 0) return NULL;
-    if (PyType_Ready(&SortedVectorType) < 0) return NULL;
-    if (PyType_Ready(&SortedVectorIteratorType) < 0) return NULL;
-    if (PyType_Ready(&TransientSortedVectorType) < 0) return NULL;
+    if (PyType_Ready(&RBNodeType) < 0) return -1;
+    if (PyType_Ready(&SortedVectorType) < 0) return -1;
+    if (PyType_Ready(&SortedVectorIteratorType) < 0) return -1;
+    if (PyType_Ready(&TransientSortedVectorType) < 0) return -1;
 
     // Initialize type-specialized vector types
-    if (PyType_Ready(&DoubleVectorNodeType) < 0) return NULL;
-    if (PyType_Ready(&DoubleVectorType) < 0) return NULL;
-    if (PyType_Ready(&DoubleVectorIteratorType) < 0) return NULL;
-    if (PyType_Ready(&TransientDoubleVectorType) < 0) return NULL;
-    if (PyType_Ready(&IntVectorNodeType) < 0) return NULL;
-    if (PyType_Ready(&IntVectorType) < 0) return NULL;
-    if (PyType_Ready(&IntVectorIteratorType) < 0) return NULL;
-    if (PyType_Ready(&TransientIntVectorType) < 0) return NULL;
+    if (PyType_Ready(&DoubleVectorNodeType) < 0) return -1;
+    if (PyType_Ready(&DoubleVectorType) < 0) return -1;
+    if (PyType_Ready(&DoubleVectorIteratorType) < 0) return -1;
+    if (PyType_Ready(&TransientDoubleVectorType) < 0) return -1;
+    if (PyType_Ready(&IntVectorNodeType) < 0) return -1;
+    if (PyType_Ready(&IntVectorType) < 0) return -1;
+    if (PyType_Ready(&IntVectorIteratorType) < 0) return -1;
+    if (PyType_Ready(&TransientIntVectorType) < 0) return -1;
 
-    if (PyType_Ready(&BitmapIndexedNodeType) < 0) return NULL;
-    if (PyType_Ready(&ArrayNodeType) < 0) return NULL;
-    if (PyType_Ready(&HashCollisionNodeType) < 0) return NULL;
-    if (PyType_Ready(&BitmapIndexedNodeIteratorType) < 0) return NULL;
-    if (PyType_Ready(&ArrayNodeIteratorType) < 0) return NULL;
-    if (PyType_Ready(&HashCollisionNodeIteratorType) < 0) return NULL;
-    if (PyType_Ready(&MapType) < 0) return NULL;
-    if (PyType_Ready(&TransientMapType) < 0) return NULL;
-    if (PyType_Ready(&SetType) < 0) return NULL;
-    if (PyType_Ready(&TransientSetType) < 0) return NULL;
-    if (PyType_Ready(&SetIteratorType) < 0) return NULL;
+    if (PyType_Ready(&BitmapIndexedNodeType) < 0) return -1;
+    if (PyType_Ready(&ArrayNodeType) < 0) return -1;
+    if (PyType_Ready(&HashCollisionNodeType) < 0) return -1;
+    if (PyType_Ready(&BitmapIndexedNodeIteratorType) < 0) return -1;
+    if (PyType_Ready(&ArrayNodeIteratorType) < 0) return -1;
+    if (PyType_Ready(&HashCollisionNodeIteratorType) < 0) return -1;
+    if (PyType_Ready(&MapType) < 0) return -1;
+    if (PyType_Ready(&TransientMapType) < 0) return -1;
+    if (PyType_Ready(&SetType) < 0) return -1;
+    if (PyType_Ready(&TransientSetType) < 0) return -1;
+    if (PyType_Ready(&SetIteratorType) < 0) return -1;
 
     // Create sentinel
-    _MISSING = PyObject_New(PyObject, &PyBaseObject_Type);
-    if (!_MISSING) return NULL;
+    st->_MISSING = PyObject_New(PyObject, &PyBaseObject_Type);
+    if (!st->_MISSING) return -1;
 
     // Create empty node
-    EMPTY_NODE = VectorNode_create(NULL);
-    if (!EMPTY_NODE) return NULL;
+    st->EMPTY_NODE = (PyObject *)VectorNode_create(NULL);
+    if (!st->EMPTY_NODE) return -1;
 
     // Create empty vector
-    EMPTY_VECTOR = Vector_create(0, BITS, EMPTY_NODE, NULL, NULL);
-    if (!EMPTY_VECTOR) return NULL;
+    st->EMPTY_VECTOR = (PyObject *)Vector_create(0, BITS, (VectorNode *)st->EMPTY_NODE, NULL, NULL);
+    if (!st->EMPTY_VECTOR) return -1;
 
     // Create empty double vector node and vector
-    EMPTY_DOUBLE_NODE = DoubleVectorNode_create(NULL);
-    if (!EMPTY_DOUBLE_NODE) return NULL;
+    st->EMPTY_DOUBLE_NODE = (PyObject *)DoubleVectorNode_create(NULL);
+    if (!st->EMPTY_DOUBLE_NODE) return -1;
 
-    EMPTY_DOUBLE_VECTOR = DoubleVector_create(0, BITS, EMPTY_DOUBLE_NODE, NULL, 0, NULL);
-    if (!EMPTY_DOUBLE_VECTOR) return NULL;
+    st->EMPTY_DOUBLE_VECTOR = (PyObject *)DoubleVector_create(0, BITS, (DoubleVectorNode *)st->EMPTY_DOUBLE_NODE, NULL, 0, NULL);
+    if (!st->EMPTY_DOUBLE_VECTOR) return -1;
 
     // Create empty long vector node and vector
-    EMPTY_LONG_NODE = IntVectorNode_create(NULL);
-    if (!EMPTY_LONG_NODE) return NULL;
+    st->EMPTY_LONG_NODE = (PyObject *)IntVectorNode_create(NULL);
+    if (!st->EMPTY_LONG_NODE) return -1;
 
-    EMPTY_LONG_VECTOR = IntVector_create(0, BITS, EMPTY_LONG_NODE, NULL, 0, NULL);
-    if (!EMPTY_LONG_VECTOR) return NULL;
+    st->EMPTY_LONG_VECTOR = (PyObject *)IntVector_create(0, BITS, (IntVectorNode *)st->EMPTY_LONG_NODE, NULL, 0, NULL);
+    if (!st->EMPTY_LONG_VECTOR) return -1;
 
     // Create empty bitmap indexed node
-    EMPTY_BIN = BitmapIndexedNode_create(0, NULL, NULL);
-    if (!EMPTY_BIN) return NULL;
+    st->EMPTY_BIN = (PyObject *)BitmapIndexedNode_create(0, NULL, NULL);
+    if (!st->EMPTY_BIN) return -1;
 
     // Create empty map
-    EMPTY_MAP = Map_create(0, NULL, NULL);
-    if (!EMPTY_MAP) return NULL;
+    st->EMPTY_MAP = (PyObject *)Map_create(0, NULL, NULL);
+    if (!st->EMPTY_MAP) return -1;
 
     // Create empty set
-    EMPTY_SET = Set_create(0, NULL, NULL);
-    if (!EMPTY_SET) return NULL;
+    st->EMPTY_SET = (PyObject *)Set_create(0, NULL, NULL);
+    if (!st->EMPTY_SET) return -1;
 
     // Create empty sorted vector
-    EMPTY_SORTED_VECTOR = PyObject_New(SortedVector, &SortedVectorType);
-    if (!EMPTY_SORTED_VECTOR) return NULL;
-    EMPTY_SORTED_VECTOR->root = NULL;
-    EMPTY_SORTED_VECTOR->cnt = 0;
-    EMPTY_SORTED_VECTOR->key_fn = NULL;
-    EMPTY_SORTED_VECTOR->reverse = 0;
+    st->EMPTY_SORTED_VECTOR = (PyObject *)PyObject_New(SortedVector, &SortedVectorType);
+    if (!st->EMPTY_SORTED_VECTOR) return -1;
+    {
+        SortedVector *sv = (SortedVector *)st->EMPTY_SORTED_VECTOR;
+        sv->root = NULL;
+        sv->cnt = 0;
+        sv->key_fn = NULL;
+        sv->reverse = 0;
+    }
 
-    PyObject *m = PyModule_Create(&pdsmodule);
-    if (m == NULL) return NULL;
+    // Update global aliases for backward compatibility with existing code
+    // TODO: Remove these in future versions to avoid global state now that we have module state
+    //       This requires updating all code that uses these globals to access via module state
+    _MISSING = st->_MISSING;
+    EMPTY_NODE = (VectorNode *)st->EMPTY_NODE;
+    EMPTY_VECTOR = (Vector *)st->EMPTY_VECTOR;
+    EMPTY_DOUBLE_NODE = (DoubleVectorNode *)st->EMPTY_DOUBLE_NODE;
+    EMPTY_DOUBLE_VECTOR = (DoubleVector *)st->EMPTY_DOUBLE_VECTOR;
+    EMPTY_LONG_NODE = (IntVectorNode *)st->EMPTY_LONG_NODE;
+    EMPTY_LONG_VECTOR = (IntVector *)st->EMPTY_LONG_VECTOR;
+    EMPTY_BIN = (BitmapIndexedNode *)st->EMPTY_BIN;
+    EMPTY_MAP = (Map *)st->EMPTY_MAP;
+    EMPTY_SET = (Set *)st->EMPTY_SET;
+    EMPTY_SORTED_VECTOR = (SortedVector *)st->EMPTY_SORTED_VECTOR;
 
     // Add types to module
     Py_INCREF(&ConsType);
     if (PyModule_AddObject(m, "Cons", (PyObject *)&ConsType) < 0) {
         Py_DECREF(&ConsType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&VectorType);
     if (PyModule_AddObject(m, "Vector", (PyObject *)&VectorType) < 0) {
         Py_DECREF(&VectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&TransientVectorType);
     if (PyModule_AddObject(m, "TransientVector", (PyObject *)&TransientVectorType) < 0) {
         Py_DECREF(&TransientVectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&MapType);
     if (PyModule_AddObject(m, "Map", (PyObject *)&MapType) < 0) {
         Py_DECREF(&MapType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&TransientMapType);
     if (PyModule_AddObject(m, "TransientMap", (PyObject *)&TransientMapType) < 0) {
         Py_DECREF(&TransientMapType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&SetType);
     if (PyModule_AddObject(m, "Set", (PyObject *)&SetType) < 0) {
         Py_DECREF(&SetType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&TransientSetType);
     if (PyModule_AddObject(m, "TransientSet", (PyObject *)&TransientSetType) < 0) {
         Py_DECREF(&TransientSetType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     // Add empty instances
-    Py_INCREF(EMPTY_VECTOR);
-    if (PyModule_AddObject(m, "EMPTY_VECTOR", (PyObject *)EMPTY_VECTOR) < 0) {
-        Py_DECREF(EMPTY_VECTOR);
-        Py_DECREF(m);
-        return NULL;
+    Py_INCREF(st->EMPTY_VECTOR);
+    if (PyModule_AddObject(m, "EMPTY_VECTOR", st->EMPTY_VECTOR) < 0) {
+        Py_DECREF(st->EMPTY_VECTOR);
+        return -1;
     }
 
-    Py_INCREF(EMPTY_MAP);
-    if (PyModule_AddObject(m, "EMPTY_MAP", (PyObject *)EMPTY_MAP) < 0) {
-        Py_DECREF(EMPTY_MAP);
-        Py_DECREF(m);
-        return NULL;
+    Py_INCREF(st->EMPTY_MAP);
+    if (PyModule_AddObject(m, "EMPTY_MAP", st->EMPTY_MAP) < 0) {
+        Py_DECREF(st->EMPTY_MAP);
+        return -1;
     }
 
-    Py_INCREF(EMPTY_SET);
-    if (PyModule_AddObject(m, "EMPTY_SET", (PyObject *)EMPTY_SET) < 0) {
-        Py_DECREF(EMPTY_SET);
-        Py_DECREF(m);
-        return NULL;
+    Py_INCREF(st->EMPTY_SET);
+    if (PyModule_AddObject(m, "EMPTY_SET", st->EMPTY_SET) < 0) {
+        Py_DECREF(st->EMPTY_SET);
+        return -1;
     }
 
     // Add SortedVector types
     Py_INCREF(&SortedVectorType);
     if (PyModule_AddObject(m, "SortedVector", (PyObject *)&SortedVectorType) < 0) {
         Py_DECREF(&SortedVectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&TransientSortedVectorType);
     if (PyModule_AddObject(m, "TransientSortedVector", (PyObject *)&TransientSortedVectorType) < 0) {
         Py_DECREF(&TransientSortedVectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
-    Py_INCREF(EMPTY_SORTED_VECTOR);
-    if (PyModule_AddObject(m, "EMPTY_SORTED_VECTOR", (PyObject *)EMPTY_SORTED_VECTOR) < 0) {
-        Py_DECREF(EMPTY_SORTED_VECTOR);
-        Py_DECREF(m);
-        return NULL;
+    Py_INCREF(st->EMPTY_SORTED_VECTOR);
+    if (PyModule_AddObject(m, "EMPTY_SORTED_VECTOR", st->EMPTY_SORTED_VECTOR) < 0) {
+        Py_DECREF(st->EMPTY_SORTED_VECTOR);
+        return -1;
     }
 
     // Add type-specialized vector types
     Py_INCREF(&DoubleVectorType);
     if (PyModule_AddObject(m, "DoubleVector", (PyObject *)&DoubleVectorType) < 0) {
         Py_DECREF(&DoubleVectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&IntVectorType);
     if (PyModule_AddObject(m, "IntVector", (PyObject *)&IntVectorType) < 0) {
         Py_DECREF(&IntVectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&TransientDoubleVectorType);
     if (PyModule_AddObject(m, "TransientDoubleVector", (PyObject *)&TransientDoubleVectorType) < 0) {
         Py_DECREF(&TransientDoubleVectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     Py_INCREF(&TransientIntVectorType);
     if (PyModule_AddObject(m, "TransientIntVector", (PyObject *)&TransientIntVectorType) < 0) {
         Py_DECREF(&TransientIntVectorType);
-        Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
     // Add empty specialized vector instances
-    Py_INCREF(EMPTY_DOUBLE_VECTOR);
-    if (PyModule_AddObject(m, "EMPTY_DOUBLE_VECTOR", (PyObject *)EMPTY_DOUBLE_VECTOR) < 0) {
-        Py_DECREF(EMPTY_DOUBLE_VECTOR);
-        Py_DECREF(m);
-        return NULL;
+    Py_INCREF(st->EMPTY_DOUBLE_VECTOR);
+    if (PyModule_AddObject(m, "EMPTY_DOUBLE_VECTOR", st->EMPTY_DOUBLE_VECTOR) < 0) {
+        Py_DECREF(st->EMPTY_DOUBLE_VECTOR);
+        return -1;
     }
 
-    Py_INCREF(EMPTY_LONG_VECTOR);
-    if (PyModule_AddObject(m, "EMPTY_LONG_VECTOR", (PyObject *)EMPTY_LONG_VECTOR) < 0) {
-        Py_DECREF(EMPTY_LONG_VECTOR);
-        Py_DECREF(m);
-        return NULL;
+    Py_INCREF(st->EMPTY_LONG_VECTOR);
+    if (PyModule_AddObject(m, "EMPTY_LONG_VECTOR", st->EMPTY_LONG_VECTOR) < 0) {
+        Py_DECREF(st->EMPTY_LONG_VECTOR);
+        return -1;
     }
 
     // Register types with collections.abc ABCs
@@ -9783,5 +9872,10 @@ PyMODINIT_FUNC PyInit_pds(void) {
     // Clear any import errors - ABC registration is optional
     PyErr_Clear();
 
-    return m;
+    return 0;
+}
+
+PyMODINIT_FUNC PyInit_pds(void)
+{
+    return PyModuleDef_Init(&pdsmodule);
 }

@@ -31,6 +31,12 @@ class VectorFuzzer(Fuzzer):
         self.reference = []
         self.old_versions.clear()
 
+    def release_all(self):
+        """Release all references to allow GC."""
+        self.vector = EMPTY_VECTOR
+        self.reference = []
+        self.old_versions.clear()
+
     def get_stats(self) -> dict[str, Any]:
         """Return additional stats to display."""
         return {"Max vector size": self.max_size}

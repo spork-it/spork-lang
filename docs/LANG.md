@@ -996,9 +996,9 @@ Transients provide **mutable** versions of persistent collections for efficient 
 
 ; SortedVector operations
 (def tsv (transient (sorted_vec [1 3 5])))
-(.conj_mut tsv 2)    ; Add element (maintains sort order)
-(.conj_mut tsv 4)    ; => now contains 1, 2, 3, 4, 5
-(.disj_mut tsv 3)    ; Remove element
+(conj! tsv 2)    ; Add element (maintains sort order)
+(conj! tsv 4)    ; => now contains 1, 2, 3, 4, 5
+(conj! tsv 3)    ; Remove element
 ```
 
 ### Converting Back to Persistent
@@ -1024,6 +1024,8 @@ The recommended way to work with transients is the `with-mutable` macro, which h
   (.append v 5))
 ; => [1 2 3 4 5]
 ```
+
+> Note: Inside `with-mutable`, vectors/maps/sets behave like mutable collections and expose a Python-like API for better compatibility with outside code. 
 
 ### Python Protocol Support
 

@@ -5,13 +5,13 @@
 
 Spork is a Lisp that runs on Python. It gives you the expressive power of macros, immutable data structures, and a modern REPL driven development experience.
 
-Spork compiles directly to Python AST and executes on CPython, giving you seamless interoperability with existing Python libraries and tools. No wrappers (unless you want a lispy one) or FFI layers are needed, just continue using your favorite Python libraries.
+Spork compiles to Python AST and can be imported directly via a standard import hook. This gives you seamless interoperability with existing Python libraries and tools. No wrappers (unless you want a lispy one) or FFI layers are needed, just continue using your favorite Python libraries.
 
 Spork adds features that Python natively lacks, such as:
 
-*  **Persistent Data Structures** implemented in native C for performance
+*  **Persistent Data Structures** that are immutable by default with [near-free snapshot](#performance) copies thanks to structural sharing
+*  **Predictable data flow** with no hidden mutation or shared state surprises
 *  **Expression oriented syntax** that reduces boilerplate and enables powerful macros
-*  **Predictable data flow** with immutability and structural sharing by default
 
 
 ## **Alpha Warning**
@@ -79,9 +79,9 @@ Continue to the [Using Spork in an existing Python project](#using-spork-in-an-e
 
 If you wish to contribute to Spork or modify the compiler:
 
-You'll first need to clone the repository and setup the virtual environment.
+You'll first need to clone the repository and set up the virtual environment.
 
-```bash title="Setup Spork Development Environment"
+```bash title="Set up Spork Development Environment"
 $ git clone https://github.com/spork-it/spork-lang.git
 
 $ cd spork-lang
@@ -276,7 +276,7 @@ As a Lisp, Spork allows you to extend the compiler via macros.
 ;; Fetch the star count for a given GitHub repo full name
 (defn ^int fetch-stars [^str full-name]
   (let [resp (requests.get (+ "https://api.github.com/repos/" full-name))]
-  title="examples/async.spork"   (match resp.status_code
+    (match resp.status_code
       200 (get (resp.json) "stargazers_count")
       404 0                                     ; missing repo → 0 stars
       _   (throw (RuntimeError "GitHub API error")))))
@@ -480,7 +480,7 @@ Spork is not just a syntax skin; it is a runtime system optimized for the Python
 
 *   **Native Persistence:** Spork's data structures are not wrappers. They are custom C extensions.
     *   **Vectors:** 32-way Bit-Partitioned Tries (similar to Clojure/Rust im-rs).
-    *   **SortedVector:** Persistant Red Black Tree built for sorted collections.
+    *   **SortedVector:** Persistent Red Black Tree built for sorted collections.
     *   **Maps & Sets:** Hash Array Mapped Tries (HAMT).
 *   **Transient Internals:** The runtime utilizes mutable "Transients" internally to construct immutable results. This ensures that Spork remains performant at the boundary between mutation and persistence, giving you safety without the typical "copy-everything" penalty.
 *   **Source Mapping:** We track every AST node back to its origin. When an error happens, Spork points to *your* code, not the generated Python.
@@ -491,7 +491,7 @@ Spork prioritizes safety over raw mutation speed.
 
 *  **Reads:** Comparable to native Python collections 
 *  **Updates:** Slower than raw mutation, but significantly faster than defensive copying.
-*  **Snapshots:** Orders of magnitude faster. Because of structural sharing, "copyping" a Spork Vector is effectively free.
+*  **Snapshots:** Orders of magnitude faster. Because of structural sharing, "copying" a Spork Vector is effectively free.
 
 Comparison of Spork Persistent Vector vs Native Python List for common operations:
 
@@ -501,7 +501,7 @@ Comparison of Spork Persistent Vector vs Native Python List for common operation
 | **Write** (Append) | ~5.8 ms | ~8.2 ms | ~1.4x Slower |
 | **Copy & Update** | 143.13 µs | **1.44 µs** | **~100x Faster** |
 
-> Note: Spork includes specialized `IntVector` and `DoubleVector` types. These support the Buffer Protocol but need further testing and benchmarking to verify zero-copy interop performance (promissing early results).
+> Note: Spork includes specialized `IntVector` and `DoubleVector` types. These support the Buffer Protocol but need further testing and benchmarking to verify zero-copy interop performance (promising early results).
 
 ## Roots
 
@@ -554,26 +554,26 @@ These modes are evolving quickly and will improve over time. Contributions are w
 
 *  **Language:**
     -  Additional persistent data structures (deque anyone?)
-    -  Error reporting improvments in codegen and macro expansion
+    -  Error reporting improvements in codegen and macro expansion
     -  Expand the Spork standard library with more utilities and data structures
     -  Testing needs a major overhaul (right now it's asserts in spork files)
 *  **Tooling:**
     -  Expand `spork` CLI with testing, linting, and formatting commands
     -  Improve build process and packaging options
-    -  Setup integrations with the Python packaging ecosystem and static analysis tools
+    -  Set up integrations with the Python packaging ecosystem and static analysis tools
     -  REPL/nREPL improvements (multi-line editing, auto completion, history search)
 *  **Editor Support:**
     -  Complete and polish Emacs and Neovim modes
     -  Add VSCode support via LSP and textmate grammar extension
     -  Tree Sitter grammar for advanced syntax features
-*  **Presense:**
+*  **Presence:**
     -  Tutorials and guides
     -  Example projects and libraries
-    -  Website with documenation and resources
+    -  Website with documentation and resources
     
 ## Documentation
 
-Checkout the [docs](docs) folder for more detailed documentation on language features, the standard library, and benchmarks of the persistent data structures.
+Check out the [docs](docs) folder for more detailed documentation on language features, the standard library, and benchmarks of the persistent data structures.
 
 
 ## License

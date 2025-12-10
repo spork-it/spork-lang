@@ -233,7 +233,13 @@ def tokenize(src: str) -> list[Token]:
                 tokens.append(Token("*{", tok_line, tok_col))
                 i += 2
                 continue
-            # Otherwise fall through to symbol parsing
+            # Check for standalone * (keyword-only marker in defn, or kwargs separator in calls)
+            # Standalone means followed by whitespace, delimiter, or EOF
+            if i + 1 >= n or src[i + 1] in WHITESPACE or src[i + 1] in delimiters:
+                tokens.append(Token("*", tok_line, tok_col))
+                i += 1
+                continue
+            # Otherwise fall through to symbol parsing (e.g., *args in Python interop)
         if c in delimiters:
             tokens.append(Token(c, tok_line, tok_col))
             i += 1
@@ -445,17 +451,31 @@ class Reader:
             return SetLiteral(items, tok_line, tok_col, end_line, end_col)
         if tok_value == "*{":
             items, end_tok = self.read_list_with_end("}", tok_line, tok_col)
-            if len(items) % 2 != 0:
-                raise SyntaxError(
-                    f"Kwargs literal must have even number of forms at line {tok_line}"
-                )
-            pairs = []
-            for j in range(0, len(items), 2):
-                k = items[j]
-                v = items[j + 1]
-                pairs.append((k, v))
             end_line = end_tok.line if end_tok else tok_line
             end_col = end_tok.col + 1 if end_tok else tok_col + 2
+            # Parse mixed content: *{variable :key val :key2 val2 other_var}
+            # - Symbols (non-keyword) are splat variables: (None, symbol)
+            # - Keywords start key-value pairs: (keyword, value)
+            pairs = []
+            i = 0
+            while i < len(items):
+                item = items[i]
+                if isinstance(item, Keyword):
+                    # Keyword starts a key-value pair
+                    if i + 1 >= len(items):
+                        raise SyntaxError(
+                            f"Keyword {item.name} must be followed by a value at line {tok_line}"
+                        )
+                    pairs.append((item, items[i + 1]))
+                    i += 2
+                elif isinstance(item, Symbol):
+                    # Symbol is a splat variable: *{opts} -> **opts
+                    pairs.append((None, item))
+                    i += 1
+                else:
+                    raise SyntaxError(
+                        f"Kwargs literal expects keywords or symbols, got {type(item).__name__} at line {tok_line}"
+                    )
             return KwargsLiteral(pairs, tok_line, tok_col, end_line, end_col)
         if isinstance(tok_value, tuple) and tok_value[0] == "STRING":
             # Strings don't carry location info as they're Python primitives

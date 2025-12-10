@@ -1,5 +1,5 @@
-; Test keyword-only arguments with # syntax
-; Tests the (defn name [positional # keyword-only] ...) pattern
+; Test keyword-only arguments with * syntax
+; Tests the (defn name [positional * keyword-only] ...) pattern
 ; Uses explicit *{:key value} syntax for passing keyword arguments
 
 (print "=== Testing Keyword-Only Arguments ===\n")
@@ -10,7 +10,7 @@
 
 (print "--- 1. Basic keyword-only arguments ---")
 
-(defn create-user [name # age email]
+(defn create-user [name * age email]
   {:name name :age age :email email})
 
 (def user1 (create-user "Alice" *{:age 30 :email "alice@example.com"}))
@@ -26,7 +26,7 @@
 
 (print "--- 2. Keyword-only with defaults ---")
 
-(defn config [host # (port 8080) (debug false)]
+(defn config [host * (port 8080) (debug false)]
   {:host host :port port :debug debug})
 
 (def cfg1 (config "localhost"))
@@ -53,7 +53,7 @@
 
 (print "--- 3. Multiple positional and keyword-only ---")
 
-(defn make-request [method url # (headers {}) (body nil) (timeout 30)]
+(defn make-request [method url * (headers {}) (body nil) (timeout 30)]
   {:method method
    :url url
    :headers headers
@@ -80,7 +80,7 @@
 
 (print "--- 4. Positional + varargs + keyword-only ---")
 
-(defn log-message [level & messages # (timestamp true) (prefix "")]
+(defn log-message [level & messages * (timestamp true) (prefix "")]
   (let [msg-str (.join "" messages)]
     {:level level
      :message (+ prefix msg-str)
@@ -110,10 +110,9 @@
 (def flex1 (flexible-func "value" *{:a 1 :b 2 :c 3}))
 (print "flex1:" flex1)
 (assert (= (get flex1 :required) "value"))
-; Note: Python **kwargs collects keyword args as a dict with string keys
-(assert (= (get (get flex1 :opts) "a") 1))
-(assert (= (get (get flex1 :opts) "b") 2))
-(assert (= (get (get flex1 :opts) "c") 3))
+(assert (= (get (get flex1 :opts) :a) 1))
+(assert (= (get (get flex1 :opts) :b) 2))
+(assert (= (get (get flex1 :opts) :c) 3))
 (print "✓ ** kwargs collection works\n")
 
 ; ============================================================================
@@ -122,7 +121,7 @@
 
 (print "--- 6. Keyword-only in anonymous functions ---")
 
-(def make-point (fn [# x y (z 0)]
+(def make-point (fn [* x y (z 0)]
                   [x y z]))
 
 (def p1 (make-point *{:x 10 :y 20}))
@@ -142,7 +141,7 @@
 
 (print "--- 7. Error on missing required keyword arg ---")
 
-(defn strict-func [# required-kw]
+(defn strict-func [* required-kw]
   required-kw)
 
 (try
@@ -153,6 +152,47 @@
     (print "✓ Correctly raised TypeError for missing required kwarg")))
 
 (print "")
+
+; ============================================================================
+; 8. * separator syntax for inline kwargs at call sites
+; ============================================================================
+
+(print "--- 8. New * separator syntax ---")
+
+(defn greet [name * (greeting "Hello") (punctuation "!")]
+  (+ greeting " " name punctuation))
+
+; Using * separator instead of *{...}
+(def g1 (greet "Alice" * :greeting "Hi" :punctuation "?"))
+(print "g1:" g1)
+(assert (= g1 "Hi Alice?"))
+
+; Mix of * separator and *{...}
+(def defaults {:punctuation "..."})
+(def g2 (greet "Bob" * :greeting "Hey" *{defaults}))
+(print "g2:" g2)
+(assert (= g2 "Hey Bob..."))
+
+(print "✓ * separator syntax works\n")
+
+; ============================================================================
+; 9. *{variable} splatting
+; ============================================================================
+
+(print "--- 9. *{variable} splatting ---")
+
+(def opts {:greeting "Howdy" :punctuation "!!"})
+(def g3 (greet "Charlie" *{opts}))
+(print "g3:" g3)
+(assert (= g3 "Howdy Charlie!!"))
+
+; Mixed inline and splat in same *{...}
+(def partial-opts {:punctuation "~"})
+(def g4 (greet "Dave" *{:greeting "Yo" partial-opts}))
+(print "g4:" g4)
+(assert (= g4 "Yo Dave~"))
+
+(print "✓ *{variable} splatting works\n")
 
 ; ============================================================================
 ; Summary
@@ -166,3 +206,5 @@
 (print "✓ ** kwargs collection")
 (print "✓ Keyword-only in anonymous functions")
 (print "✓ Error handling for missing required kwargs")
+(print "✓ New * separator syntax")
+(print "✓ *{variable} splatting")

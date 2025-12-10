@@ -189,6 +189,68 @@ def spork_setattr(obj, attr, value):
     return value
 
 
+def spork_kwargs_map(d):
+    """
+    Convert a Python kwargs dict to a Spork Map with Keyword keys.
+
+    When defining a function with ** kwargs, Python passes a dict with string keys.
+    This function converts it to a Spork Map with Keyword keys for consistency
+    with Spork's idioms.
+
+    Args:
+        d: A Python dict (from **kwargs)
+
+    Returns:
+        A Spork Map with Keyword keys
+    """
+
+    # TODO: Add support in pds.c hash_map() for this operation
+    items = []
+    for k, v in d.items():
+        key_name = k.replace("_", "-")
+        items.append(Keyword(key_name))
+        items.append(v)
+    return hash_map(*items)
+
+
+def spork_kwargs_dict(m):
+    """
+    Convert a Spork Map to a Python dict with string keys for kwargs splatting.
+
+    When using *{variable} to splat a map as keyword arguments, the map's keys
+    (which may be Keywords) need to be converted to strings for Python's ** operator.
+
+    Args:
+        m: A Spork Map, Python dict, or any mapping-like object
+
+    Returns:
+        A Python dict with string keys suitable for ** splatting
+    """
+    result = {}
+
+    def get_key_str(k):
+        if isinstance(k, Keyword):
+            return normalize_name(k.name)
+        elif isinstance(k, str):
+            return normalize_name(k)
+        else:
+            return normalize_name(str(k))
+
+    if isinstance(m, Map):
+        for k, v in m.items():
+            result[get_key_str(k)] = v
+    elif isinstance(m, dict):
+        for k, v in m.items():
+            result[get_key_str(k)] = v
+    else:
+        try:
+            for k, v in m.items():
+                result[get_key_str(k)] = v
+        except (AttributeError, TypeError):
+            raise TypeError(f"Cannot splat {type(m).__name__} as keyword arguments")
+    return result
+
+
 # =============================================================================
 # Namespace System Runtime Helpers
 # =============================================================================
@@ -534,6 +596,8 @@ def setup_runtime_env(env: dict[str, Any]) -> None:
     env.setdefault("spork_try", spork_try)
     env.setdefault("spork_raise", spork_raise)
     env.setdefault("spork_setattr", spork_setattr)
+    env.setdefault("spork_kwargs_dict", spork_kwargs_dict)
+    env.setdefault("spork_kwargs_map", spork_kwargs_map)
 
     # Pattern matching
     env.setdefault("MatchError", MatchError)

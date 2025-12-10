@@ -1651,12 +1651,12 @@ def parse_arity(arity_form):
         elif is_symbol(item, "**"):
             has_kwargs = True
             i += 2  # Skip ** and kwargs name
-        elif is_symbol(item, "#"):
+        elif is_symbol(item, "*"):
             # Keyword-only marker - everything after is keyword-only
             i += 1
         else:
             # Regular positional arg (could have default)
-            if not has_vararg and not is_symbol(item, "#"):
+            if not has_vararg and not is_symbol(item, "*"):
                 min_args += 1
             i += 1
 
@@ -1734,8 +1734,8 @@ def parse_arity_with_patterns(arity_form):
             i += 2
             continue
 
-        # Check for # keyword-only marker
-        if is_symbol(item, "#"):
+        # Check for * keyword-only marker
+        if is_symbol(item, "*"):
             i += 1
             continue
 
@@ -2658,12 +2658,20 @@ def compile_arity_dispatch_body(params, body_forms, has_kwargs, is_generator=Fal
             i += 2
 
         elif is_symbol(item, "**"):
-            # Kwargs: kwargs = __kwargs__
+            # Kwargs: kwargs = spork_kwargs_map(__kwargs__)
+            # Convert Python dict to Spork Map with Keyword keys
             kwargs_item = items[i + 1]
 
             # Use pending type annotation if available
             kwargs_annotation = pending_type_annotation
             pending_type_annotation = None
+
+            # Wrap __kwargs__ with spork_kwargs_map to convert to Spork Map
+            converted_kwargs = ast.Call(
+                func=ast.Name(id="spork_kwargs_map", ctx=ast.Load()),
+                args=[ast.Name(id="__kwargs__", ctx=ast.Load())],
+                keywords=[],
+            )
 
             if isinstance(kwargs_item, Symbol):
                 kwargs_name = normalize_name(kwargs_item.name)
@@ -2672,7 +2680,7 @@ def compile_arity_dispatch_body(params, body_forms, has_kwargs, is_generator=Fal
                         ast.AnnAssign(
                             target=ast.Name(id=kwargs_name, ctx=ast.Store()),
                             annotation=kwargs_annotation,
-                            value=ast.Name(id="__kwargs__", ctx=ast.Load()),
+                            value=converted_kwargs,
                             simple=1,
                         )
                     )
@@ -2680,7 +2688,7 @@ def compile_arity_dispatch_body(params, body_forms, has_kwargs, is_generator=Fal
                     body_nodes.append(
                         ast.Assign(
                             targets=[ast.Name(id=kwargs_name, ctx=ast.Store())],
-                            value=ast.Name(id="__kwargs__", ctx=ast.Load()),
+                            value=converted_kwargs,
                         )
                     )
             else:
@@ -2689,7 +2697,7 @@ def compile_arity_dispatch_body(params, body_forms, has_kwargs, is_generator=Fal
                 body_nodes.append(
                     ast.Assign(
                         targets=[ast.Name(id=temp, ctx=ast.Store())],
-                        value=ast.Name(id="__kwargs__", ctx=ast.Load()),
+                        value=converted_kwargs,
                     )
                 )
                 body_nodes.extend(
@@ -2697,7 +2705,7 @@ def compile_arity_dispatch_body(params, body_forms, has_kwargs, is_generator=Fal
                 )
             i += 2
 
-        elif is_symbol(item, "#"):
+        elif is_symbol(item, "*"):
             # Keyword-only marker - skip (handled by kwargs in multi-arity)
             i += 1
 
@@ -3077,13 +3085,35 @@ def compile_params(items):
             pending_type_annotation = None
 
             if isinstance(kwarg_item, Symbol):
-                kwarg = ast.arg(
-                    arg=normalize_name(kwarg_item.name), annotation=kwarg_annotation
+                kwarg_name = normalize_name(kwarg_item.name)
+                kwarg = ast.arg(arg=kwarg_name, annotation=kwarg_annotation)
+                # Convert Python kwargs dict to Spork Map with Keyword keys
+                # kwarg_name = spork_kwargs_map(kwarg_name)
+                destructure_stmts.insert(
+                    0,
+                    ast.Assign(
+                        targets=[ast.Name(id=kwarg_name, ctx=ast.Store())],
+                        value=ast.Call(
+                            func=ast.Name(id="spork_kwargs_map", ctx=ast.Load()),
+                            args=[ast.Name(id=kwarg_name, ctx=ast.Load())],
+                            keywords=[],
+                        ),
+                    ),
                 )
             else:
                 # Destructuring pattern for kwargs
                 temp = gensym("__kwarg_")
                 kwarg = ast.arg(arg=temp, annotation=None)
+                # Convert before destructuring
+                convert_stmt = ast.Assign(
+                    targets=[ast.Name(id=temp, ctx=ast.Store())],
+                    value=ast.Call(
+                        func=ast.Name(id="spork_kwargs_map", ctx=ast.Load()),
+                        args=[ast.Name(id=temp, ctx=ast.Load())],
+                        keywords=[],
+                    ),
+                )
+                destructure_stmts.insert(0, convert_stmt)
                 temp_load = ast.Name(id=temp, ctx=ast.Load())
                 destructure_stmts.extend(compile_destructure(kwarg_item, temp_load))
             continue
@@ -3092,7 +3122,7 @@ def compile_params(items):
         if is_symbol(item, "&"):
             if state not in ("pos",):
                 raise SyntaxError(
-                    "& (rest) must come before # (keyword args) and ** (kwargs)"
+                    "& (rest) must come before * (keyword args) and ** (kwargs)"
                 )
             state = "rest"
 
@@ -3120,10 +3150,10 @@ def compile_params(items):
                 destructure_stmts.extend(compile_destructure(vararg_item, temp_load))
             continue
 
-        # Check for Keyword Marker (#)
-        if is_symbol(item, "#"):
+        # Check for Keyword Marker (*)
+        if is_symbol(item, "*"):
             if state == "kwargs":
-                raise SyntaxError("# (keyword args) must come before ** (kwargs)")
+                raise SyntaxError("* (keyword args) must come before ** (kwargs)")
             state = "kw"
             i += 1
             continue
@@ -7980,6 +8010,8 @@ def compile_apply(args):
         (apply f xs)                  -> f(*xs)
         (apply f a b xs)              -> f(a, b, *xs)
         (apply f a *{:key v} xs)      -> f(a, *xs, key=v)
+        (apply f a *{opts} xs)        -> f(a, *xs, **opts)
+        (apply f a * :key v xs)       -> f(a, *xs, key=v)
     """
     if len(args) < 2:
         raise SyntaxError("apply requires at least function and args sequence")
@@ -7996,25 +8028,71 @@ def compile_apply(args):
     # Compile regular arguments (may include keyword args with *{:key value} syntax)
     compiled_args = []
     compiled_keywords = []
-    for f in regular_args:
-        # Check for *{:key value} kwargs literal syntax
+    i = 0
+    in_kwargs_mode = False
+
+    while i < len(regular_args):
+        f = regular_args[i]
+
+        # Check for * separator
+        if is_symbol(f, "*"):
+            in_kwargs_mode = True
+            i += 1
+            continue
+
+        # Check for *{...} kwargs literal syntax
         if isinstance(f, KwargsLiteral):
             for key, val in f.pairs:
-                if isinstance(key, Keyword):
+                if key is None:
+                    # Splat variable: *{opts} -> **spork_kwargs_dict(opts)
+                    # Wrap in spork_kwargs_dict to convert Keyword keys to strings
+                    wrapped = ast.Call(
+                        func=ast.Name(id="spork_kwargs_dict", ctx=ast.Load()),
+                        args=[compile_expr(val)],
+                        keywords=[],
+                    )
+                    compiled_keywords.append(ast.keyword(arg=None, value=wrapped))
+                elif isinstance(key, Keyword):
                     key_name = normalize_name(key.name)
+                    compiled_keywords.append(
+                        ast.keyword(arg=key_name, value=compile_expr(val))
+                    )
                 elif isinstance(key, Symbol):
                     key_name = normalize_name(key.name)
+                    compiled_keywords.append(
+                        ast.keyword(arg=key_name, value=compile_expr(val))
+                    )
                 elif isinstance(key, str):
-                    key_name = key
+                    compiled_keywords.append(
+                        ast.keyword(arg=key, value=compile_expr(val))
+                    )
                 else:
                     raise SyntaxError(
                         f"Kwargs keys must be keywords, symbols, or strings, got {type(key).__name__}"
                     )
+            i += 1
+            continue
+
+        # In kwargs mode after *, expect :key value pairs
+        if in_kwargs_mode:
+            if isinstance(f, Keyword):
+                if i + 1 >= len(regular_args):
+                    raise SyntaxError(f"Keyword :{f.name} must be followed by a value")
+                key_name = normalize_name(f.name)
+                val = regular_args[i + 1]
                 compiled_keywords.append(
                     ast.keyword(arg=key_name, value=compile_expr(val))
                 )
-        else:
-            compiled_args.append(compile_expr(f))
+                i += 2
+                continue
+            else:
+                raise SyntaxError(
+                    f"After * separator, expected :keyword or *{{...}}, got {type(f).__name__}"
+                )
+
+        # Regular positional argument
+        compiled_args.append(compile_expr(f))
+        i += 1
 
     # Add the spread argument as *args
     compiled_args.append(ast.Starred(value=compile_expr(spread_arg), ctx=ast.Load()))
@@ -8025,34 +8103,82 @@ def compile_apply(args):
 def compile_call_args(forms):
     """Compile function call arguments.
 
-    Keyword arguments use the syntax *{:key value} - a KwargsLiteral that
-    splats keyword arguments into the function call.
+    Supports multiple syntaxes for keyword arguments:
+
+    1. *{:key value} - inline keyword args in a map literal
+    2. *{variable} - splat a map variable as **variable
+    3. *{:key value variable} - mixed inline and splat
+    4. * :key value - separator followed by bare keyword-value pairs
 
     Examples:
-        (f 1 2 3)                    -> f(1, 2, 3)
-        (f 1 *{:name "Alice"})       -> f(1, name="Alice")
-        (f :x :y :z)                 -> f(Keyword("x"), Keyword("y"), Keyword("z"))
-        (f *{:a 1} x *{:b 2})        -> f(a=1, x, b=2)
+        (f 1 2 3)                         -> f(1, 2, 3)
+        (f 1 *{:name "Alice"})            -> f(1, name="Alice")
+        (f 1 *{opts})                     -> f(1, **opts)
+        (f 1 *{:name "Alice" opts})       -> f(1, name="Alice", **opts)
+        (f 1 * :name "Alice" :age 30)     -> f(1, name="Alice", age=30)
+        (f 1 * :timeout 10 *{defaults})   -> f(1, timeout=10, **defaults)
     """
     args = []
     keywords = []
-    for f in forms:
-        # Check for *{:key value} kwargs literal syntax
+    i = 0
+    in_kwargs_mode = False  # True after seeing * separator
+
+    while i < len(forms):
+        f = forms[i]
+
+        # Check for * separator (bare symbol, not *{...})
+        if is_symbol(f, "*"):
+            in_kwargs_mode = True
+            i += 1
+            continue
+
+        # Check for *{...} kwargs literal syntax
         if isinstance(f, KwargsLiteral):
             for key, val in f.pairs:
-                if isinstance(key, Keyword):
+                if key is None:
+                    # Splat variable: *{opts} -> **spork_kwargs_dict(opts)
+                    # Wrap in spork_kwargs_dict to convert Keyword keys to strings
+                    wrapped = ast.Call(
+                        func=ast.Name(id="spork_kwargs_dict", ctx=ast.Load()),
+                        args=[compile_expr(val)],
+                        keywords=[],
+                    )
+                    keywords.append(ast.keyword(arg=None, value=wrapped))
+                elif isinstance(key, Keyword):
                     key_name = normalize_name(key.name)
+                    keywords.append(ast.keyword(arg=key_name, value=compile_expr(val)))
                 elif isinstance(key, Symbol):
                     key_name = normalize_name(key.name)
+                    keywords.append(ast.keyword(arg=key_name, value=compile_expr(val)))
                 elif isinstance(key, str):
-                    key_name = key
+                    keywords.append(ast.keyword(arg=key, value=compile_expr(val)))
                 else:
                     raise SyntaxError(
                         f"Kwargs keys must be keywords, symbols, or strings, got {type(key).__name__}"
                     )
+            i += 1
+            continue
+
+        # In kwargs mode after *, expect :key value pairs
+        if in_kwargs_mode:
+            if isinstance(f, Keyword):
+                # :key value pair
+                if i + 1 >= len(forms):
+                    raise SyntaxError(f"Keyword :{f.name} must be followed by a value")
+                key_name = normalize_name(f.name)
+                val = forms[i + 1]
                 keywords.append(ast.keyword(arg=key_name, value=compile_expr(val)))
-        else:
-            args.append(compile_expr(f))
+                i += 2
+                continue
+            else:
+                raise SyntaxError(
+                    f"After * separator, expected :keyword or *{{...}}, got {type(f).__name__}"
+                )
+
+        # Regular positional argument
+        args.append(compile_expr(f))
+        i += 1
+
     return args, keywords
 
 

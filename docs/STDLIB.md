@@ -41,6 +41,9 @@ Persistent vectors provide efficient random access and updates. Vectors are crea
 ; DoubleVector - Optimized for 64-bit floats
 (vec-f64 1.0 2.0 3.0)  ; => DoubleVector
 
+; type annotations can also be used to hint the type
+(def ^(Vector double) v [1.0 2.0 3.0])
+
 ; IntVector - Optimized for 64-bit integers  
 (vec-i64 1 2 3)        ; => IntVector
 ```
@@ -141,22 +144,22 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 
 ```clojure
 ; Creating sorted vectors
-(sorted_vec [3 1 4 1 5 9])      ; => sorted_vec(1, 1, 3, 4, 5, 9)
-(sorted_vec)                     ; empty sorted vector
+(sorted-vec [3 1 4 1 5 9])      ; => sorted_vec(1, 1, 3, 4, 5, 9)
+(sorted-vec)                     ; empty sorted vector
 
 ; With key function (sort by result of key-fn)
-(sorted_vec ["banana" "apple" "cherry"] :key len)
+(sorted-vec ["banana" "apple" "cherry"] :key len)
 ; => sorted_vec("apple", "banana", "cherry")
 
 ; With keyword as key (for sorting maps/dicts)
-(sorted_vec [{:name "Bob" :age 25} {:name "Alice" :age 30}] :key :age)
+(sorted-vec [{:name "Bob" :age 25} {:name "Alice" :age 30}] :key :age)
 ; => sorted by age
 
 ; Reverse order
-(sorted_vec [3 1 4] :reverse true)  ; => sorted_vec(4, 3, 1)
+(sorted-vec [3 1 4] :reverse true)  ; => sorted_vec(4, 3, 1)
 
 ; Combine key and reverse
-(sorted_vec items :key :score :reverse true)  ; highest scores first
+(sorted-vec items :key :score :reverse true)  ; highest scores first
 ```
 
 **Basic Operations:**
@@ -228,27 +231,27 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 **Transient Operations:**
 ```clojure
 ; For batch operations, use transients
-(def sv (sorted_vec [1 3 5]))
-(def tsv (.transient sv))
+(def sv (sorted-vec [1 3 5]))
+(def tsv (transient sv))
 
 (conj! tsv 2)           ; mutates in place
 (conj! tsv 4)
 (disj! tsv 3)
-(def result (.persistent tsv))  ; => sorted_vec(1, 2, 4, 5)
+(def result (persistent! tsv))  ; => sorted_vec(1, 2, 4, 5)
 
 ; Transient preserves key and reverse settings
-(def sv (sorted_vec items :key :score :reverse true))
-(def tsv (.transient sv))   ; still sorts by :score, reversed
+(def sv (sorted-vec items :key :score :reverse true))
+(def tsv (transient sv))   ; still sorts by :score, reversed
 ```
 
 **Equality and Hashing:**
 ```clojure
 ; Equal if same elements in same order
-(= (sorted_vec [3 1 2]) (sorted_vec [1 2 3]))  ; => true
-(= (sorted_vec [1 2]) (sorted_vec [1 2 3]))    ; => false
+(= (sorted-vec [3 1 2]) (sorted-vec [1 2 3]))  ; => true
+(= (sorted-vec [1 2]) (sorted-vec [1 2 3]))    ; => false
 
 ; Can be used as map keys (hashable)
-(def cache {(sorted_vec [1 2 3]) "result"})
+(def cache {(sorted-vec [1 2 3]) "result"})
 ```
 
 ---
@@ -511,8 +514,8 @@ SortedVector has its own transient type with methods that maintain sorted order:
 
 ```clojure
 ; Create transient from sorted vector
-(def sv (sorted_vec [1 3 5 7]))
-(def tsv (.transient sv))
+(def sv (sorted-vec [1 3 5 7]))
+(def tsv (transient sv))
 
 ; Add elements (maintains sorted order)
 (conj! tsv 2)    ; now contains 1, 2, 3, 5, 7
@@ -524,15 +527,15 @@ SortedVector has its own transient type with methods that maintain sorted order:
 (disj! tsv 99)   ; no-op, element not present
 
 ; Convert back to persistent
-(def result (.persistent tsv))  ; => sorted_vec(1, 2, 4, 5, 6, 7)
+(def result (persistent! tsv))  ; => sorted_vec(1, 2, 4, 5, 6, 7)
 
 ; Transient preserves key function and reverse settings
-(def sv (sorted_vec items :key :score :reverse true))
-(def tsv (.transient sv))
+(def sv (sorted-vec items :key :score :reverse true))
+(def tsv (transient sv))
 (conj! tsv new-item)  ; still sorted by :score in reverse
 ```
 
-Note: After calling `.persistent`, the transient can no longer be used.
+Note: After calling `persistent!`, the transient can no longer be used.
 
 #### `with-mutable`
 Executes body with a transient collection, automatically converting back to persistent when done. This is the recommended way to work with transients.

@@ -36,6 +36,8 @@ Spork automatically normalizes identifiers for Python compatibility:
 | `math.sin` | `math.sin` | Namespace/module access |
 | `foo.bar.baz` | `foo.bar.baz` | Nested namespaces |
 
+> This can cause name collisions if both forms are used in the same scope (e.g. `my-variable` and `my_variable`). 
+
 ### Reader Macros
 
 | Syntax | Expansion | Description |
@@ -89,6 +91,7 @@ The core types are:
 - `Set` - Persistent hash set (HAMT)
 - `DoubleVector` - Type-specialized vector for floats (float64)
 - `IntVector` - Type-specialized vector for integers (int64)
+- `SortedVector` - Persistent sorted vector (Red-Black tree)
 - `Cons` - Linked list cells
 
 ### Vectors
@@ -836,12 +839,18 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
 
 ### Import Macros
 
+Macros currently have a separate import mechanism since they operate at compile-time:
+
 ```clojure
 ; Macros require special import (compile-time)
 (import-macros my.macros [my-macro])
 ```
 
+> Note: Since the (ns ...) form has stabalized, macro imports may be moved there in the future.
+
 ### Dot Notation for Namespace Access
+
+Unlike Clojure, Spork uses dot notation for all namespace/module access:
 
 ```clojure
 ; All namespace/module access uses dot notation
@@ -1124,7 +1133,7 @@ obj.attr              ; get attribute
 
 ### Python Builtins
 
-All Python builtins are available:
+Common Python built-in functions are available:
 
 ```clojure
 (print "hello")

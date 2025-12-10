@@ -26,6 +26,7 @@ from spork.runtime.pds import (
     IntVector,
     Map,
     Set,
+    SortedVector,
     TransientMap,
     TransientSet,
     TransientVector,
@@ -79,7 +80,9 @@ class SporkJSONEncoder(json.JSONEncoder):
             return {self._convert_key(k): v for k, v in o.items()}
 
         # Vector types -> list
-        if isinstance(o, (Vector, DoubleVector, IntVector, TransientVector)):
+        if isinstance(
+            o, (Vector, DoubleVector, IntVector, TransientVector, SortedVector)
+        ):
             return list(o)
 
         # Set types -> list (JSON has no native set)

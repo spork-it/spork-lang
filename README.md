@@ -9,7 +9,7 @@ Spork compiles to Python AST and can be imported directly via a standard import 
 
 Spork adds features that Python natively lacks, such as:
 
-*  **Persistent Data Structures** that are immutable by default with [near-free snapshot](#performance) copies thanks to structural sharing
+*  **Persistent Data Structures** that are immutable by default with [near-free snapshot](#performance) copies
 *  **Predictable data flow** with no hidden mutation or shared state surprises
 *  **Expression oriented syntax** that reduces boilerplate and enables powerful macros
 
@@ -174,20 +174,21 @@ Spork compiles to Python, so interop is seamless.
 (.upper text) ; "HELLO WORLD"
 
 ;; Attribute access
-(print os.name)
+(print os.name) ; e.g. "posix" or "nt"
 
 ;; Mixing Python types (escape hatch)
 (def py-list (list [1 2 3])) ; Convert Spork Vector to Python list
 (.append py-list 4)          ; Mutate it in place
+(py-list.append 5)           ; alternative call syntax
 
-(print py-list) ; [1, 2, 3, 4]
+(print py-list) ; [1, 2, 3, 4, 5]
 
 (def data {:name "Spork" :version 1.0}) ; Immutable Spork Map
-(print (j.dumps data)) ; '{"name": "Spork", "version": 1.0}'
+(print (j.dumps data)) ; '{"name": "Spork", "version": 1.0, "nums": [1, 2, 3, 4, 5]}'
 ```
 
 > Python objects and Spork objects interoperate freely, no wrappers or FFI layers.
-
+ thanks to structural sharing
 ### Async/Await
 
 Spork has first-class support for Python's async/await ecosystem.

@@ -1,5 +1,4 @@
 ;; Test file demonstrating statement-friendly features in let bodies
-;; This showcases why the wrapper function approach is superior
 
 ;; Test 1: let with while loop in body (statement, not expression)
 (def test-let-with-while-statement

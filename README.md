@@ -498,11 +498,11 @@ Comparison of Spork Persistent Vector vs Native Python List for common operation
 
 | Operation (N=100k) | Python (Native) | Spork (PDS) | Difference |
 | :--- | :--- | :--- | :--- |
-| Vector random read (10k reads) | 0.46 ms `list[i]` | 1.44 ms `Vector[i]` | ~3x slower |
-| Build collection from `range(N)` | 2.84 ms `list(range(N))` | 5.38 ms `vec(range(N))` | ~2x slower |
-| Copy & update one list/vec element | 134.59 µs `lst = lst.copy; lst[i] = v` | 0.79 µs `vec2 = vec.assoc(i, v)` | ~170x faster |
-| Copy & update one map entry | 1.01 ms `dct = dct.copy(); dct[k] = v` | 1.07 µs `m2 = m.assoc(k, v)` | ~940x faster |
-| Copy & update one set element | 416.82 µs `s = s.copy(); s.add(v)` | 0.90 µs `s2 = s.conj(v)` | ~460x faster |
+| Vector random read (10k reads) | 0.46 ms | 1.44 ms | ~3x slower |
+| Build collection from `range(N)` | 2.84 ms | 5.38 ms | ~2x slower |
+| Copy & update one list/vec element | 134.59 µs | 0.79 µs | ~170x faster |
+| Copy & update one map entry | 1.01 ms | 1.07 µs | ~940x faster |
+| Copy & update one set element | 416.82 µs | 0.90 µs | ~460x faster |
 
 Benchmarks run on: AMD Ryzen 7 6800H, Linux 6.12, CPython 3.13.5
 

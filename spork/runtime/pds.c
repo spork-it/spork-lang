@@ -2228,6 +2228,79 @@ static DoubleVectorNode *TransientDoubleVector_push_tail(TransientDoubleVector *
     return ret;
 }
 
+// Internal function that takes a raw double value directly (no boxing overhead)
+static int TransientDoubleVector_conj_mut_raw(TransientDoubleVector *self, double dval) {
+    // Room in tail?
+    if (self->cnt - TransientDoubleVector_tail_off(self) < WIDTH) {
+        // Grow tail if needed
+        if (self->tail_len >= self->tail_cap) {
+            Py_ssize_t new_cap = self->tail_cap == 0 ? WIDTH : self->tail_cap * 2;
+            if (new_cap > WIDTH) new_cap = WIDTH;
+            double *new_tail = (double *)realloc(self->tail, new_cap * sizeof(double));
+            if (!new_tail) {
+                PyErr_NoMemory();
+                return -1;
+            }
+            self->tail = new_tail;
+            self->tail_cap = new_cap;
+        }
+        self->tail[self->tail_len++] = dval;
+        self->cnt++;
+        return 0;
+    }
+
+    // Tail is full, push into trie
+    DoubleVectorNode *tail_node = DoubleVectorNode_create(self->id);
+    if (!tail_node) return -1;
+
+    for (Py_ssize_t i = 0; i < self->tail_len && i < WIDTH; i++) {
+        tail_node->data.values[i] = self->tail[i];
+        tail_node->valid_mask |= (1 << i);
+    }
+
+    // Reset tail
+    self->tail[0] = dval;
+    self->tail_len = 1;
+
+    // Overflow root?
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
+        DoubleVectorNode *new_root = DoubleVectorNode_create(self->id);
+        if (!new_root) {
+            Py_DECREF(tail_node);
+            return -1;
+        }
+        new_root->data.children[0] = self->root;
+        Py_INCREF(self->root);
+        new_root->valid_mask = 1;
+
+        DoubleVectorNode *path = TransientDoubleVector_new_path(self, self->shift, tail_node);
+        if (!path) {
+            Py_DECREF(new_root);
+            Py_DECREF(tail_node);
+            return -1;
+        }
+        new_root->data.children[1] = path;
+        new_root->valid_mask |= 2;
+
+        Py_DECREF(self->root);
+        self->root = new_root;
+        self->shift += BITS;
+    } else {
+        DoubleVectorNode *new_root = TransientDoubleVector_push_tail(self, self->shift, self->root, tail_node);
+        if (!new_root) {
+            Py_DECREF(tail_node);
+            return -1;
+        }
+        Py_DECREF(self->root);
+        self->root = new_root;
+    }
+
+    Py_DECREF(tail_node);
+    self->cnt++;
+
+    return 0;
+}
+
 static PyObject *TransientDoubleVector_conj_mut(TransientDoubleVector *self, PyObject *val) {
     TransientDoubleVector_ensure_editable(self);
     if (PyErr_Occurred()) return NULL;
@@ -3197,6 +3270,79 @@ static IntVectorNode *TransientIntVector_push_tail(TransientIntVector *self, int
     ret->data.children[subidx] = node_to_insert;
     ret->valid_mask |= (1 << subidx);
     return ret;
+}
+
+// Internal function that takes a raw int64_t value directly (no boxing overhead)
+static int TransientIntVector_conj_mut_raw(TransientIntVector *self, int64_t lval) {
+    // Room in tail?
+    if (self->cnt - TransientIntVector_tail_off(self) < WIDTH) {
+        // Grow tail if needed
+        if (self->tail_len >= self->tail_cap) {
+            Py_ssize_t new_cap = self->tail_cap == 0 ? WIDTH : self->tail_cap * 2;
+            if (new_cap > WIDTH) new_cap = WIDTH;
+            int64_t *new_tail = (int64_t *)realloc(self->tail, new_cap * sizeof(int64_t));
+            if (!new_tail) {
+                PyErr_NoMemory();
+                return -1;
+            }
+            self->tail = new_tail;
+            self->tail_cap = new_cap;
+        }
+        self->tail[self->tail_len++] = lval;
+        self->cnt++;
+        return 0;
+    }
+
+    // Tail is full, push into trie
+    IntVectorNode *tail_node = IntVectorNode_create(self->id);
+    if (!tail_node) return -1;
+
+    for (Py_ssize_t i = 0; i < self->tail_len && i < WIDTH; i++) {
+        tail_node->data.values[i] = self->tail[i];
+        tail_node->valid_mask |= (1 << i);
+    }
+
+    // Reset tail
+    self->tail[0] = lval;
+    self->tail_len = 1;
+
+    // Overflow root?
+    if (((size_t)self->cnt >> BITS) > (1ULL << self->shift)) {
+        IntVectorNode *new_root = IntVectorNode_create(self->id);
+        if (!new_root) {
+            Py_DECREF(tail_node);
+            return -1;
+        }
+        new_root->data.children[0] = self->root;
+        Py_INCREF(self->root);
+        new_root->valid_mask = 1;
+
+        IntVectorNode *path = TransientIntVector_new_path(self, self->shift, tail_node);
+        if (!path) {
+            Py_DECREF(new_root);
+            Py_DECREF(tail_node);
+            return -1;
+        }
+        new_root->data.children[1] = path;
+        new_root->valid_mask |= 2;
+
+        Py_DECREF(self->root);
+        self->root = new_root;
+        self->shift += BITS;
+    } else {
+        IntVectorNode *new_root = TransientIntVector_push_tail(self, self->shift, self->root, tail_node);
+        if (!new_root) {
+            Py_DECREF(tail_node);
+            return -1;
+        }
+        Py_DECREF(self->root);
+        self->root = new_root;
+    }
+
+    Py_DECREF(tail_node);
+    self->cnt++;
+
+    return 0;
 }
 
 static PyObject *TransientIntVector_conj_mut(TransientIntVector *self, PyObject *val) {
@@ -9362,36 +9508,31 @@ static PyObject *pds_vec_f64(PyObject *self, PyObject *args) {
         return (PyObject *)EMPTY_DOUBLE_VECTOR;
     }
 
-    // Build using repeated conj (could optimize with transient later)
-    DoubleVector *result = (DoubleVector *)Py_NewRef(EMPTY_DOUBLE_VECTOR);
+    // Build using transient for O(1) amortized appends
+    TransientDoubleVector *t = (TransientDoubleVector *)DoubleVector_transient(EMPTY_DOUBLE_VECTOR, NULL);
+    if (!t) return NULL;
 
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *item = PyTuple_GET_ITEM(args, i);
         double val = PyFloat_AsDouble(item);
 
         if (val == -1.0 && PyErr_Occurred()) {
-            Py_DECREF(result);
+            Py_DECREF(t);
+            PyErr_Clear();
             PyErr_Format(PyExc_TypeError,
                 "vec_f64 argument %zd must be a number, got %s",
                 i, Py_TYPE(item)->tp_name);
             return NULL;
         }
 
-        PyObject *boxed = PyFloat_FromDouble(val);
-        if (!boxed) {
-            Py_DECREF(result);
+        // Use raw function to avoid boxing/unboxing overhead
+        if (TransientDoubleVector_conj_mut_raw(t, val) < 0) {
+            Py_DECREF(t);
             return NULL;
         }
-
-        PyObject *new_result = DoubleVector_conj(result, boxed);
-        Py_DECREF(boxed);
-        Py_DECREF(result);
-
-        if (!new_result) return NULL;
-        result = (DoubleVector *)new_result;
     }
 
-    return (PyObject *)result;
+    return TransientDoubleVector_persistent(t, NULL);
 }
 
 static PyObject *pds_vec_i64(PyObject *self, PyObject *args) {
@@ -9402,35 +9543,31 @@ static PyObject *pds_vec_i64(PyObject *self, PyObject *args) {
         return (PyObject *)EMPTY_LONG_VECTOR;
     }
 
-    IntVector *result = (IntVector *)Py_NewRef(EMPTY_LONG_VECTOR);
+    // Build using transient for O(1) amortized appends
+    TransientIntVector *t = (TransientIntVector *)IntVector_transient(EMPTY_LONG_VECTOR, NULL);
+    if (!t) return NULL;
 
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *item = PyTuple_GET_ITEM(args, i);
-        long val = PyLong_AsLong(item);
+        int64_t val = PyLong_AsLongLong(item);
 
         if (val == -1 && PyErr_Occurred()) {
-            Py_DECREF(result);
+            Py_DECREF(t);
+            PyErr_Clear();
             PyErr_Format(PyExc_TypeError,
                 "vec_i64 argument %zd must be an integer, got %s",
                 i, Py_TYPE(item)->tp_name);
             return NULL;
         }
 
-        PyObject *boxed = PyLong_FromLong(val);
-        if (!boxed) {
-            Py_DECREF(result);
+        // Use raw function to avoid boxing/unboxing overhead
+        if (TransientIntVector_conj_mut_raw(t, val) < 0) {
+            Py_DECREF(t);
             return NULL;
         }
-
-        PyObject *new_result = IntVector_conj(result, boxed);
-        Py_DECREF(boxed);
-        Py_DECREF(result);
-
-        if (!new_result) return NULL;
-        result = (IntVector *)new_result;
     }
 
-    return (PyObject *)result;
+    return TransientIntVector_persistent(t, NULL);
 }
 
 static PyObject *pds_sorted_vec(PyObject *self, PyObject *args, PyObject *kwargs) {

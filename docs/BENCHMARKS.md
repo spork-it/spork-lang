@@ -16,7 +16,7 @@ The benchmarks quantify:
 ## Running
 
 ```bash
-python3 tools/benchmark_pds.py --size 100000 --iter 50
+.venv/bin/python tools/benchmark_pds.py --size 100000 --iter 50
 ```
 
 Requires the C extension to be built. NumPy is optional.
@@ -60,32 +60,11 @@ For large collections with multiple updates, Spork can be 100x+ faster.
 ### NumPy Interop
 `DoubleVector` and `IntVector` support zero-copy `np.array()` via the buffer protocol.
 
-## Adding Benchmarks
-
-Add a method to the `Benchmarks` class:
-
-```python
-def bench_my_op(self):
-    def py_version():
-        ...
-    def spork_version():
-        ...
-
-    py_time = run_benchmark("Python", py_version, self.ITERS)
-    spork_time = run_benchmark("Spork", spork_version, self.ITERS)
-
-    print_group("My Operation", [
-        ("Python", py_time),
-        ("Spork", spork_time),
-    ])
-```
-
-Then call it from `main()`.
-
 
 ## Results
 
 ### AMD Ryzen 7 6800H
+
 
 - **OS**: Linux 6.12.54-gentoo-dist
 - **CPU**: AMD Ryzen 7 6800H with Radeon Graphics
@@ -112,40 +91,42 @@ generating pre-built structures (N=25000)... done.
 ============================================================
 
 --- Vector Construction (N=25000) ---
-  Python [x for x in range(N)]      884.98 µs  (fastest)
-  Python list(range(N))             906.43 µs  (~same)
-  Python list.append() loop           1.28 ms  (1.45x slower)
-  Spork TransientVector               1.79 ms  (2.02x slower)
-  Spork vec(*range(N))                2.02 ms  (2.28x slower)
-  Spork Vector.conj() chain           4.10 ms  (4.6x slower)
+  Python [x for x in range(N)]      893.27 µs  (fastest)
+  Python list(range(N))               1.01 ms  (1.13x slower)
+  Python list.append() loop           1.21 ms  (1.36x slower)
+  Spork TransientVector               1.88 ms  (2.10x slower)
+  Spork vec(*range(N))                2.27 ms  (2.54x slower)
+  Spork Vector.conj() chain           3.53 ms  (3.9x slower)
 
 --- Float64 Vector Construction ---
-  Python list[float]               535.15 µs  (fastest)
-  Spork TransientDoubleVector        1.04 ms  (1.94x slower)
-  Python array('d').extend()         1.36 ms  (2.53x slower)
-  Spork vec_f64(*data)               2.63 ms  (4.9x slower)
+  Python list[float]               443.68 µs  (fastest)
+  Spork vec_f64(*data)             443.92 µs  (~same)
+  Spork vec(*data) boxed           495.98 µs  (1.12x slower)
+  Spork TransientDoubleVector        1.09 ms  (2.46x slower)
+  Python array('d').extend()         1.29 ms  (2.91x slower)
 
 --- Int64 Vector Construction ---
-  Python list[int]                406.69 µs  (fastest)
-  Spork TransientIntVector        616.90 µs  (1.52x slower)
-  Python array('q').extend()      684.27 µs  (1.68x slower)
-  Spork vec_i64(*data)              1.57 ms  (3.9x slower)
+  Spork vec_i64(*data)            248.49 µs  (fastest)
+  Python list[int]                289.20 µs  (1.16x slower)
+  Spork TransientIntVector        618.41 µs  (2.49x slower)
+  Python array('q').extend()      659.65 µs  (2.65x slower)
+  Spork vec(*data) boxed          811.47 µs  (3.3x slower)
 
 --- Random Access (10000 reads) ---
-  Python list[i]                  505.48 µs  (fastest)
-  Spork Vector[i]                   1.13 ms  (2.23x slower)
-  Spork Vector.nth(i)               1.93 ms  (3.8x slower)
+  Python list[i]                  343.91 µs  (fastest)
+  Spork Vector[i]                   1.09 ms  (3.2x slower)
+  Spork Vector.nth(i)               1.53 ms  (4.4x slower)
 
 --- Sequential Iteration ---
-  Python list                     549.10 µs  (fastest)
-  Spork DoubleVector              697.33 µs  (1.27x slower)
-  Spork Vector                    837.05 µs  (1.52x slower)
-  Spork IntVector                 972.22 µs  (1.77x slower)
+  Python list                     543.06 µs  (fastest)
+  Spork Vector                    637.15 µs  (1.17x slower)
+  Spork DoubleVector              697.22 µs  (1.28x slower)
+  Spork IntVector                 949.97 µs  (1.75x slower)
 
 --- Vector Pop (1000 pops) ---
-  Spork Transient.pop_mut()        41.81 µs  (fastest)
-  Python list.pop()                49.54 µs  (1.18x slower)
-  Spork Vector.pop()              157.84 µs  (3.8x slower)
+  Spork Transient.pop_mut()        41.12 µs  (fastest)
+  Python list.pop()                48.32 µs  (1.18x slower)
+  Spork Vector.pop()               86.63 µs  (2.11x slower)
 
 
 ============================================================
@@ -154,34 +135,34 @@ generating pre-built structures (N=25000)... done.
 
 --- Map Construction (N=25000) ---
   Python dict(zip(k, v))            1.18 ms  (fastest)
-  Python {k: v for ...}             1.58 ms  (1.34x slower)
-  Python dict[] loop                1.63 ms  (1.39x slower)
-  Spork TransientMap               10.21 ms  (8.7x slower)
-  Spork hash_map(*args)            15.17 ms  (13x slower)
-  Spork Map.assoc() chain          18.90 ms  (16x slower)
+  Python {k: v for ...}             1.31 ms  (1.11x slower)
+  Python dict[] loop                1.80 ms  (1.53x slower)
+  Spork TransientMap                9.98 ms  (8.4x slower)
+  Spork hash_map(*args)            10.49 ms  (8.9x slower)
+  Spork Map.assoc() chain          18.00 ms  (15x slower)
 
 --- Map Lookup (10000 lookups) ---
-  Python dict[k]                  383.02 µs  (fastest)
-  Python dict.get(missing)        809.86 µs  (2.11x slower)
-  Spork Map.get(k)                  1.48 ms  (3.9x slower)
-  Spork Map.get(missing)            1.96 ms  (5.1x slower)
+  Python dict.get(missing)        407.57 µs  (fastest)
+  Python dict[k]                  433.12 µs  (~same)
+  Spork Map.get(missing)            1.05 ms  (2.58x slower)
+  Spork Map.get(k)                  1.45 ms  (3.6x slower)
 
 --- Map Dissoc (1000 removals) ---
-  Python dict copy+del              207.46 µs  (fastest)
-  Spork Transient.dissoc_mut()      735.40 µs  (3.5x slower)
-  Spork Map.dissoc()                  1.20 ms  (5.8x slower)
+  Python dict copy+del              101.64 µs  (fastest)
+  Spork Transient.dissoc_mut()      382.22 µs  (3.8x slower)
+  Spork Map.dissoc()                637.71 µs  (6.3x slower)
 
 --- Map Iteration - keys() ---
-  Python dict.keys()                1.67 ms  (fastest)
-  Spork Map.keys()                  4.16 ms  (2.49x slower)
+  Python dict.keys()              840.55 µs  (fastest)
+  Spork Map.keys()                  1.89 ms  (2.25x slower)
 
 --- Map Iteration - values() ---
-  Python dict.values()              1.12 ms  (fastest)
-  Spork Map.values()                2.99 ms  (2.66x slower)
+  Python dict.values()            625.27 µs  (fastest)
+  Spork Map.values()                2.23 ms  (3.6x slower)
 
 --- Map Iteration - items() ---
-  Python dict.items()               1.45 ms  (fastest)
-  Spork Map.items()                 4.29 ms  (2.96x slower)
+  Python dict.items()               1.34 ms  (fastest)
+  Spork Map.items()                 4.48 ms  (3.3x slower)
 
 
 ============================================================
@@ -189,24 +170,24 @@ generating pre-built structures (N=25000)... done.
 ============================================================
 
 --- Set Construction (N=25000) ---
-  Python set(iterable)            676.91 µs  (fastest)
-  Python {x for x in ...}         800.58 µs  (1.18x slower)
-  Python set.add() loop             1.14 ms  (1.68x slower)
-  Spork TransientSet               11.22 ms  (17x slower)
-  Spork Set.conj() chain           23.17 ms  (34x slower)
+  Python set(iterable)            572.92 µs  (fastest)
+  Python {x for x in ...}         772.91 µs  (1.35x slower)
+  Python set.add() loop             1.07 ms  (1.87x slower)
+  Spork TransientSet               11.27 ms  (20x slower)
+  Spork Set.conj() chain           22.90 ms  (40x slower)
 
 --- Set Membership (10000 lookups) ---
-  Python set (in)                 810.36 µs  (fastest)
-  Spork Set (in)                    1.76 ms  (2.17x slower)
+  Python set (in)                 697.04 µs  (fastest)
+  Spork Set (in)                    2.15 ms  (3.1x slower)
 
 --- Set Disj (1000 removals) ---
-  Python set copy+discard         160.41 µs  (fastest)
-  Spork Transient.disj_mut()      438.10 µs  (2.73x slower)
-  Spork Set.disj()                693.17 µs  (4.3x slower)
+  Python set copy+discard         157.54 µs  (fastest)
+  Spork Transient.disj_mut()      211.62 µs  (1.34x slower)
+  Spork Set.disj()                746.24 µs  (4.7x slower)
 
 --- Set Iteration ---
-  Python set                        1.15 ms  (fastest)
-  Spork Set                         4.03 ms  (3.5x slower)
+  Python set                        1.27 ms  (fastest)
+  Spork Set                         2.36 ms  (1.86x slower)
 
 
 ============================================================
@@ -216,28 +197,28 @@ generating pre-built structures (N=25000)... done.
   Scenario: Single update on collection of size 25000
 
 --- Vector: Single Element Update ---
-  Spork Vector.assoc()               1.20 µs  (fastest)
-  Python list.copy() + modify       39.34 µs  (33x slower)
+  Spork Vector.assoc()               0.64 µs  (fastest)
+  Python list.copy() + modify       33.42 µs  (53x slower)
 
 --- Map: Single Key Update ---
-  Spork Map.assoc()                  1.11 µs  (fastest)
-  Python dict.copy() + modify      104.58 µs  (94x slower)
+  Spork Map.assoc()                  1.00 µs  (fastest)
+  Python dict.copy() + modify       91.64 µs  (92x slower)
 
 --- Set: Single Element Add ---
-  Spork Set.conj()                  1.28 µs  (fastest)
-  Python set.copy() + add         147.36 µs  (115x slower)
+  Spork Set.conj()                  0.90 µs  (fastest)
+  Python set.copy() + add         162.28 µs  (181x slower)
 
   Scenario: 100 updates on collection of size 25000
 
 --- Vector: Multiple Updates ---
-  Spork Vector.assoc() chain        43.50 µs  (fastest)
-  Spork Transient.assoc_mut()       53.87 µs  (1.24x slower)
-  Python list copy chain             5.91 ms  (136x slower)
+  Spork Transient.assoc_mut()       20.04 µs  (fastest)
+  Spork Vector.assoc() chain        31.00 µs  (1.55x slower)
+  Python list copy chain             2.70 ms  (135x slower)
 
 --- Map: Multiple Updates ---
-  Spork Transient.assoc_mut()       41.45 µs  (fastest)
-  Spork Map.assoc() chain           73.35 µs  (1.77x slower)
-  Python dict copy chain            13.68 ms  (330x slower)
+  Spork Transient.assoc_mut()       42.12 µs  (fastest)
+  Spork Map.assoc() chain           62.12 µs  (1.47x slower)
+  Python dict copy chain             8.30 ms  (197x slower)
 
 
 ============================================================
@@ -245,29 +226,29 @@ generating pre-built structures (N=25000)... done.
 ============================================================
 
 --- Length Operation ---
-  Spork len(Set)                    0.24 µs  (fastest)
-  Spork len(Vector)                 0.26 µs  (~same)
-  Python len(list)                  0.27 µs  (1.10x slower)
-  Python len(set)                   0.32 µs  (1.33x slower)
-  Python len(dict)                  0.34 µs  (1.40x slower)
-  Spork len(Map)                    0.42 µs  (1.73x slower)
+  Spork len(Set)                    0.25 µs  (fastest)
+  Python len(set)                   0.25 µs  (~same)
+  Python len(dict)                  0.26 µs  (~same)
+  Spork len(Vector)                 0.27 µs  (~same)
+  Python len(list)                  0.28 µs  (1.13x slower)
+  Spork len(Map)                    0.31 µs  (1.24x slower)
 
 --- Eager Sequence Conversion (to Cons list) ---
-  Python list(iter(list))         124.04 µs  (fastest)
-  Spork Vector.to_seq()             1.76 ms  (14x slower)
-  Spork Set.to_seq()                5.00 ms  (40x slower)
-  Spork Map.to_seq()               13.14 ms  (106x slower)
+  Python list(iter(list))          87.75 µs  (fastest)
+  Spork Vector.to_seq()           914.71 µs  (10x slower)
+  Spork Set.to_seq()                2.66 ms  (30x slower)
+  Spork Map.to_seq()                5.58 ms  (64x slower)
 
 --- Lazy Sequence Creation (O(1)) ---
-  Python iter(list)                 0.26 µs  (fastest)
-  Python (x for x in list)          0.88 µs  (3.3x slower)
-  Spork lazy_seq(Map)               1.70 µs  (6.4x slower)
-  Spork lazy_seq(Vector)            1.94 µs  (7.3x slower)
-  Spork lazy_seq(Set)               8.96 µs  (34x slower)
+  Python iter(list)                 0.28 µs  (fastest)
+  Python (x for x in list)          0.46 µs  (1.65x slower)
+  Spork lazy_seq(Map)               0.92 µs  (3.3x slower)
+  Spork lazy_seq(Set)               1.01 µs  (3.6x slower)
+  Spork lazy_seq(Vector)            1.05 µs  (3.7x slower)
 
 --- Lazy Sequence Full Consumption ---
-  Python sum(iter(list))             1.40 ms  (fastest)
-  Spork sum(lazy_seq(Vector))       14.71 ms  (10x slower)
+  Python sum(iter(list))           603.55 µs  (fastest)
+  Spork sum(lazy_seq(Vector))        8.70 ms  (14x slower)
 
 
 ============================================================
@@ -275,14 +256,14 @@ generating pre-built structures (N=25000)... done.
 ============================================================
 
 --- NumPy Array Creation ---
-  np.array(DoubleVector) [zero-copy]        0.70 µs  (fastest)
-  np.array(Python list)                   622.69 µs  (886x slower)
+  np.array(DoubleVector) [zero-copy]        0.85 µs  (fastest)
+  np.array(Python list)                   567.42 µs  (664x slower)
 
 --- NumPy Operations ---
-  np.sum(from list)                 7.12 µs  (fastest)
-  np.sum(from DoubleVector)         9.10 µs  (1.28x slower)
-  np.mean(from list)               24.11 µs  (3.4x slower)
-  np.mean(from DoubleVector)       62.08 µs  (8.7x slower)
+  np.sum(from list)                 7.57 µs  (fastest)
+  np.sum(from DoubleVector)         7.75 µs  (~same)
+  np.mean(from list)                9.11 µs  (1.20x slower)
+  np.mean(from DoubleVector)       10.01 µs  (1.32x slower)
 
   Verification: Array sum=312487500.00
 
@@ -309,40 +290,42 @@ generating pre-built structures (N=50000)... done.
 ============================================================
 
 --- Vector Construction (N=50000) ---
-  Python list(range(N))               1.70 ms  (fastest)
-  Python [x for x in range(N)]        2.10 ms  (1.23x slower)
-  Python list.append() loop           2.32 ms  (1.36x slower)
-  Spork vec(*range(N))                2.52 ms  (1.48x slower)
-  Spork TransientVector               4.38 ms  (2.57x slower)
-  Spork Vector.conj() chain           9.71 ms  (5.7x slower)
+  Python list(range(N))             919.54 µs  (fastest)
+  Python [x for x in range(N)]        1.13 ms  (1.23x slower)
+  Python list.append() loop           1.38 ms  (1.50x slower)
+  Spork vec(*range(N))                2.21 ms  (2.41x slower)
+  Spork TransientVector               2.32 ms  (2.53x slower)
+  Spork Vector.conj() chain           5.35 ms  (5.8x slower)
 
 --- Float64 Vector Construction ---
-  Python list[float]               770.02 µs  (fastest)
-  Spork TransientDoubleVector        1.18 ms  (1.54x slower)
-  Python array('d').extend()         1.66 ms  (2.15x slower)
-  Spork vec_f64(*data)               3.48 ms  (4.5x slower)
+  Spork vec_f64(*data)             446.69 µs  (fastest)
+  Python list[float]               536.03 µs  (1.20x slower)
+  Spork vec(*data) boxed           911.01 µs  (2.04x slower)
+  Spork TransientDoubleVector        1.15 ms  (2.57x slower)
+  Python array('d').extend()         1.33 ms  (2.97x slower)
 
 --- Int64 Vector Construction ---
-  Python list[int]                623.56 µs  (fastest)
-  Python array('q').extend()        1.34 ms  (2.15x slower)
-  Spork TransientIntVector          1.42 ms  (2.28x slower)
-  Spork vec_i64(*data)              3.44 ms  (5.5x slower)
+  Spork vec_i64(*data)            437.51 µs  (fastest)
+  Python list[int]                534.14 µs  (1.22x slower)
+  Spork vec(*data) boxed          915.69 µs  (2.09x slower)
+  Spork TransientIntVector          1.23 ms  (2.81x slower)
+  Python array('q').extend()        1.33 ms  (3.0x slower)
 
 --- Random Access (10000 reads) ---
-  Python list[i]                  646.13 µs  (fastest)
-  Spork Vector[i]                   1.14 ms  (1.76x slower)
-  Spork Vector.nth(i)               1.63 ms  (2.52x slower)
+  Python list[i]                  401.16 µs  (fastest)
+  Spork Vector[i]                   1.15 ms  (2.87x slower)
+  Spork Vector.nth(i)               1.63 ms  (4.1x slower)
 
 --- Sequential Iteration ---
-  Spork Vector                      1.27 ms  (fastest)
-  Python list                       1.38 ms  (~same)
-  Spork DoubleVector                1.61 ms  (1.27x slower)
-  Spork IntVector                   2.27 ms  (1.78x slower)
+  Python list                       1.17 ms  (fastest)
+  Spork Vector                      1.33 ms  (1.14x slower)
+  Spork DoubleVector                1.48 ms  (1.27x slower)
+  Spork IntVector                   2.22 ms  (1.89x slower)
 
 --- Vector Pop (1000 pops) ---
-  Spork Transient.pop_mut()        57.53 µs  (fastest)
-  Python list.pop()                79.16 µs  (1.38x slower)
-  Spork Vector.pop()               99.40 µs  (1.73x slower)
+  Spork Transient.pop_mut()        46.39 µs  (fastest)
+  Python list.pop()                88.68 µs  (1.91x slower)
+  Spork Vector.pop()               96.18 µs  (2.07x slower)
 
 
 ============================================================
@@ -350,35 +333,35 @@ generating pre-built structures (N=50000)... done.
 ============================================================
 
 --- Map Construction (N=50000) ---
-  Python dict(zip(k, v))            2.70 ms  (fastest)
-  Python {k: v for ...}             3.57 ms  (1.32x slower)
-  Python dict[] loop                3.63 ms  (1.34x slower)
-  Spork hash_map(*args)            21.38 ms  (7.9x slower)
-  Spork TransientMap               29.70 ms  (11x slower)
-  Spork Map.assoc() chain          52.06 ms  (19x slower)
+  Python dict(zip(k, v))            3.16 ms  (fastest)
+  Python {k: v for ...}             3.53 ms  (1.12x slower)
+  Python dict[] loop                3.61 ms  (1.14x slower)
+  Spork hash_map(*args)            20.53 ms  (6.5x slower)
+  Spork TransientMap               23.11 ms  (7.3x slower)
+  Spork Map.assoc() chain          46.29 ms  (15x slower)
 
 --- Map Lookup (10000 lookups) ---
-  Python dict[k]                  427.09 µs  (fastest)
-  Python dict.get(missing)        819.32 µs  (1.92x slower)
-  Spork Map.get(missing)            1.10 ms  (2.58x slower)
-  Spork Map.get(k)                  1.57 ms  (3.7x slower)
+  Python dict[k]                  427.22 µs  (fastest)
+  Python dict.get(missing)        457.01 µs  (~same)
+  Spork Map.get(missing)            1.13 ms  (2.63x slower)
+  Spork Map.get(k)                  1.73 ms  (4.0x slower)
 
 --- Map Dissoc (1000 removals) ---
-  Python dict copy+del              255.65 µs  (fastest)
-  Spork Transient.dissoc_mut()      406.61 µs  (1.59x slower)
-  Spork Map.dissoc()                  1.24 ms  (4.8x slower)
+  Python dict copy+del              209.53 µs  (fastest)
+  Spork Transient.dissoc_mut()      426.45 µs  (2.04x slower)
+  Spork Map.dissoc()                772.15 µs  (3.7x slower)
 
 --- Map Iteration - keys() ---
-  Python dict.keys()                1.77 ms  (fastest)
-  Spork Map.keys()                 13.14 ms  (7.4x slower)
+  Python dict.keys()                1.91 ms  (fastest)
+  Spork Map.keys()                  4.90 ms  (2.56x slower)
 
 --- Map Iteration - values() ---
-  Python dict.values()              2.44 ms  (fastest)
-  Spork Map.values()               10.44 ms  (4.3x slower)
+  Python dict.values()              1.36 ms  (fastest)
+  Spork Map.values()                3.55 ms  (2.60x slower)
 
 --- Map Iteration - items() ---
-  Python dict.items()               3.15 ms  (fastest)
-  Spork Map.items()                19.90 ms  (6.3x slower)
+  Python dict.items()               1.58 ms  (fastest)
+  Spork Map.items()                 5.28 ms  (3.3x slower)
 
 
 ============================================================
@@ -386,24 +369,24 @@ generating pre-built structures (N=50000)... done.
 ============================================================
 
 --- Set Construction (N=50000) ---
-  Python set(iterable)              1.03 ms  (fastest)
-  Python {x for x in ...}           1.13 ms  (1.10x slower)
-  Python set.add() loop             2.16 ms  (2.09x slower)
-  Spork TransientSet               23.85 ms  (23x slower)
-  Spork Set.conj() chain           59.43 ms  (58x slower)
+  Python set(iterable)            586.32 µs  (fastest)
+  Python {x for x in ...}         714.63 µs  (1.22x slower)
+  Python set.add() loop             1.05 ms  (1.79x slower)
+  Spork TransientSet               12.50 ms  (21x slower)
+  Spork Set.conj() chain           27.01 ms  (46x slower)
 
 --- Set Membership (10000 lookups) ---
-  Python set (in)                 812.56 µs  (fastest)
-  Spork Set (in)                    1.91 ms  (2.35x slower)
+  Python set (in)                 483.62 µs  (fastest)
+  Spork Set (in)                  997.52 µs  (2.06x slower)
 
 --- Set Disj (1000 removals) ---
-  Python set copy+discard         300.53 µs  (fastest)
-  Spork Transient.disj_mut()      670.57 µs  (2.23x slower)
-  Spork Set.disj()                  1.10 ms  (3.7x slower)
+  Python set copy+discard         160.77 µs  (fastest)
+  Spork Transient.disj_mut()      362.75 µs  (2.26x slower)
+  Spork Set.disj()                495.65 µs  (3.1x slower)
 
 --- Set Iteration ---
-  Python set                        2.25 ms  (fastest)
-  Spork Set                        10.28 ms  (4.6x slower)
+  Python set                        1.26 ms  (fastest)
+  Spork Set                         4.54 ms  (3.6x slower)
 
 
 ============================================================
@@ -413,28 +396,28 @@ generating pre-built structures (N=50000)... done.
   Scenario: Single update on collection of size 50000
 
 --- Vector: Single Element Update ---
-  Spork Vector.assoc()               0.76 µs  (fastest)
-  Python list.copy() + modify      116.91 µs  (153x slower)
+  Spork Vector.assoc()               0.77 µs  (fastest)
+  Python list.copy() + modify       70.00 µs  (91x slower)
 
 --- Map: Single Key Update ---
-  Spork Map.assoc()                  1.12 µs  (fastest)
-  Python dict.copy() + modify      259.02 µs  (231x slower)
+  Spork Map.assoc()                  0.94 µs  (fastest)
+  Python dict.copy() + modify      184.86 µs  (196x slower)
 
 --- Set: Single Element Add ---
-  Spork Set.conj()                  1.64 µs  (fastest)
-  Python set.copy() + add         239.07 µs  (146x slower)
+  Spork Set.conj()                  0.83 µs  (fastest)
+  Python set.copy() + add         174.96 µs  (212x slower)
 
   Scenario: 100 updates on collection of size 50000
 
 --- Vector: Multiple Updates ---
-  Spork Transient.assoc_mut()       21.00 µs  (fastest)
-  Spork Vector.assoc() chain        44.06 µs  (2.10x slower)
-  Python list copy chain            11.58 ms  (551x slower)
+  Spork Transient.assoc_mut()       20.21 µs  (fastest)
+  Spork Vector.assoc() chain        42.33 µs  (2.09x slower)
+  Python list copy chain             5.79 ms  (287x slower)
 
 --- Map: Multiple Updates ---
-  Spork Map.assoc() chain           99.92 µs  (fastest)
-  Spork Transient.assoc_mut()      123.57 µs  (1.24x slower)
-  Python dict copy chain            34.87 ms  (349x slower)
+  Spork Transient.assoc_mut()       43.34 µs  (fastest)
+  Spork Map.assoc() chain           62.61 µs  (1.44x slower)
+  Python dict copy chain            16.06 ms  (371x slower)
 
 
 ============================================================
@@ -442,29 +425,29 @@ generating pre-built structures (N=50000)... done.
 ============================================================
 
 --- Length Operation ---
-  Python len(dict)                  0.24 µs  (fastest)
-  Python len(set)                   0.24 µs  (~same)
-  Spork len(Map)                    0.27 µs  (1.13x slower)
-  Spork len(Vector)                 0.29 µs  (1.20x slower)
-  Spork len(Set)                    0.34 µs  (1.41x slower)
-  Python len(list)                  1.97 µs  (8.2x slower)
+  Python len(set)                   0.20 µs  (fastest)
+  Spork len(Set)                    0.29 µs  (1.42x slower)
+  Spork len(Map)                    0.29 µs  (1.42x slower)
+  Python len(list)                  0.29 µs  (1.43x slower)
+  Python len(dict)                  0.32 µs  (1.56x slower)
+  Spork len(Vector)                 0.53 µs  (2.61x slower)
 
 --- Eager Sequence Conversion (to Cons list) ---
-  Python list(iter(list))         254.80 µs  (fastest)
-  Spork Vector.to_seq()             3.49 ms  (14x slower)
-  Spork Set.to_seq()               11.06 ms  (43x slower)
-  Spork Map.to_seq()               34.36 ms  (135x slower)
+  Python list(iter(list))         162.41 µs  (fastest)
+  Spork Vector.to_seq()             2.40 ms  (15x slower)
+  Spork Set.to_seq()                7.41 ms  (46x slower)
+  Spork Map.to_seq()               23.62 ms  (145x slower)
 
 --- Lazy Sequence Creation (O(1)) ---
-  Python iter(list)                 0.35 µs  (fastest)
-  Python (x for x in list)          0.48 µs  (1.37x slower)
-  Spork lazy_seq(Set)               1.09 µs  (3.1x slower)
-  Spork lazy_seq(Map)               1.21 µs  (3.5x slower)
-  Spork lazy_seq(Vector)            2.40 µs  (6.9x slower)
+  Python iter(list)                 0.31 µs  (fastest)
+  Python (x for x in list)          0.46 µs  (1.48x slower)
+  Spork lazy_seq(Map)               1.05 µs  (3.4x slower)
+  Spork lazy_seq(Set)               1.17 µs  (3.7x slower)
+  Spork lazy_seq(Vector)            1.36 µs  (4.3x slower)
 
 --- Lazy Sequence Full Consumption ---
-  Python sum(iter(list))             2.23 ms  (fastest)
-  Spork sum(lazy_seq(Vector))       33.24 ms  (15x slower)
+  Python sum(iter(list))             1.32 ms  (fastest)
+  Spork sum(lazy_seq(Vector))       21.03 ms  (16x slower)
 
 
 ============================================================
@@ -472,14 +455,14 @@ generating pre-built structures (N=50000)... done.
 ============================================================
 
 --- NumPy Array Creation ---
-  np.array(DoubleVector) [zero-copy]        3.55 µs  (fastest)
-  np.array(Python list)                     2.05 ms  (576x slower)
+  np.array(DoubleVector) [zero-copy]        0.84 µs  (fastest)
+  np.array(Python list)                     1.29 ms  (1536x slower)
 
 --- NumPy Operations ---
-  np.sum(from DoubleVector)        10.69 µs  (fastest)
-  np.mean(from list)               13.31 µs  (1.25x slower)
-  np.mean(from DoubleVector)       17.45 µs  (1.63x slower)
-  np.sum(from list)                28.21 µs  (2.64x slower)
+  np.sum(from DoubleVector)        11.08 µs  (fastest)
+  np.sum(from list)                13.22 µs  (1.19x slower)
+  np.mean(from DoubleVector)       14.47 µs  (1.31x slower)
+  np.mean(from list)               18.60 µs  (1.68x slower)
 
   Verification: Array sum=1249975000.00
 
@@ -506,40 +489,42 @@ generating pre-built structures (N=100000)... done.
 ============================================================
 
 --- Vector Construction (N=100000) ---
-  Python list(range(N))               4.69 ms  (fastest)
-  Python [x for x in range(N)]        4.85 ms  (~same)
-  Python list.append() loop           5.79 ms  (1.24x slower)
-  Spork vec(*range(N))                7.87 ms  (1.68x slower)
-  Spork TransientVector               8.27 ms  (1.77x slower)
-  Spork Vector.conj() chain          19.80 ms  (4.2x slower)
+  Python list(range(N))               2.84 ms  (fastest)
+  Python [x for x in range(N)]        3.31 ms  (1.17x slower)
+  Python list.append() loop           3.82 ms  (1.34x slower)
+  Spork vec(*range(N))                5.38 ms  (1.89x slower)
+  Spork TransientVector               5.76 ms  (2.03x slower)
+  Spork Vector.conj() chain          11.81 ms  (4.2x slower)
 
 --- Float64 Vector Construction ---
-  Python list[float]                 1.85 ms  (fastest)
-  Spork TransientDoubleVector        3.85 ms  (2.08x slower)
-  Python array('d').extend()         4.89 ms  (2.64x slower)
-  Spork vec_f64(*data)              11.20 ms  (6.1x slower)
+  Spork vec_f64(*data)             986.60 µs  (fastest)
+  Python list[float]                 1.22 ms  (1.24x slower)
+  Spork vec(*data) boxed             1.98 ms  (2.00x slower)
+  Spork TransientDoubleVector        2.43 ms  (2.46x slower)
+  Python array('d').extend()         2.97 ms  (3.0x slower)
 
 --- Int64 Vector Construction ---
-  Python list[int]                  2.18 ms  (fastest)
-  Spork TransientIntVector          3.86 ms  (1.77x slower)
-  Python array('q').extend()        4.79 ms  (2.20x slower)
-  Spork vec_i64(*data)             11.92 ms  (5.5x slower)
+  Spork vec_i64(*data)            975.93 µs  (fastest)
+  Python list[int]                  1.15 ms  (1.18x slower)
+  Spork vec(*data) boxed            2.11 ms  (2.16x slower)
+  Spork TransientIntVector          2.63 ms  (2.69x slower)
+  Python array('q').extend()        2.94 ms  (3.0x slower)
 
 --- Random Access (10000 reads) ---
-  Python list[i]                  799.92 µs  (fastest)
-  Spork Vector[i]                   2.25 ms  (2.81x slower)
-  Spork Vector.nth(i)               2.91 ms  (3.6x slower)
+  Python list[i]                  461.62 µs  (fastest)
+  Spork Vector[i]                   1.44 ms  (3.1x slower)
+  Spork Vector.nth(i)               1.95 ms  (4.2x slower)
 
 --- Sequential Iteration ---
-  Python list                       4.21 ms  (fastest)
-  Spork Vector                      4.93 ms  (1.17x slower)
-  Spork DoubleVector                5.05 ms  (1.20x slower)
-  Spork IntVector                   7.96 ms  (1.89x slower)
+  Python list                       2.81 ms  (fastest)
+  Spork Vector                      3.45 ms  (1.23x slower)
+  Spork DoubleVector                3.62 ms  (1.29x slower)
+  Spork IntVector                   4.85 ms  (1.72x slower)
 
 --- Vector Pop (1000 pops) ---
-  Spork Transient.pop_mut()        49.07 µs  (fastest)
-  Spork Vector.pop()              162.48 µs  (3.3x slower)
-  Python list.pop()               258.78 µs  (5.3x slower)
+  Spork Transient.pop_mut()        47.79 µs  (fastest)
+  Spork Vector.pop()               96.76 µs  (2.02x slower)
+  Python list.pop()               156.52 µs  (3.3x slower)
 
 
 ============================================================
@@ -547,35 +532,35 @@ generating pre-built structures (N=100000)... done.
 ============================================================
 
 --- Map Construction (N=100000) ---
-  Python dict(zip(k, v))           14.33 ms  (fastest)
-  Python {k: v for ...}            15.09 ms  (~same)
-  Python dict[] loop               15.28 ms  (~same)
-  Spork hash_map(*args)            91.05 ms  (6.4x slower)
-  Spork TransientMap              120.85 ms  (8.4x slower)
-  Spork Map.assoc() chain         203.16 ms  (14x slower)
+  Python dict(zip(k, v))            9.67 ms  (fastest)
+  Python {k: v for ...}            10.13 ms  (~same)
+  Python dict[] loop               10.77 ms  (1.11x slower)
+  Spork hash_map(*args)            44.71 ms  (4.6x slower)
+  Spork TransientMap               73.31 ms  (7.6x slower)
+  Spork Map.assoc() chain         123.37 ms  (13x slower)
 
 --- Map Lookup (10000 lookups) ---
-  Python dict.get(missing)        474.51 µs  (fastest)
-  Python dict[k]                  863.64 µs  (1.82x slower)
-  Spork Map.get(missing)            1.39 ms  (2.94x slower)
-  Spork Map.get(k)                  3.07 ms  (6.5x slower)
+  Python dict.get(missing)        471.08 µs  (fastest)
+  Python dict[k]                  475.93 µs  (~same)
+  Spork Map.get(missing)            1.16 ms  (2.46x slower)
+  Spork Map.get(k)                  1.65 ms  (3.5x slower)
 
 --- Map Dissoc (1000 removals) ---
-  Spork Transient.dissoc_mut()      734.49 µs  (fastest)
-  Spork Map.dissoc()                  1.22 ms  (1.67x slower)
-  Python dict copy+del                1.56 ms  (2.13x slower)
+  Spork Transient.dissoc_mut()      441.12 µs  (fastest)
+  Spork Map.dissoc()                699.70 µs  (1.59x slower)
+  Python dict copy+del              838.34 µs  (1.90x slower)
 
 --- Map Iteration - keys() ---
-  Python dict.keys()                6.69 ms  (fastest)
-  Spork Map.keys()                 41.20 ms  (6.2x slower)
+  Python dict.keys()                4.03 ms  (fastest)
+  Spork Map.keys()                 14.86 ms  (3.7x slower)
 
 --- Map Iteration - values() ---
-  Python dict.values()              5.15 ms  (fastest)
-  Spork Map.values()               33.80 ms  (6.6x slower)
+  Python dict.values()              2.92 ms  (fastest)
+  Spork Map.values()                7.68 ms  (2.63x slower)
 
 --- Map Iteration - items() ---
-  Python dict.items()               6.19 ms  (fastest)
-  Spork Map.items()                45.83 ms  (7.4x slower)
+  Python dict.items()               3.94 ms  (fastest)
+  Spork Map.items()                30.29 ms  (7.7x slower)
 
 
 ============================================================
@@ -583,24 +568,24 @@ generating pre-built structures (N=100000)... done.
 ============================================================
 
 --- Set Construction (N=100000) ---
-  Python set(iterable)              2.67 ms  (fastest)
-  Python {x for x in ...}           2.98 ms  (1.12x slower)
-  Python set.add() loop             3.34 ms  (1.25x slower)
-  Spork TransientSet               53.88 ms  (20x slower)
-  Spork Set.conj() chain          100.26 ms  (38x slower)
+  Python set(iterable)              1.76 ms  (fastest)
+  Python {x for x in ...}           2.05 ms  (1.17x slower)
+  Python set.add() loop             2.42 ms  (1.38x slower)
+  Spork TransientSet               30.50 ms  (17x slower)
+  Spork Set.conj() chain           55.86 ms  (32x slower)
 
 --- Set Membership (10000 lookups) ---
-  Python set (in)                 955.99 µs  (fastest)
-  Spork Set (in)                    1.66 ms  (1.74x slower)
+  Python set (in)                 482.35 µs  (fastest)
+  Spork Set (in)                    1.03 ms  (2.14x slower)
 
 --- Set Disj (1000 removals) ---
-  Spork Transient.disj_mut()      716.12 µs  (fastest)
-  Python set copy+discard         718.28 µs  (~same)
-  Spork Set.disj()                892.63 µs  (1.25x slower)
+  Python set copy+discard         328.93 µs  (fastest)
+  Spork Transient.disj_mut()      342.93 µs  (~same)
+  Spork Set.disj()                505.17 µs  (1.54x slower)
 
 --- Set Iteration ---
-  Python set                        5.16 ms  (fastest)
-  Spork Set                        16.43 ms  (3.2x slower)
+  Python set                        3.35 ms  (fastest)
+  Spork Set                         9.06 ms  (2.70x slower)
 
 
 ============================================================
@@ -610,28 +595,28 @@ generating pre-built structures (N=100000)... done.
   Scenario: Single update on collection of size 100000
 
 --- Vector: Single Element Update ---
-  Spork Vector.assoc()               1.44 µs  (fastest)
-  Python list.copy() + modify      143.13 µs  (99x slower)
+  Spork Vector.assoc()               0.79 µs  (fastest)
+  Python list.copy() + modify      134.59 µs  (171x slower)
 
 --- Map: Single Key Update ---
-  Spork Map.assoc()                  1.93 µs  (fastest)
-  Python dict.copy() + modify        1.09 ms  (566x slower)
+  Spork Map.assoc()                  1.07 µs  (fastest)
+  Python dict.copy() + modify        1.01 ms  (939x slower)
 
 --- Set: Single Element Add ---
-  Spork Set.conj()                  1.04 µs  (fastest)
-  Python set.copy() + add         433.89 µs  (418x slower)
+  Spork Set.conj()                  0.90 µs  (fastest)
+  Python set.copy() + add         416.82 µs  (462x slower)
 
   Scenario: 100 updates on collection of size 100000
 
 --- Vector: Multiple Updates ---
-  Spork Vector.assoc() chain        44.91 µs  (fastest)
-  Spork Transient.assoc_mut()      165.62 µs  (3.7x slower)
-  Python list copy chain            15.59 ms  (347x slower)
+  Spork Transient.assoc_mut()       23.26 µs  (fastest)
+  Spork Vector.assoc() chain        44.02 µs  (1.89x slower)
+  Python list copy chain            11.14 ms  (479x slower)
 
 --- Map: Multiple Updates ---
-  Spork Transient.assoc_mut()       51.14 µs  (fastest)
-  Spork Map.assoc() chain           70.95 µs  (1.39x slower)
-  Python dict copy chain           127.94 ms  (2502x slower)
+  Spork Transient.assoc_mut()       55.45 µs  (fastest)
+  Spork Map.assoc() chain           65.33 µs  (1.18x slower)
+  Python dict copy chain            77.79 ms  (1403x slower)
 
 
 ============================================================
@@ -639,29 +624,29 @@ generating pre-built structures (N=100000)... done.
 ============================================================
 
 --- Length Operation ---
-  Spork len(Vector)                 0.28 µs  (fastest)
-  Spork len(Map)                    0.37 µs  (1.28x slower)
-  Python len(dict)                  0.38 µs  (1.33x slower)
-  Python len(set)                   0.38 µs  (1.33x slower)
-  Python len(list)                  0.39 µs  (1.35x slower)
-  Spork len(Set)                    1.28 µs  (4.5x slower)
+  Spork len(Set)                    0.24 µs  (fastest)
+  Python len(dict)                  0.25 µs  (~same)
+  Python len(list)                  0.31 µs  (1.28x slower)
+  Spork len(Vector)                 0.34 µs  (1.38x slower)
+  Python len(set)                   0.36 µs  (1.47x slower)
+  Spork len(Map)                    0.44 µs  (1.82x slower)
 
 --- Eager Sequence Conversion (to Cons list) ---
-  Python list(iter(list))         570.43 µs  (fastest)
-  Spork Vector.to_seq()             5.52 ms  (9.7x slower)
-  Spork Set.to_seq()               16.85 ms  (30x slower)
-  Spork Map.to_seq()               61.15 ms  (107x slower)
+  Python list(iter(list))         329.93 µs  (fastest)
+  Spork Vector.to_seq()             3.93 ms  (12x slower)
+  Spork Set.to_seq()               17.06 ms  (52x slower)
+  Spork Map.to_seq()               43.90 ms  (133x slower)
 
 --- Lazy Sequence Creation (O(1)) ---
-  Python iter(list)                 0.37 µs  (fastest)
-  Python (x for x in list)          0.54 µs  (1.45x slower)
-  Spork lazy_seq(Vector)            1.12 µs  (3.0x slower)
-  Spork lazy_seq(Map)               1.23 µs  (3.3x slower)
-  Spork lazy_seq(Set)               1.31 µs  (3.5x slower)
+  Python iter(list)                 0.34 µs  (fastest)
+  Python (x for x in list)          0.62 µs  (1.81x slower)
+  Spork lazy_seq(Set)               1.54 µs  (4.5x slower)
+  Spork lazy_seq(Map)               1.56 µs  (4.6x slower)
+  Spork lazy_seq(Vector)            6.81 µs  (20x slower)
 
 --- Lazy Sequence Full Consumption ---
-  Python sum(iter(list))             3.38 ms  (fastest)
-  Spork sum(lazy_seq(Vector))       55.18 ms  (16x slower)
+  Python sum(iter(list))             3.02 ms  (fastest)
+  Spork sum(lazy_seq(Vector))       40.88 ms  (14x slower)
 
 
 ============================================================
@@ -669,14 +654,14 @@ generating pre-built structures (N=100000)... done.
 ============================================================
 
 --- NumPy Array Creation ---
-  np.array(DoubleVector) [zero-copy]        4.39 µs  (fastest)
-  np.array(Python list)                     3.24 ms  (738x slower)
+  np.array(DoubleVector) [zero-copy]        1.23 µs  (fastest)
+  np.array(Python list)                     2.47 ms  (2007x slower)
 
 --- NumPy Operations ---
-  np.mean(from list)               22.19 µs  (fastest)
-  np.mean(from DoubleVector)       23.55 µs  (~same)
-  np.sum(from DoubleVector)        44.33 µs  (2.00x slower)
-  np.sum(from list)               126.76 µs  (5.7x slower)
+  np.mean(from DoubleVector)       20.84 µs  (fastest)
+  np.sum(from DoubleVector)        21.34 µs  (~same)
+  np.sum(from list)                21.41 µs  (~same)
+  np.mean(from list)               22.21 µs  (~same)
 
   Verification: Array sum=4999950000.00
 

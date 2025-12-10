@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Spork PDS Benchmark Suite
 -------------------------
@@ -340,6 +339,9 @@ class Benchmarks:
         def spork_vec_f64_factory():
             return vec_f64(*self.data_float)
 
+        def spork_vec_box_factory():
+            return vec(*self.data_float)
+
         def py_list_int():
             l = []
             for i in self.data_int:
@@ -360,11 +362,18 @@ class Benchmarks:
         def spork_vec_i64_factory():
             return vec_i64(*self.data_int)
 
+        def spork_vec_box_factory():
+            return vec(*self.data_int)
+
         py_float_time = run_benchmark("list[float]", py_list_float, self.ITERS)
         arr_float_time = run_benchmark("array('d')", py_array_float, self.ITERS)
         spork_f64_time = run_benchmark("DoubleVector", spork_transient_f64, self.ITERS)
         spork_f64_factory_time = run_benchmark(
             "vec_f64(*data)", spork_vec_f64_factory, self.ITERS
+        )
+        # also test regular spork vec(*data) for floats
+        spork_f64_vec_box_time = run_benchmark(
+            "vec(*data)", spork_vec_box_factory, self.ITERS
         )
 
         py_int_time = run_benchmark("list[int]", py_list_int, self.ITERS)
@@ -372,6 +381,9 @@ class Benchmarks:
         spork_i64_time = run_benchmark("IntVector", spork_transient_i64, self.ITERS)
         spork_i64_factory_time = run_benchmark(
             "vec_i64(*data)", spork_vec_i64_factory, self.ITERS
+        )
+        spork_i64_vec_box_time = run_benchmark(
+            "vec(*data)", spork_vec_box_factory, self.ITERS
         )
 
         print_group(
@@ -381,6 +393,7 @@ class Benchmarks:
                 ("Python array('d').extend()", arr_float_time),
                 ("Spork TransientDoubleVector", spork_f64_time),
                 ("Spork vec_f64(*data)", spork_f64_factory_time),
+                ("Spork vec(*data) boxed", spork_f64_vec_box_time),
             ],
         )
 
@@ -391,6 +404,7 @@ class Benchmarks:
                 ("Python array('q').extend()", arr_int_time),
                 ("Spork TransientIntVector", spork_i64_time),
                 ("Spork vec_i64(*data)", spork_i64_factory_time),
+                ("Spork vec(*data) boxed", spork_i64_vec_box_time),
             ],
         )
 

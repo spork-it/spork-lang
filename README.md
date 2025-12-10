@@ -504,6 +504,8 @@ Comparison of Spork Persistent Vector vs Native Python List for common operation
 
 > Note: Spork includes specialized `IntVector` and `DoubleVector` types. These support the Buffer Protocol but need further testing and benchmarking to verify zero-copy interop performance (promising early results).
 
+[Benchmarks](docs/BENCHMARKS.md) are available in the `docs/` folder for more detailed performance characteristics of Spork's data structures.
+
 ## Roots
 
 *   **Clojure:** The primary inspiration for our syntax and the sequence abstraction. We admire Clojure's discipline, but Spork is native to Python, not a JVM port.

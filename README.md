@@ -498,13 +498,17 @@ Comparison of Spork Persistent Vector vs Native Python List for common operation
 
 | Operation (N=100k) | Python (Native) | Spork (PDS) | Difference |
 | :--- | :--- | :--- | :--- |
-| **Read** (Random Index) | ~0.8 ms | ~2.2 ms | ~2.8x Slower |
-| **Write** (Append) | ~5.8 ms | ~8.2 ms | ~1.4x Slower |
-| **Copy & Update** | 143.13 µs | **1.44 µs** | **~100x Faster** |
+| Vector random read (10k reads) | 0.46 ms `list[i]` | 1.44 ms `Vector[i]` | ~3x slower |
+| Build collection from `range(N)` | 2.84 ms `list(range(N)) | 5.38 ms `vec(range(N))` | ~2x slower |
+| Copy & update one list/vec element | 134.59 µs `lst = lst.copy; lst[i] = v` | 0.79 µs `vec2 = vec.assoc(i, v)` | ~170x faster |
+| Copy & update one map entry | 1.01 ms `dct = dct.copy(); dct[k] = v` | 1.07 µs `m2 = m.assoc(k, v)` | ~940x faster |
+| Copy & update one set element | 416.82 µs `s = s.copy(); s.add(v)` | 0.90 µs `s2 = s.conj(v)` | ~460x faster |
+
+Benchmarks run on: AMD Ryzen 7 6800H, Linux 6.12, CPython 3.13.5
+
+See [Benchmarks](docs/BENCHMARKS.md) for full details and methodology.
 
 > Note: Spork includes specialized `IntVector` and `DoubleVector` types. These support the Buffer Protocol but need further testing and benchmarking to verify zero-copy interop performance (promising early results).
-
-[Benchmarks](docs/BENCHMARKS.md) are available in the `docs/` folder for more detailed performance characteristics of Spork's data structures.
 
 ## Roots
 

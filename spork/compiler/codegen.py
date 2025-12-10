@@ -1115,16 +1115,6 @@ def compile_toplevel(form):
     return node
 
 
-# === import form ===
-# (import
-#   [math]                              ; import math
-#   [math :as m]                        ; import math as m
-#   [pathlib [Path]]                    ; from pathlib import Path
-#   [collections [defaultdict Counter]] ; from collections import defaultdict, Counter
-#   [math [sin :as s cos]]              ; from math import sin as s, cos
-#   [os.path :as osp [join dirname]])   ; import os.path as osp; from os.path import join, dirname
-
-
 def _compile_std_import(
     module_name: str, alias: str | None, form_loc
 ) -> list[ast.stmt]:
@@ -1287,33 +1277,6 @@ def _compile_import_clause(clause: VectorLiteral, form_loc=None) -> list[ast.stm
     return stmts
 
 
-def compile_import(args, form_loc=None):
-    """
-    Compile (import ...) form with new module-first syntax.
-
-    Syntax:
-        (import
-          [math]                              ; import math
-          [math :as m]                        ; import math as m
-          [pathlib [Path]]                    ; from pathlib import Path
-          [collections [defaultdict Counter]] ; from collections import defaultdict, Counter
-          [math [sin :as s cos]]              ; from math import sin as s, cos
-          [os.path :as osp [join dirname]])   ; import os.path as osp; from os.path import join, dirname
-    """
-    stmts: list[ast.stmt] = []
-
-    for arg in args:
-        if isinstance(arg, VectorLiteral):
-            stmts.extend(_compile_import_clause(arg, form_loc))
-        else:
-            raise SyntaxError(
-                f"import expects vector clauses like [module] or [module [names]], "
-                f"got {type(arg).__name__}"
-            )
-
-    return stmts
-
-
 # === def / defn ===
 
 
@@ -1324,7 +1287,7 @@ def _get_specialized_vector_constructor(type_expr, value_form):
     Returns 'vec_f64', 'vec_i64', or None.
 
     Only optimizes when:
-    1. Type annotation is (Vector float) or (Vector int) [or legacy (Vector float/int)]
+    1. Type annotation is (Vector float) or (Vector int)
     2. Value is a vector literal [...]
     """
     # Only optimize vector literals
@@ -3252,6 +3215,7 @@ def compile_destructure(pattern, value_expr, form_loc=None):
     - Vector destructuring: [a b c] -> sequential element access
     - Vector with rest: [a b & rest] -> first N elements + rest
     - Dict with :keys: {:keys [x y]} -> extract named keys
+    - Dict with key-value: {a :x b :y} -> bind 'a' to map[:x], 'b' to map[:y]
     - Nested patterns: [[a b] c] -> recursive destructuring
     """
     # Get location from pattern if form_loc not provided
@@ -3397,20 +3361,6 @@ def compile_destructure(pattern, value_expr, form_loc=None):
                     keywords=[],
                 )
                 stmts.extend(compile_destructure(key, elem, loc))
-            elif isinstance(key, Keyword):
-                # Reverse syntax: {:x a :y b} means bind 'a' to value at key :x
-                # Create Keyword object for lookup
-                lookup_expr = ast.Call(
-                    func=ast.Name(id="Keyword", ctx=ast.Load()),
-                    args=[ast.Constant(value=key.name)],
-                    keywords=[],
-                )
-                elem = ast.Call(
-                    func=ast.Name(id="get", ctx=ast.Load()),
-                    args=[temp_load, lookup_expr],
-                    keywords=[],
-                )
-                stmts.extend(compile_destructure(value, elem, loc))
             else:
                 raise SyntaxError(
                     f"Invalid dict destructuring pattern: {key!r} -> {value!r}"
@@ -6210,7 +6160,6 @@ def compile_vector_comprehension(for_form, body_expr, form):
         loop_body.extend(compile_destructure(var_form, item_load))
 
     # Compile body expression INSIDE the loop context (after variable is bound)
-    # This is the key fix - we compile the body here, not earlier
     body_compiled = compile_expr(body_expr)
 
     # Capture any nested functions that were generated during body compilation
@@ -8131,10 +8080,10 @@ def compile_forms_to_code(src: str, filename: str = "<string>"):
 
     # Phase 1: Read
     forms = read_str(src)
-    # Phase 1.5: Process defmacros (creates a local macro environment)
+    # Process defmacros (creates a local macro environment)
     local_macro_env = dict(MACRO_ENV)
     forms = process_defmacros(forms, local_macro_env)
-    # Phase 1.6: Process import-macros, which may add to local macro env
+    # Process import-macros, which may add to local macro env
     forms = process_import_macros(forms, local_macro_env)
     # Phase 2: Macroexpand with local macro environment
     forms = macroexpand_all(forms, local_macro_env)

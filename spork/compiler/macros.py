@@ -290,14 +290,6 @@ def is_macro_call(form, macro_env):
     if name in macro_env:
         return True
 
-    # Also check for slash-qualified names during transition period
-    # This allows existing code with ns/macro to continue working
-    if "/" in name:
-        # Convert ns/macro to ns.macro format for lookup
-        dot_name = name.replace("/", ".", 1)
-        if dot_name in macro_env:
-            return True
-
     return False
 
 
@@ -313,10 +305,6 @@ def macroexpand_1(form, macro_env):
     # Look up macro - try direct name first
     if macro_name in macro_env:
         macro_fn = macro_env[macro_name]
-    elif "/" in macro_name:
-        # Convert ns/macro to ns.macro format for lookup (transition support)
-        dot_name = macro_name.replace("/", ".", 1)
-        macro_fn = macro_env[dot_name]
     else:
         # Should not reach here if is_macro_call returned True
         raise RuntimeError(f"Macro not found: {macro_name}")
@@ -475,8 +463,7 @@ def process_import_macros(forms, macro_env):
                     "import-macros currently supports only (import-macros module [m1 m2 ...])"
                 )
 
-            # Convert module symbol to Python module name
-            py_mod_name = module_form.name.replace("/", ".")
+            py_mod_name = module_form.name
 
             try:
                 mod = importlib.import_module(py_mod_name)
@@ -492,9 +479,7 @@ def process_import_macros(forms, macro_env):
                     "(is it a Spork module with defmacros?)"
                 )
 
-            # Pull requested macro functions into this file's macro env
-            # Get the module alias (convert dots to match how it would be used)
-            module_alias = module_form.name.replace("/", ".")
+            module_alias = module_form.name
 
             for name_form in names_vec.items:
                 if not isinstance(name_form, Symbol):
@@ -508,8 +493,6 @@ def process_import_macros(forms, macro_env):
                 macro_env[macro_name] = macros_dict[macro_name]
                 # Register with dot notation (canonical format)
                 macro_env[f"{module_alias}.{macro_name}"] = macros_dict[macro_name]
-                # Also register with slash notation for backwards compatibility
-                macro_env[f"{module_form.name}/{macro_name}"] = macros_dict[macro_name]
 
             # Do NOT keep this form; it's compile-time only
         else:

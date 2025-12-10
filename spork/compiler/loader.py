@@ -217,13 +217,13 @@ def compile_file_to_python(src: str, src_path: str) -> tuple[str, dict[str, Any]
     # Phase 1: Read
     forms = read_str(src)
 
-    # Phase 1.5: Process defmacros
+    # Process defmacros
     local_macro_env = dict(MACRO_ENV)
     forms = _process_defmacros_base(
         forms, local_macro_env, compile_defn, normalize_name
     )
 
-    # Phase 1.6: Process import-macros
+    # Process import-macros
     forms = process_import_macros(forms, local_macro_env)
 
     # Phase 2: Macroexpand

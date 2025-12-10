@@ -254,7 +254,7 @@ class ReplBackend:
             if len(forms) >= 1 and self._is_ns_form(forms[0]):
                 ns_form_ns_name = self._extract_ns_name(forms[0])
 
-            # Phase 1.5: Process defmacros
+            # Process defmacros
             forms = process_defmacros(forms, self.macro_env)
 
             # Phase 2: Macroexpand

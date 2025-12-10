@@ -42,12 +42,6 @@
   (assert (= foo 100))
   (assert (= bar 200)))
 
-;; Alternative syntax: {:key binding}
-(let [{:a baz :b qux} {:a 300 :b 400}]
-  (print "Alternative {:a baz :b qux} from {:a 300 :b 400}:" baz qux)
-  (assert (= baz 300))
-  (assert (= qux 400)))
-
 (print "\n--- Mixed Destructuring in Let ---")
 
 ;; Multiple bindings with mixed patterns

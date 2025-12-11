@@ -187,7 +187,8 @@
 (def my-path #p"src/main.spork")
 (print "Path:" my-path)
 (print "Type:" (type my-path))
-(assert (= (str (type my-path)) "<class 'pathlib._local.PosixPath'>") "should be a Path")
+; Check for Path in the type string to work on both Windows (WindowsPath) and Unix (PosixPath)
+(assert (in "Path" (str (type my-path))) "should be a Path")
 
 ; Path operations
 (def joined (.joinpath #p"base" "subdir" "file.txt"))

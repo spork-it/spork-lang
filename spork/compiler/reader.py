@@ -26,6 +26,21 @@ import ast
 from dataclasses import dataclass
 from typing import Any, Optional, TypeVar
 
+from spork.compiler.reader_macros import (
+    DISCARD,
+    AnonFnLiteral,
+    FStringLiteral,
+    InstLiteral,
+    PathLiteral,
+    ReadTimeEval,
+    RegexLiteral,
+    SliceLiteral,
+    UUIDLiteral,
+    is_discard,
+    validate_inst,
+    validate_regex,
+    validate_uuid,
+)
 from spork.runtime.types import (
     Decorated,
     Keyword,
@@ -223,6 +238,205 @@ def tokenize(src: str) -> list[Token]:
                 tokens.append(Token("#{", tok_line, tok_col))
                 i += 2
                 continue
+            # Check for anonymous function #(
+            if i + 1 < n and src[i + 1] == "(":
+                tokens.append(Token("#(", tok_line, tok_col))
+                i += 2
+                continue
+            # Check for slice literal #[
+            if i + 1 < n and src[i + 1] == "[":
+                tokens.append(Token("#[", tok_line, tok_col))
+                i += 2
+                continue
+            # Check for discard #_
+            if i + 1 < n and src[i + 1] == "_":
+                tokens.append(Token("#_", tok_line, tok_col))
+                i += 2
+                continue
+            # Check for read-time eval #=
+            if i + 1 < n and src[i + 1] == "=":
+                tokens.append(Token("#=", tok_line, tok_col))
+                i += 2
+                continue
+            # Check for tagged string literals: #f", #p", #r"
+            if i + 1 < n and src[i + 1] in "fpr" and i + 2 < n and src[i + 2] == '"':
+                tag = src[i + 1]
+                i += 2  # Move past #f, #p, or #r
+                # Now parse the string (i is at ")
+                string_start_col = tok_col
+                i += 1  # Move past opening quote
+                buf = []
+                if tag == "f":
+                    # F-string: parse with embedded expressions
+                    # We'll store raw content and parse expressions in reader
+                    parts = []
+                    current_text = []
+                    brace_depth = 0
+                    expr_start = -1
+                    while i < n:
+                        if src[i] == "\\":
+                            if i + 1 < n:
+                                esc = src[i + 1]
+                                if esc == "n":
+                                    current_text.append("\n")
+                                elif esc == "t":
+                                    current_text.append("\t")
+                                elif esc == "{":
+                                    current_text.append("{")
+                                elif esc == "}":
+                                    current_text.append("}")
+                                elif esc == "\n":
+                                    i += 2
+                                    line += 1
+                                    line_start = i
+                                    continue
+                                else:
+                                    current_text.append(esc)
+                                i += 2
+                            else:
+                                raise SyntaxError(
+                                    f"unterminated string escape at line {line}"
+                                )
+                        elif src[i] == "{" and brace_depth == 0:
+                            # Start of embedded expression
+                            if current_text:
+                                parts.append(("TEXT", "".join(current_text)))
+                                current_text = []
+                            brace_depth = 1
+                            expr_start = i + 1
+                            i += 1
+                        elif src[i] == "{" and brace_depth > 0:
+                            brace_depth += 1
+                            i += 1
+                        elif src[i] == "}" and brace_depth > 0:
+                            brace_depth -= 1
+                            if brace_depth == 0:
+                                # End of embedded expression
+                                expr_text = src[expr_start:i]
+                                parts.append(("EXPR", expr_text))
+                                i += 1
+                            else:
+                                i += 1
+                        elif src[i] == "\n":
+                            if brace_depth > 0:
+                                # Inside expression
+                                i += 1
+                                line += 1
+                                line_start = i
+                            else:
+                                current_text.append("\n")
+                                i += 1
+                                line += 1
+                                line_start = i
+                        elif src[i] == '"' and brace_depth == 0:
+                            if current_text:
+                                parts.append(("TEXT", "".join(current_text)))
+                            i += 1
+                            break
+                        else:
+                            if brace_depth > 0:
+                                i += 1
+                            else:
+                                current_text.append(src[i])
+                                i += 1
+                    else:
+                        raise SyntaxError(
+                            f"unterminated f-string starting at line {tok_line}"
+                        )
+                    tokens.append(Token(("FSTRING", parts), tok_line, string_start_col))
+                else:
+                    # Tagged string (#p or #r)
+                    # #r is raw (preserve backslashes), #p uses normal escaping
+                    is_raw = tag == "r"
+                    while i < n:
+                        if src[i] == "\\":
+                            if is_raw:
+                                # Raw string: preserve backslashes literally
+                                buf.append("\\")
+                                i += 1
+                            elif i + 1 < n:
+                                esc = src[i + 1]
+                                if esc == "n":
+                                    buf.append("\n")
+                                elif esc == "t":
+                                    buf.append("\t")
+                                elif esc == "\n":
+                                    i += 2
+                                    line += 1
+                                    line_start = i
+                                    continue
+                                else:
+                                    buf.append(esc)
+                                i += 2
+                            else:
+                                raise SyntaxError(
+                                    f"unterminated string escape at line {line}"
+                                )
+                        elif src[i] == "\n":
+                            buf.append("\n")
+                            i += 1
+                            line += 1
+                            line_start = i
+                        elif src[i] == '"':
+                            i += 1
+                            break
+                        else:
+                            buf.append(src[i])
+                            i += 1
+                    else:
+                        raise SyntaxError(
+                            f"unterminated string starting at line {tok_line}"
+                        )
+                    tag_type = "PATH" if tag == "p" else "REGEX"
+                    tokens.append(
+                        Token((tag_type, "".join(buf)), tok_line, string_start_col)
+                    )
+                continue
+            # Check for #uuid" and #inst" tagged literals
+            if i + 1 < n and src[i + 1] == "u":
+                # Check for #uuid"
+                if src[i : i + 6] == '#uuid"':
+                    i += 5  # Move to the quote
+                    string_start_col = tok_col
+                    i += 1  # Move past opening quote
+                    buf = []
+                    while i < n:
+                        if src[i] == '"':
+                            i += 1
+                            break
+                        else:
+                            buf.append(src[i])
+                            i += 1
+                    else:
+                        raise SyntaxError(
+                            f"unterminated uuid literal at line {tok_line}"
+                        )
+                    tokens.append(
+                        Token(("UUID", "".join(buf)), tok_line, string_start_col)
+                    )
+                    continue
+            if i + 1 < n and src[i + 1] == "i":
+                # Check for #inst"
+                if src[i : i + 6] == '#inst"':
+                    i += 5  # Move to the quote
+                    string_start_col = tok_col
+                    i += 1  # Move past opening quote
+                    buf = []
+                    while i < n:
+                        if src[i] == '"':
+                            i += 1
+                            break
+                        else:
+                            buf.append(src[i])
+                            i += 1
+                    else:
+                        raise SyntaxError(
+                            f"unterminated inst literal at line {tok_line}"
+                        )
+                    tokens.append(
+                        Token(("INST", "".join(buf)), tok_line, string_start_col)
+                    )
+                    continue
             # Standalone # is the keyword-only marker
             tokens.append(Token("#", tok_line, tok_col))
             i += 1
@@ -414,6 +628,170 @@ class Reader:
             end_col = dec_loc.end_col if dec_loc else tok_col + 1
             return Decorated(decorator_expr, tok_line, tok_col, end_line, end_col)
 
+        # Reader macro: #_ discard
+        if tok_value == "#_":
+            self.next()
+            # Read and discard the next form
+            self.read_form()
+            # Return the discard sentinel - caller should filter these out
+            return DISCARD
+
+        # Reader macro: #= read-time eval
+        if tok_value == "#=":
+            self.next()
+            inner = self.read_form()
+            inner_loc = get_source_location(inner)
+            end_line = inner_loc.end_line if inner_loc else tok_line
+            end_col = inner_loc.end_col if inner_loc else tok_col + 2
+            return ReadTimeEval(inner, tok_line, tok_col, end_line, end_col)
+
+        # Reader macro: #( anonymous function
+        # The contents of #(...) form a single expression that is the function body.
+        # #(+ % 1) -> body is the form (+ % 1), returned as [the form]
+        # #(do (print %) (+ % 1)) -> body is (do (print %) (+ % 1))
+        # #(42) -> body is just 42 (single literal, not a call)
+        if tok_value == "#(":
+            self.next()
+            items, end_tok = self.read_list_with_end(")", tok_line, tok_col)
+            # Filter out any discarded forms
+            items = [item for item in items if not is_discard(item)]
+            end_line = end_tok.line if end_tok else tok_line
+            end_col = end_tok.col + 1 if end_tok else tok_col + 2
+
+            # Determine the body form:
+            # - If single item that's not a Symbol (function call head), use it directly
+            # - Otherwise wrap as a SourceList (function call)
+            if len(items) == 1 and not isinstance(items[0], Symbol):
+                # Single literal value like #(42) or #("hello")
+                body_form = items[0]
+            else:
+                # Multiple items or starts with symbol - it's a function call
+                body_form = SourceList(items, tok_line, tok_col, end_line, end_col)
+
+            # The body is a list containing this single form
+            return AnonFnLiteral([body_form], tok_line, tok_col, end_line, end_col)
+
+        # Reader macro: #[ slice literal
+        if tok_value == "#[":
+            self.next()
+            items, end_tok = self.read_list_with_end("]", tok_line, tok_col)
+            # Filter out any discarded forms
+            items = [item for item in items if not is_discard(item)]
+            end_line = end_tok.line if end_tok else tok_line
+            end_col = end_tok.col + 1 if end_tok else tok_col + 2
+
+            # Parse slice arguments: #[start stop step] or #[start stop] or #[start]
+            # _ means None
+            def parse_slice_arg(arg):
+                if isinstance(arg, Symbol) and arg.name == "_":
+                    return None
+                return arg
+
+            if len(items) == 0:
+                raise SyntaxError(
+                    f"Slice literal requires at least one argument at line {tok_line}"
+                )
+            elif len(items) == 1:
+                # #[stop] -> slice(None, stop)
+                return SliceLiteral(
+                    None,
+                    parse_slice_arg(items[0]),
+                    None,
+                    tok_line,
+                    tok_col,
+                    end_line,
+                    end_col,
+                )
+            elif len(items) == 2:
+                # #[start stop] -> slice(start, stop)
+                return SliceLiteral(
+                    parse_slice_arg(items[0]),
+                    parse_slice_arg(items[1]),
+                    None,
+                    tok_line,
+                    tok_col,
+                    end_line,
+                    end_col,
+                )
+            elif len(items) == 3:
+                # #[start stop step] -> slice(start, stop, step)
+                return SliceLiteral(
+                    parse_slice_arg(items[0]),
+                    parse_slice_arg(items[1]),
+                    parse_slice_arg(items[2]),
+                    tok_line,
+                    tok_col,
+                    end_line,
+                    end_col,
+                )
+            else:
+                raise SyntaxError(
+                    f"Slice literal takes at most 3 arguments, got {len(items)} at line {tok_line}"
+                )
+
+        # Reader macro: #f"..." f-string
+        if isinstance(tok_value, tuple) and tok_value[0] == "FSTRING":
+            self.next()
+            parts = tok_value[1]
+            # Parse embedded expressions
+            parsed_parts = []
+            for part_type, part_content in parts:
+                if part_type == "TEXT":
+                    parsed_parts.append(part_content)
+                elif part_type == "EXPR":
+                    # Parse the expression as Spork code
+                    expr_forms = read_str(part_content)
+                    if len(expr_forms) == 0:
+                        raise SyntaxError(
+                            f"Empty expression in f-string at line {tok_line}"
+                        )
+                    elif len(expr_forms) == 1:
+                        parsed_parts.append(("EXPR", expr_forms[0]))
+                    else:
+                        # Multiple forms - wrap in do
+                        parsed_parts.append(
+                            (
+                                "EXPR",
+                                SourceList(
+                                    [Symbol("do", tok_line, tok_col)] + expr_forms,
+                                    tok_line,
+                                    tok_col,
+                                    tok_line,
+                                    tok_col,
+                                ),
+                            )
+                        )
+            return FStringLiteral(parsed_parts, tok_line, tok_col, tok_line, tok_col)
+
+        # Reader macro: #p"..." path literal
+        if isinstance(tok_value, tuple) and tok_value[0] == "PATH":
+            self.next()
+            return PathLiteral(tok_value[1], tok_line, tok_col, tok_line, tok_col)
+
+        # Reader macro: #r"..." regex literal
+        if isinstance(tok_value, tuple) and tok_value[0] == "REGEX":
+            self.next()
+            pattern = tok_value[1]
+            # Validate regex at read time
+            validate_regex(pattern, tok_line, tok_col)
+            return RegexLiteral(pattern, tok_line, tok_col, tok_line, tok_col)
+
+        # Reader macro: #uuid"..." UUID literal
+        if isinstance(tok_value, tuple) and tok_value[0] == "UUID":
+            self.next()
+            value = tok_value[1]
+            # Validate UUID at read time
+            validate_uuid(value, tok_line, tok_col)
+            return UUIDLiteral(value, tok_line, tok_col, tok_line, tok_col)
+
+        # Reader macro: #inst"..." instant literal
+        if isinstance(tok_value, tuple) and tok_value[0] == "INST":
+            self.next()
+            value = tok_value[1]
+            # Validate datetime at read time
+            validate_inst(value, tok_line, tok_col)
+            return InstLiteral(value, tok_line, tok_col, tok_line, tok_col)
+
         tok = self.next()
         assert tok is not None  # We already peeked and it was not None
         tok_value = tok.value
@@ -499,7 +877,10 @@ class Reader:
             if tok.value == end_delim:
                 end_tok = self.next()
                 return items, end_tok
-            items.append(self.read_form())
+            form = self.read_form()
+            # Filter out discarded forms
+            if not is_discard(form):
+                items.append(form)
 
     def read_list(self, end_delim, start_line: int = 0, start_col: int = 0):
         """Read a list (for backward compatibility)."""
@@ -546,7 +927,9 @@ def read_str(src: str):
     """Phase 1: Read - tokenize and parse source into forms."""
     tokens = tokenize(src)
     rdr = Reader(tokens)
-    return rdr.read()
+    forms = rdr.read()
+    # Filter out any top-level discarded forms
+    return [f for f in forms if not is_discard(f)]
 
 
 # =============================================================================
@@ -566,4 +949,15 @@ __all__ = [
     # Reader
     "Reader",
     "read_str",
+    # Reader macro types (re-exported from reader_macros)
+    "AnonFnLiteral",
+    "SliceLiteral",
+    "FStringLiteral",
+    "PathLiteral",
+    "RegexLiteral",
+    "UUIDLiteral",
+    "InstLiteral",
+    "ReadTimeEval",
+    "DISCARD",
+    "is_discard",
 ]

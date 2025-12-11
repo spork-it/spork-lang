@@ -1,0 +1,367 @@
+; Test file for Reader Macros
+
+(print "=== Testing Reader Macros ===\n")
+
+; =============================================================================
+; #[...] - Slice Literal
+; =============================================================================
+
+(print "--- Testing #[...] Slice Literals ---")
+
+; Basic slice with Python list
+(def my-list (list [0 1 2 3 4 5 6 7 8 9]))
+
+; #[start stop]
+(print "Original list:" my-list)
+(print "#[2 5] (items 2-4):" (get my-list #[2 5]))
+(assert (= (get my-list #[2 5]) (list [2 3 4])) "slice [2 5] should give [2 3 4]")
+
+; #[start stop step]
+(print "#[0 8 2] (every other):" (get my-list #[0 8 2]))
+(assert (= (get my-list #[0 8 2]) (list [0 2 4 6])) "slice with step 2 should work")
+
+; Using _ for None
+(print "#[_ _ -1] (reverse):" (get my-list #[_ _ -1]))
+(assert (= (get my-list #[_ _ -1]) (list [9 8 7 6 5 4 3 2 1 0])) "reverse slice should work")
+
+(print "#[5 _] (from index 5):" (get my-list #[5 _]))
+(assert (= (get my-list #[5 _]) (list [5 6 7 8 9])) "slice from index 5 should work")
+
+(print "#[_ 3] (first 3):" (get my-list #[_ 3]))
+(assert (= (get my-list #[_ 3]) (list [0 1 2])) "slice first 3 should work")
+
+(print "Slice literals with Python list: PASS\n")
+
+; Slice literals with Spork Vector
+(print "--- Testing #[...] Slice Literals with Vectors ---")
+
+(def my-vec [1 2 3 4 5 6 7 8 9])
+(print "Original vector:" my-vec)
+
+; Basic slicing
+(print "#[2 5] (items 2-4):" (get my-vec #[2 5]))
+(assert (= (get my-vec #[2 5]) [3 4 5]) "vector slice [2 5] should work")
+
+; Slicing with step
+(print "#[2 _ 2] (every other from index 2):" (get my-vec #[2 _ 2]))
+(assert (= (get my-vec #[2 _ 2]) [3 5 7 9]) "slice with step 2 from index 2 should work")
+
+(print "#[2 _ 3] (every third from index 2):" (get my-vec #[2 _ 3]))
+(assert (= (get my-vec #[2 _ 3]) [3 6 9]) "slice with step 3 from index 2 should work")
+
+(print "#[2 _ 4] (every fourth from index 2):" (get my-vec #[2 _ 4]))
+(assert (= (get my-vec #[2 _ 4]) [3 7]) "slice with step 4 from index 2 should work")
+
+(print "#[2 _ 5] (every fifth from index 2):" (get my-vec #[2 _ 5]))
+(assert (= (get my-vec #[2 _ 5]) [3 8]) "slice with step 5 from index 2 should work")
+
+; Reverse slice on vector
+(print "#[_ _ -1] (reverse vector):" (get my-vec #[_ _ -1]))
+(assert (= (get my-vec #[_ _ -1]) [9 8 7 6 5 4 3 2 1]) "reverse vector slice should work")
+
+; Slice returns a Vector
+(print "Slice result type:" (type (get my-vec #[0 3])))
+(assert (= (str (type (get my-vec #[0 3]))) "<class 'spork.runtime.pds.Vector'>") "slice of vector should return vector")
+
+(print "Slice literals with Vectors: PASS\n")
+
+; =============================================================================
+; #(...) - Anonymous Function (Hoisted Lambda)
+; =============================================================================
+
+(print "--- Testing #(...) Anonymous Functions ---")
+
+; Single argument with %
+(def add-one #(+ % 1))
+(print "(add-one 5):" (add-one 5))
+(assert (= (add-one 5) 6) "add-one should return 6")
+
+; Multiple arguments with %1, %2
+(def add #(+ %1 %2))
+(print "(add 3 4):" (add 3 4))
+(assert (= (add 3 4) 7) "add should return 7")
+
+; Three arguments
+(def sum3 #(+ %1 %2 %3))
+(print "(sum3 1 2 3):" (sum3 1 2 3))
+(assert (= (sum3 1 2 3) 6) "sum3 should return 6")
+
+; Using with map
+(def doubled (list (map #(* % 2) [1 2 3 4 5])))
+(print "map with #(* % 2):" doubled)
+(assert (= doubled (list [2 4 6 8 10])) "doubling should work")
+
+; Using with filter
+(def evens (list (filter #(= 0 (mod % 2)) [1 2 3 4 5 6])))
+(print "filter evens:" evens)
+(assert (= evens (list [2 4 6])) "filtering evens should work")
+
+; Rest args with %&
+(def sum-all #(apply + %&))
+(print "(sum-all 1 2 3 4 5):" (sum-all 1 2 3 4 5))
+(assert (= (sum-all 1 2 3 4 5) 15) "sum-all should return 15")
+
+; Combining positional and rest
+(def add-first-to-sum #(+ %1 (apply + %&)))
+(print "(add-first-to-sum 10 1 2 3):" (add-first-to-sum 10 1 2 3))
+(assert (= (add-first-to-sum 10 1 2 3) 16) "should add 10 + (1+2+3) = 16")
+
+; Nested expressions
+(def complex-fn #(* (+ %1 %2) (- %1 %2)))
+(print "(complex-fn 5 3):" (complex-fn 5 3))
+(assert (= (complex-fn 5 3) 16) "(5+3)*(5-3) = 8*2 = 16")
+
+(print "Anonymous functions: PASS\n")
+
+; =============================================================================
+; #_ - Discard
+; =============================================================================
+
+(print "--- Testing #_ Discard ---")
+
+; Discard in expression
+(def x (+ 1 2 #_(print "this should not print") 3))
+(print "1 + 2 + (discarded) + 3 =" x)
+(assert (= x 6) "discard should not affect result")
+
+; Discard in vector
+(def v [1 #_2 3 #_4 5])
+(print "vector with discards:" v)
+(assert (= (count v) 3) "vector should have 3 elements")
+(assert (= (nth v 1) 3) "second element should be 3")
+
+; Discard complex form
+(def y (+ 1 #_(do (print "complex discarded") (some-undefined-fn)) 2))
+(assert (= y 3) "complex discard should work")
+
+; Nested discard - #_#_2 3 means #_ discards (#_2), and #_2 discards 2
+; So we're left with [1 3 4] - only the 2 is actually removed from the data
+(def z [1 #_#_2 3 4])
+(print "nested discard [1 #_#_2 3 4]:" z)
+(assert (= (count z) 3) "nested discard removes one value (2)")
+(assert (= (list z) (list [1 3 4])) "should be [1 3 4]")
+
+(print "Discard: PASS\n")
+
+; =============================================================================
+; #f"..." - F-String
+; =============================================================================
+
+(print "--- Testing #f\"...\" F-Strings ---")
+
+; Simple variable interpolation
+(def name "World")
+(def greeting #f"Hello, {name}!")
+(print greeting)
+(assert (= greeting "Hello, World!") "simple interpolation should work")
+
+; Expression interpolation
+(def math-result #f"1 + 1 = {(+ 1 1)}")
+(print math-result)
+(assert (= math-result "1 + 1 = 2") "expression interpolation should work")
+
+; Multiple interpolations
+(def a 10)
+(def b 20)
+(def multi #f"{a} + {b} = {(+ a b)}")
+(print multi)
+(assert (= multi "10 + 20 = 30") "multiple interpolations should work")
+
+; Nested expressions
+(def nested #f"Square of 5 is {(* 5 5)}, cube is {(* 5 5 5)}")
+(print nested)
+(assert (= nested "Square of 5 is 25, cube is 125") "nested expressions should work")
+
+; Empty string parts
+(def just-expr #f"{42}")
+(assert (= just-expr "42") "just expression should work")
+
+(print "F-Strings: PASS\n")
+
+; =============================================================================
+; #p"..." - Path Literal
+; =============================================================================
+
+(print "--- Testing #p\"...\" Path Literals ---")
+
+(def my-path #p"src/main.spork")
+(print "Path:" my-path)
+(print "Type:" (type my-path))
+(assert (= (str (type my-path)) "<class 'pathlib._local.PosixPath'>") "should be a Path")
+
+; Path operations
+(def joined (.joinpath #p"base" "subdir" "file.txt"))
+(print "Joined path:" joined)
+
+(def parent (. #p"a/b/c" parent))
+(print "Parent of a/b/c:" parent)
+
+(print "Path literals: PASS\n")
+
+; =============================================================================
+; #r"..." - Regex Literal
+; =============================================================================
+
+(print "--- Testing #r\"...\" Regex Literals ---")
+
+(def digit-pattern #r"\d+")
+(print "Pattern:" digit-pattern)
+(print "Type:" (type digit-pattern))
+
+; Test matching
+(def match-result (.search digit-pattern "abc123def"))
+(print "Match in 'abc123def':" (.group match-result))
+(assert (= (.group match-result) "123") "should match 123")
+
+; More complex regex
+(def phone-pattern #r"\d{3}-\d{4}")
+(def phone-match (.search phone-pattern "Call 555-1234 today"))
+(print "Phone match:" (.group phone-match))
+(assert (= (.group phone-match) "555-1234") "should match phone number")
+
+; Find all matches
+(def all-digits (.findall #r"\d+" "a1b22c333"))
+(print "All digit groups:" all-digits)
+(assert (= (list all-digits) (list ["1" "22" "333"])) "should find all digit groups")
+
+(print "Regex literals: PASS\n")
+
+; =============================================================================
+; #uuid"..." - UUID Literal
+; =============================================================================
+
+(print "--- Testing #uuid\"...\" UUID Literals ---")
+
+(def my-uuid #uuid"550e8400-e29b-41d4-a716-446655440000")
+(print "UUID:" my-uuid)
+(print "Type:" (type my-uuid))
+(assert (= (str (type my-uuid)) "<class 'uuid.UUID'>") "should be a UUID")
+
+; UUID properties
+(print "Version:" (. my-uuid version))
+(print "Hex:" (. my-uuid hex))
+
+; Comparison
+(def same-uuid #uuid"550e8400-e29b-41d4-a716-446655440000")
+(assert (= my-uuid same-uuid) "same UUIDs should be equal")
+
+(def different-uuid #uuid"00000000-0000-0000-0000-000000000001")
+(assert (not (= my-uuid different-uuid)) "different UUIDs should not be equal")
+
+(print "UUID literals: PASS\n")
+
+; =============================================================================
+; #inst"..." - Instant/Datetime Literal
+; =============================================================================
+
+(print "--- Testing #inst\"...\" Datetime Literals ---")
+
+(def my-date #inst"2025-12-10T00:00:00Z")
+(print "DateTime:" my-date)
+(print "Type:" (type my-date))
+(assert (= (str (type my-date)) "<class 'datetime.datetime'>") "should be a datetime")
+
+; Datetime properties
+(print "Year:" (. my-date year))
+(print "Month:" (. my-date month))
+(print "Day:" (. my-date day))
+(assert (= (. my-date year) 2025) "year should be 2025")
+(assert (= (. my-date month) 12) "month should be 12")
+(assert (= (. my-date day) 10) "day should be 10")
+
+; Timezone aware
+(print "Timezone:" (. my-date tzinfo))
+(assert (not (nil? (. my-date tzinfo))) "should have timezone info")
+
+; Different format
+(def another-date #inst"2024-06-15T14:30:45Z")
+(print "Another date:" another-date)
+(assert (= (. another-date hour) 14) "hour should be 14")
+(assert (= (. another-date minute) 30) "minute should be 30")
+(assert (= (. another-date second) 45) "second should be 45")
+
+(print "Datetime literals: PASS\n")
+
+; =============================================================================
+; #= - Read-Time Eval
+; =============================================================================
+
+(print "--- Testing #= Read-Time Eval ---")
+
+; Simple expression evaluated at compile time
+(def computed #=(+ 100 200))
+(print "Compile-time computed value:" computed)
+(assert (= computed 300) "should be 300")
+
+; More complex expression
+(def factorial-5 #=(* 1 2 3 4 5))
+(print "5! computed at compile time:" factorial-5)
+(assert (= factorial-5 120) "should be 120")
+
+; String operations at compile time
+(def upper-greeting #=(.upper "hello"))
+(print "Uppercase at compile time:" upper-greeting)
+(assert (= upper-greeting "HELLO") "should be HELLO")
+
+(print "Read-time eval: PASS\n")
+
+; =============================================================================
+; Combined Usage
+; =============================================================================
+
+(print "--- Testing Combined Usage ---")
+
+; Using anonymous function with slice
+(def transform-slice
+  (fn [lst]
+    (list (map #(* % 2) (get (list lst) #[1 4])))))
+(print "Transform slice [0 1 2 3 4 5] at [1:4] doubled:" (transform-slice [0 1 2 3 4 5]))
+(assert (= (transform-slice [0 1 2 3 4 5]) (list [2 4 6])) "should double elements 1-3")
+
+; F-string with computed values
+(defn greet [name]
+  #f"Hello, {name}! The answer is {(* 6 7)}.")
+(print (greet "Alice"))
+(assert (= (greet "Alice") "Hello, Alice! The answer is 42.") "greeting should work")
+
+; Multiple reader macros together
+(def data {:items [1 2 3 4 5]
+           :id #uuid"12345678-1234-5678-1234-567812345678"
+           :created #inst"2025-01-01T00:00:00Z"})
+(print "Complex data structure with reader macros:")
+(print "  Items:" (:items data))
+(print "  ID:" (:id data))
+(print "  Created:" (:created data))
+
+(print "Combined usage: PASS\n")
+
+; =============================================================================
+; Edge Cases
+; =============================================================================
+
+(print "--- Testing Edge Cases ---")
+
+; Empty anonymous function body (implicit nil return)
+; Note: #() would fail since it needs at least one form
+; But #(nil) or #(do) work
+
+; Slice with all None
+(def full-copy (get my-list #[_ _]))
+(print "Full copy with #[_ _]:" full-copy)
+(assert (= full-copy my-list) "should be full copy")
+
+; Anonymous function with no args used
+(def constant #(42))
+(print "(constant):" (constant))
+(assert (= (constant) 42) "constant function should return 42")
+
+; Discard at end of form
+(def before-discard [1 2 3 #_4])
+(assert (= (count before-discard) 3) "discard at end should work")
+
+; F-string with escaped braces (if supported)
+; (def escaped #f"literal {{brace}}")
+
+(print "Edge cases: PASS\n")
+
+(print "=== All Reader Macro Tests Passed! ===")

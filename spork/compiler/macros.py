@@ -509,15 +509,12 @@ def init_macro_exec_env():
     """Initialize the shared macro execution environment."""
     global MACRO_EXEC_ENV
     MACRO_EXEC_ENV = {
-        # AST types for macros (capitalized Python class names)
         "Symbol": Symbol,
         "Keyword": Keyword,
         "VectorLiteral": VectorLiteral,
         "Decorated": Decorated,
         "MapLiteral": MapLiteral,
         "SetLiteral": SetLiteral,
-        # Clojure-compatible lowercase constructor functions
-        # Handle both string and Symbol arguments
         "symbol": lambda name: Symbol(
             name.name if isinstance(name, Symbol) else str(name)
         ),
@@ -647,6 +644,12 @@ def init_macro_exec_env():
         "spork_max": spork_max,
         "spork_min": spork_min,
         "spork_abs": spork_abs,
+        # Normalized operator names for #= read-time eval
+        "_plus_": add,
+        "_minus_": sub,
+        "_star_": mul,
+        "_slash_": div,
+        "apply": lambda f, args: f(*args),
     }
 
 

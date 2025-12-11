@@ -577,10 +577,16 @@ def get(coll, key, default=None):
     if isinstance(coll, Vector):
         if isinstance(key, int):
             return coll.nth(key, default)
+        if isinstance(key, slice):
+            # Vector natively supports slicing via __getitem__
+            return coll[key]
         return default
     if isinstance(coll, SortedVector):
         if isinstance(key, int):
             return coll.nth(key, default)
+        if isinstance(key, slice):
+            # SortedVector natively supports slicing via __getitem__
+            return coll[key]
         return default
     if isinstance(coll, dict):
         return coll.get(key, default)

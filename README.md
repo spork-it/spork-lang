@@ -166,8 +166,8 @@ Spork compiles to Python, so interop is seamless.
 ```clojure
 ;; Imports
 (ns examples
-  (:import [os] [random] [antigravity]) ; Python stdlibs
-  (:require [std.json :as j])           ; spork stdlib
+  (:import [os] [random] [antigravity]) ; Host (Python) Imports
+  (:require [std.json :as j])           ; Spork Imports
 
 ;; Method calls (dot syntax)
 (def text "hello world")
@@ -184,7 +184,7 @@ Spork compiles to Python, so interop is seamless.
 (print py-list) ; [1, 2, 3, 4, 5]
 
 (def data {:name "Spork" :version 1.0}) ; Immutable Spork Map
-(print (j.dumps data)) ; '{"name": "Spork", "version": 1.0, "nums": [1, 2, 3, 4, 5]}'
+(print (j.dumps data)) ; '{"name": "Spork", "version": 1.0}'
 ```
 
 > Python objects and Spork objects interoperate freely, no wrappers or FFI layers.

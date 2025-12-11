@@ -61,6 +61,20 @@ from spork.compiler.reader import (
     tokenize,
 )
 
+# Re-export reader macro types
+from spork.compiler.reader_macros import (
+    DISCARD,
+    AnonFnLiteral,
+    FStringLiteral,
+    InstLiteral,
+    PathLiteral,
+    ReadTimeEval,
+    RegexLiteral,
+    SliceLiteral,
+    UUIDLiteral,
+    is_discard,
+)
+
 # Re-export types for backward compatibility
 from spork.runtime.types import (
     Decorated,
@@ -80,7 +94,6 @@ def _initialize():
     from spork.compiler.macros import init_stdlib_macros
 
     init_stdlib_macros(compile_defn, normalize_name)
-    install_import_hook()
 
 
 _initialize()

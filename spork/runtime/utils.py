@@ -401,7 +401,12 @@ def __spork_refer_all__(ns_name: str, target_env: dict[str, Any]) -> None:
 def setup_runtime_env(env: dict[str, Any]) -> None:
     """Add runtime helpers and data types to environment."""
     # Import typing module for first-class type syntax
+    # Import modules needed for reader macro literals
+    import datetime
+    import pathlib
+    import re
     import typing
+    import uuid
 
     def setboth(name: str, value: Any) -> None:
         """Register value under both original name and normalized Python name."""
@@ -425,6 +430,12 @@ def setup_runtime_env(env: dict[str, Any]) -> None:
     env.setdefault("Mapping", typing.Mapping)
     env.setdefault("Generator", typing.Generator)
     env.setdefault("Type", type)
+
+    # Standard library modules for reader macro literals
+    env.setdefault("pathlib", pathlib)
+    env.setdefault("re", re)
+    env.setdefault("uuid", uuid)
+    env.setdefault("datetime", datetime)
 
     # Reader/AST types (for macros and quote)
     env.setdefault("Symbol", Symbol)

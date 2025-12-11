@@ -40,6 +40,10 @@ Spork automatically normalizes identifiers for Python compatibility:
 
 ### Reader Macros
 
+Reader macros transform syntax during the read phase, before compilation. Spork provides both core reader macros for quoting/unquoting and extended reader macros prefixed with `#`.
+
+#### Core Reader Macros
+
 | Syntax | Expansion | Description |
 |--------|-----------|-------------|
 | `'form` | `(quote form)` | Returns unevaluated form |
@@ -48,6 +52,22 @@ Spork automatically normalizes identifiers for Python compatibility:
 | `~@form` | `(unquote-splicing form)` | Splice list into quasiquote |
 | `^expr form` | `(Decorated expr form)` | Metadata/decorators |
 | `;comment` | (ignored) | Line comment |
+
+#### Extended Reader Macros
+
+| Syntax | Description |
+|--------|-------------|
+| `#(...)` | Hoisted lambda with `%`, `%1`-`%N`, `%&` args |
+| `#[start stop step]` | Slice literal (use `_` for None) |
+| `#_form` | Discard next form (parsed but not compiled) |
+| `#f"..."` | F-string with `{expr}` interpolation |
+| `#p"..."` | Path literal (`pathlib.Path`) |
+| `#r"..."` | Regex literal (compile-time validated) |
+| `#uuid"..."` | UUID literal (compile-time validated) |
+| `#inst"..."` | ISO-8601 datetime literal |
+| `#=form` | Read-time evaluation |
+
+See the [Standard Library Reference](STDLIB.md#reader-macros) for detailed documentation and examples of each reader macro.
 
 ### Literals
 
@@ -383,6 +403,25 @@ All collections support the sequence protocol:
     (* sum sum)))
 ```
 
+#### Shorthand: `#(...)`
+
+The `#(...)` reader macro provides a concise syntax for simple anonymous functions:
+
+```clojure
+; Using % for the single argument
+(map #(+ % 1) [1 2 3])              ; => [2 3 4]
+(filter #(> % 5) [3 6 2 8])         ; => [6 8]
+
+; Multiple args: %1, %2, etc.
+(reduce #(+ %1 %2) [1 2 3 4])       ; => 10
+
+; Rest args with %&
+(def sum-all #(apply + %&))
+(sum-all 1 2 3 4 5)                 ; => 15
+```
+
+See [Reader Macros](#reader-macros) for more details.
+
 ### Named Functions
 
 ```clojure
@@ -424,22 +463,23 @@ All collections support the sequence protocol:
 
 ### Keyword Arguments
 
-Keyword arguments use the `*{:key value}` syntax - a map prefixed with `*` that splats as keyword arguments:
+Keyword arguments use the `*{:key value}` syntax - a map prefixed with `*` that splats as keyword arguments. There is also a shorthand for keyword-only arguments using `*` followed by `:keyword value`. As well as splatting a map using `*{mapname}` this will map the keys to symbols or kwargs.
 
 ```clojure
-; Keyword-only arguments (after #)
-(defn create-user [name # age email]
+; Keyword-only arguments (after *)
+(defn create-user [name * age email]
   {:name name :age age :email email})
 
 ; Call with *{...} syntax for keyword args
-(create-user "Alice" *{:age 30 :email "alice@example.com"})
+(create-user "Alice" * :age 30 :email "alice@example.com")
 
 ; Keyword-only with defaults
-(defn config [host # (port 8080) (debug false)]
+(defn config [host * (port 8080) (debug false)]
   {:host host :port port :debug debug})
 
-(config "localhost")                          ; uses defaults
-(config "example.com" *{:port 3000})          ; override port only
+(config "localhost")                            ; uses defaults
+(config "example.com" *{:port 3000})            ; override port only
+(config "example.com" * :port 3000 :debug true) ; override port only
 
 ; Multiple kwarg splats are allowed (after positional args)
 (make-request "POST" "/api" *{:headers h} *{:body b :timeout 30})
@@ -1099,7 +1139,7 @@ You can pass transients to Python libraries expecting mutable collections:
 
 ### Keyword Arguments
 
-Use `*{...}` to pass keyword arguments to Python (and Spork) functions:
+Use `*{...}` or `* :key val :key val` to pass keyword arguments to Python (and Spork) functions. If using shorthand `*` it must be followed by keyword arguments:
 
 ```clojure
 ; Basic keyword arguments
@@ -1116,7 +1156,7 @@ Use `*{...}` to pass keyword arguments to Python (and Spork) functions:
 ; Keywords as values are distinct from kwargs
 (get m :name)              ; :name is passed as a Keyword value
 (:name m)                  ; keyword as function for lookup
-(f *{:name "x"})           ; name="x" keyword argument
+(f * :name "x")           ; name="x" keyword argument
 ```
 
 ### Attribute Access
@@ -1198,15 +1238,31 @@ Common Python built-in functions are available:
 
 ### Slice Syntax
 
+Spork provides the `#[...]` reader macro for clean slice syntax:
+
 ```clojure
-; Python slicing via method call
+; Slice literal syntax (preferred)
+(get my-vec #[start stop])       ; items from start to stop-1
+(get my-vec #[start stop step])  ; with step
+(get my-vec #[_ _ -1])           ; reverse (use _ for None)
+
+; Examples with vectors
+(def v [0 1 2 3 4 5 6 7 8 9])
+(get v #[2 5])                   ; => [2 3 4]
+(get v #[_ _ -1])                ; => [9 8 7 6 5 4 3 2 1 0]
+(get v #[0 8 2])                 ; => [0 2 4 6]
+(get v #[5 _])                   ; => [5 6 7 8 9]
+
+; Works with Python lists too
+(def py-list (list [1 2 3 4 5]))
+(get py-list #[1 4])             ; => [2, 3, 4]
+
+; Alternative: Python method call syntax
 (. coll (slice start end))
 (. coll (slice start end step))
-
-; Examples
-(. my-list (slice 1 5))      ; my_list[1:5]
-(. my-list (slice nil nil -1))  ; my_list[::-1] (reverse)
 ```
+
+See [Reader Macros](#reader-macros) for more details on `#[...]`.
 
 ---
 

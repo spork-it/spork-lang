@@ -6,10 +6,12 @@ This document provides comprehensive documentation for the Spork standard librar
 
 1. [Built-in Types](#built-in-types)
 2. [Core Functions](#core-functions)
-3. [Prelude Macros](#prelude-macros)
-4. [Standard Library Modules](#standard-library-modules)
+3. [Reader Macros](#reader-macros)
+4. [Prelude Macros](#prelude-macros)
+5. [Standard Library Modules](#standard-library-modules)
 
 ---
+
 
 ## Built-in Types
 
@@ -1163,6 +1165,310 @@ These symbol operators also work with sets:
 
 ---
 
+## Reader Macros
+
+Reader macros are special syntax forms that transform input during the reading/parsing phase, before compilation. They provide convenient shorthand for common patterns.
+
+### Core Reader Macros
+
+These are fundamental reader macros used in quoting and metaprogramming:
+
+| Syntax | Expansion | Description |
+|--------|-----------|-------------|
+| `'form` | `(quote form)` | Returns unevaluated form |
+| `` `form `` | `(quasiquote form)` | Template with unquoting |
+| `~form` | `(unquote form)` | Evaluate inside quasiquote |
+| `~@form` | `(unquote-splicing form)` | Splice list into quasiquote |
+| `^expr form` | `(Decorated expr form)` | Metadata/decorators |
+| `;comment` | (ignored) | Line comment |
+
+### Extended Reader Macros
+
+#### `#(...)` — Hoisted Lambda
+
+Creates an anonymous function with implicit arguments. Unlike Python's `lambda`, this supports **multiple statements** because the compiler hoists it to a named function.
+
+**Implicit Arguments:**
+- `%` or `%1` — first argument
+- `%2`, `%3`, ... `%N` — positional arguments  
+- `%&` — rest args (variadic)
+
+```clojure
+; Single argument
+(map #(+ % 1) [1 2 3])              ; => [2 3 4]
+
+; Multiple arguments
+(reduce #(+ %1 %2) [1 2 3 4])       ; => 10
+
+; Rest args
+(def sum-all #(apply + %&))
+(sum-all 1 2 3 4 5)                 ; => 15
+
+; Works great with filter
+(filter #(> % 5) [3 6 2 8 1 9])     ; => [6 8 9]
+
+; Multi-statement bodies work because of hoisting
+(map #(do
+        (println "Processing:" %)
+        (* % 2))
+     [1 2 3])
+```
+
+**How Hoisting Works:**
+
+When you write `#(+ % 1)`, the compiler transforms it into a named function definition and replaces the original location with a reference to that function:
+
+```clojure
+; This:
+(map #(+ % 1) [1 2 3])
+
+; Becomes approximately:
+(def __lambda_1 (fn [%1] (+ %1 1)))
+(map __lambda_1 [1 2 3])
+```
+
+This allows multi-statement bodies that wouldn't be possible with Python's expression-only lambdas.
+
+---
+
+#### `#[...]` — Slice Literal
+
+A dedicated syntax for Python slices using Spork's space-delimited style. Use `_` for `nil` (omitted bounds).
+
+**Syntax:** `#[start stop step]`
+
+| Pattern | Python Equivalent | Description |
+|---------|-------------------|-------------|
+| `#[2 5]` | `[2:5]` | From index 2 up to (not including) 5 |
+| `#[_ _ -1]` | `[::-1]` | Reverse the sequence |
+| `#[0 8 2]` | `[0:8:2]` | Every 2nd item from 0 to 8 |
+| `#[5 _]` | `[5:]` | From index 5 to end |
+| `#[_ 5]` | `[:5]` | From start to index 5 |
+
+```clojure
+(def v [0 1 2 3 4 5 6 7 8 9])
+
+(get v #[2 5])          ; => [2 3 4] - items at indices 2, 3, 4
+(get v #[_ _ -1])       ; => [9 8 7 6 5 4 3 2 1 0] - reverse
+(get v #[0 8 2])        ; => [0 2 4 6] - every other item
+(get v #[5 _])          ; => [5 6 7 8 9] - from index 5 to end
+
+; Works with Python lists too
+(def py-list (list [1 2 3 4 5]))
+(get py-list #[1 4])    ; => [2, 3, 4]
+
+; String slicing
+(get "hello world" #[0 5])  ; => "hello"
+```
+
+---
+
+#### `#_` — Discard
+
+Reads and discards the next form completely. The form is parsed but never compiled. Useful for temporarily commenting out code while preserving structure.
+
+```clojure
+; Comment out a form without breaking structure
+(+ 1 2 #_(print "debug") 3)         ; => 6, nothing printed
+
+; Temporarily disable vector elements
+[1 #_2 3 #_4 5]                     ; => [1 3 5]
+
+; Discard complex nested forms
+(def x #_(some-expensive-call) 42)  ; x = 42
+
+; Useful for debugging - disable parts of a map
+{:name "Alice"
+ #_:debug #_true
+ :age 30}                           ; => {:name "Alice" :age 30}
+
+; Discard multiple consecutive forms
+(+ 1 #_#_2 3 4)                     ; => 5 (both 2 and 3 discarded)
+```
+
+---
+
+#### `#f"..."` — F-String
+
+Parses the string as a template with embedded Spork expressions inside `{}`. Compiles to Python's native f-string (`ast.JoinedStr`) for zero runtime overhead.
+
+```clojure
+(def name "World")
+(def greeting #f"Hello, {name}!")   ; => "Hello, World!"
+
+; Expressions are fully evaluated
+#f"1 + 1 = {(+ 1 1)}"              ; => "1 + 1 = 2"
+
+; Multiple interpolations
+(def a 10)
+(def b 20)
+#f"{a} + {b} = {(+ a b)}"          ; => "10 + 20 = 30"
+
+; Method calls work
+(def s "hello")
+#f"Upper: {(.upper s)}"            ; => "Upper: HELLO"
+
+; Nested expressions
+(def items [1 2 3])
+#f"Count: {(count items)}"         ; => "Count: 3"
+```
+
+**Escaping Braces:**
+
+To include literal braces, double them:
+```clojure
+#f"Use {{braces}} for interpolation"  ; => "Use {braces} for interpolation"
+```
+
+---
+
+#### `#p"..."` — Path Literal
+
+Creates a `pathlib.Path` object directly. Provides a clean syntax for filesystem paths.
+
+```clojure
+(def src-path #p"src/main.spork")
+(print (type src-path))             ; => <class 'pathlib.PosixPath'>
+
+; Path operations
+(.joinpath #p"base" "subdir" "file.txt")  ; => base/subdir/file.txt
+(. #p"a/b/c" parent)                       ; => a/b
+(. #p"file.txt" suffix)                    ; => ".txt"
+(. #p"file.txt" stem)                      ; => "file"
+
+; Path predicates
+(.exists #p"./README.md")           ; => true/false
+(.is-dir #p"./src")                 ; => true/false
+(.is-file #p"./main.py")            ; => true/false
+
+; Reading/writing
+(.read-text #p"config.txt")         ; => file contents as string
+(.write-text #p"out.txt" "content") ; writes to file
+```
+
+---
+
+#### `#r"..."` — Regex Literal
+
+Creates a compiled regex pattern (`re.Pattern`). The pattern is **validated at compile time**, catching regex syntax errors early.
+
+```clojure
+(def pattern #r"\d{3}-\d{4}")
+(.search pattern "Call 555-1234")   ; => match object
+
+; Find all matches
+(.findall #r"\d+" "a1b22c333")      ; => ["1", "22", "333"]
+
+; With groups
+(def m (.search #r"(\w+)@(\w+)" "user@domain"))
+(.group m 1)                        ; => "user"
+(.group m 2)                        ; => "domain"
+
+; Common patterns
+(.sub #r"\s+" " " "too   many   spaces")  ; => "too many spaces"
+(.split #r"[,;]" "a,b;c,d")               ; => ["a", "b", "c", "d"]
+
+; Invalid regex causes compile-time error
+#r"[invalid"                        ; SyntaxError at compile time!
+```
+
+---
+
+#### `#uuid"..."` — UUID Literal
+
+Parses a UUID string into a `uuid.UUID` object. Validated at compile time.
+
+```clojure
+(def id #uuid"550e8400-e29b-41d4-a716-446655440000")
+(print (type id))                   ; => <class 'uuid.UUID'>
+(. id version)                      ; => 4
+(. id hex)                          ; => "550e8400e29b41d4a716446655440000"
+
+; Equality works as expected
+(= #uuid"550e8400-e29b-41d4-a716-446655440000"
+   #uuid"550e8400-e29b-41d4-a716-446655440000")  ; => true
+
+; Different UUID formats accepted
+#uuid"550e8400e29b41d4a716446655440000"         ; without hyphens
+#uuid"{550e8400-e29b-41d4-a716-446655440000}"   ; with braces
+
+; Invalid UUIDs caught at compile time
+#uuid"not-a-uuid"                   ; SyntaxError at compile time!
+```
+
+---
+
+#### `#inst"..."` — Instant Literal
+
+Parses an ISO-8601 datetime string into a timezone-aware `datetime.datetime` object.
+
+```clojure
+(def created #inst"2025-12-10T00:00:00Z")
+(print (type created))              ; => <class 'datetime.datetime'>
+
+; Access components
+(. created year)                    ; => 2025
+(. created month)                   ; => 12
+(. created day)                     ; => 10
+(. created tzinfo)                  ; => UTC
+
+; With time
+(def event #inst"2024-06-15T14:30:45Z")
+(. event hour)                      ; => 14
+(. event minute)                    ; => 30
+(. event second)                    ; => 45
+
+; Timezone offsets
+#inst"2024-01-01T12:00:00+05:30"   ; => datetime with +05:30 offset
+#inst"2024-01-01T12:00:00-08:00"   ; => datetime with -08:00 offset
+
+; Date-only (midnight UTC)
+#inst"2024-01-01"                  ; => 2024-01-01 00:00:00+00:00
+
+; Invalid formats caught at compile time
+#inst"not-a-date"                   ; SyntaxError at compile time!
+```
+
+---
+
+#### `#=` — Read-Time Eval
+
+Evaluates the form **during compilation** and injects the result into the AST. The result must be a valid literal that can be embedded in compiled code.
+
+```clojure
+; Compute at compile time
+(def computed #=(+ 100 200))        ; compiled as (def computed 300)
+
+; String operations
+(def upper #=(.upper "hello"))      ; compiled as (def upper "HELLO")
+
+; Useful for build-time constants
+(def build-date #=(str (datetime.datetime.now)))
+
+; Mathematical constants
+(def tau #=(* 2 3.14159265359))     ; computed once at compile time
+
+; Environment-based configuration
+(def debug-mode #=(= (os.getenv "DEBUG" "") "1"))
+```
+
+**Available Environment:**
+
+The expression runs in the compiler's macro execution environment, which has access to:
+- Python builtins (`str`, `int`, `list`, `dict`, etc.)
+- Standard library modules that have been imported
+- Previously defined macros and constants
+
+**Use Cases:**
+- Build-time constants
+- Compile-time string processing
+- Embedding version numbers or build dates
+- Pre-computing expensive constant values
+
+**Caution:** Be careful with side effects, as the code runs at compile time, not runtime.
+
+---
+
 ## Prelude Macros
 
 The prelude is automatically loaded in every Spork namespace. No import required.
@@ -1965,6 +2271,22 @@ Use `*{...}` to pass keyword arguments to functions:
 
 ; With Python's open()
 (open "file.txt" *{:mode "r" :encoding "utf-8"})
+```
+
+Or the shorthand `* :key val :key val`
+
+```clojure
+; Basic keyword arguments
+(f * :name "Alice" :age 30)
+
+; Multiple kwarg splats are allowed (after positional args)
+(f pos1 pos2 * :a 1 * :b 2 :c 3)
+
+; Splatting a map using *{mapname} maps the keys to symbols or kwargs
+(f pos1 pos2 * {:name "Alice" :age 30})
+
+; Splatting a map using *{mapname} maps the keys to symbols or kwargs
+(f pos1 pos2 *{:name "Alice" :age 30 mapob})
 ```
 
 ### Import (Python Modules)

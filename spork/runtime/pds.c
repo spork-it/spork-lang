@@ -21,17 +21,12 @@ static int _singletons_initialized = 0;
 
 #if PY_VERSION_HEX >= 0x030C0000
 // Python 3.12+: Immortal objects are supported
-#ifdef Py_GIL_DISABLED
-// Free-threaded builds: set ob_ref_local to the immortal marker
-static inline void _pds_set_immortal(PyObject *op) {
-    op->ob_ref_local = _Py_IMMORTAL_REFCNT_LOCAL;
-    op->ob_ref_shared = 0;
-}
-#define PDS_SET_IMMORTAL(op) _pds_set_immortal(_PyObject_CAST(op))
-#else
-// Regular builds: set ob_refcnt to the immortal marker
-#define PDS_SET_IMMORTAL(op) Py_SET_REFCNT((op), _Py_IMMORTAL_REFCNT)
-#endif
+// Use Py_SET_REFCNT with a value > UINT32_MAX to trigger immortalization.
+// Per Python 3.14 docs: "On Python build with Free Threading, if refcnt is
+// larger than UINT32_MAX, the object is made immortal."
+// This approach works across Python 3.12-3.14+ without using internal constants.
+#define PDS_IMMORTAL_REFCNT ((Py_ssize_t)(((size_t)UINT32_MAX) + 1))
+#define PDS_SET_IMMORTAL(op) Py_SET_REFCNT((op), PDS_IMMORTAL_REFCNT)
 #else
 // Python < 3.12: No immortalization support, just a no-op
 #define PDS_SET_IMMORTAL(op) ((void)(op))

@@ -15,6 +15,28 @@
 // Guard to ensure singletons are only created once (for sub-interpreter safety)
 static int _singletons_initialized = 0;
 
+// =============================================================================
+// IMMORTALIZATION HELPER
+// =============================================================================
+
+#if PY_VERSION_HEX >= 0x030C0000
+// Python 3.12+: Immortal objects are supported
+#ifdef Py_GIL_DISABLED
+// Free-threaded builds: set ob_ref_local to the immortal marker
+static inline void _pds_set_immortal(PyObject *op) {
+    op->ob_ref_local = _Py_IMMORTAL_REFCNT_LOCAL;
+    op->ob_ref_shared = 0;
+}
+#define PDS_SET_IMMORTAL(op) _pds_set_immortal(_PyObject_CAST(op))
+#else
+// Regular builds: set ob_refcnt to the immortal marker
+#define PDS_SET_IMMORTAL(op) Py_SET_REFCNT((op), _Py_IMMORTAL_REFCNT)
+#endif
+#else
+// Python < 3.12: No immortalization support, just a no-op
+#define PDS_SET_IMMORTAL(op) ((void)(op))
+#endif
+
 #if defined(_MSC_VER)
 #include <intrin.h>
 #endif
@@ -9866,19 +9888,17 @@ static int pds_exec(PyObject *m) {
 
         // Immortalize singletons for Python 3.12+ to prevent refcount contention
         // in multi-threaded code. Immortal objects don't have their refcounts modified.
-#if PY_VERSION_HEX >= 0x030C0000
-        Py_SET_REFCNT(st->_MISSING, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_NODE, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_VECTOR, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_DOUBLE_NODE, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_DOUBLE_VECTOR, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_LONG_NODE, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_LONG_VECTOR, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_BIN, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_MAP, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_SET, _Py_IMMORTAL_REFCNT);
-        Py_SET_REFCNT(st->EMPTY_SORTED_VECTOR, _Py_IMMORTAL_REFCNT);
-#endif
+        PDS_SET_IMMORTAL(st->_MISSING);
+        PDS_SET_IMMORTAL(st->EMPTY_NODE);
+        PDS_SET_IMMORTAL(st->EMPTY_VECTOR);
+        PDS_SET_IMMORTAL(st->EMPTY_DOUBLE_NODE);
+        PDS_SET_IMMORTAL(st->EMPTY_DOUBLE_VECTOR);
+        PDS_SET_IMMORTAL(st->EMPTY_LONG_NODE);
+        PDS_SET_IMMORTAL(st->EMPTY_LONG_VECTOR);
+        PDS_SET_IMMORTAL(st->EMPTY_BIN);
+        PDS_SET_IMMORTAL(st->EMPTY_MAP);
+        PDS_SET_IMMORTAL(st->EMPTY_SET);
+        PDS_SET_IMMORTAL(st->EMPTY_SORTED_VECTOR);
 
         // Update global aliases for backward compatibility with existing code
         // These are set once and never change, ensuring sub-interpreter safety

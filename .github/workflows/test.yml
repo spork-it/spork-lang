@@ -16,15 +16,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set PYTHON_GIL=0 for free-threaded builds
-        if: endsWith(matrix.python-version, 't')
-        run: |
-          echo "PYTHON_GIL=0" >> "$GITHUB_ENV"
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Set PYTHON_GIL=0 for free-threaded builds (Unix)
+        if: endsWith(matrix.python-version, 't') && runner.os != 'Windows'
+        run: |
+          echo "PYTHON_GIL=0" >> "$GITHUB_ENV"
+
+      - name: Set PYTHON_GIL=0 for free-threaded builds (Windows)
+        if: endsWith(matrix.python-version, 't') && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          echo "PYTHON_GIL=0" >> $env:GITHUB_ENV
 
       - name: Install dependencies
         run: |

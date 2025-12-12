@@ -15,26 +15,18 @@
 // Guard to ensure singletons are only created once (for sub-interpreter safety)
 static int _singletons_initialized = 0;
 
-#if PY_VERSION_HEX >= 0x030C0000
-#define PDS_SINGLETONS_ARE_IMMORTAL 1
-#else
-#define PDS_SINGLETONS_ARE_IMMORTAL 0
-#endif
-
 // =============================================================================
 // IMMORTALIZATION HELPER
 // =============================================================================
-
-#if PY_VERSION_HEX >= 0x030C0000
-// Python 3.12+: Immortal objects are supported
-// Use Py_SET_REFCNT with a value > UINT32_MAX to trigger immortalization.
 // Per Python 3.14 docs: "On Python build with Free Threading, if refcnt is
 // larger than UINT32_MAX, the object is made immortal."
-// This approach works across Python 3.12-3.14+ without using internal constants.
+
+#if PY_VERSION_HEX >= 0x030D0000 && defined(Py_GIL_DISABLED)
+#define PDS_SINGLETONS_ARE_IMMORTAL 1
 #define PDS_IMMORTAL_REFCNT ((Py_ssize_t)(((size_t)UINT32_MAX) + 1))
 #define PDS_SET_IMMORTAL(op) Py_SET_REFCNT((op), PDS_IMMORTAL_REFCNT)
 #else
-// Python < 3.12: No immortalization support, just a no-op
+#define PDS_SINGLETONS_ARE_IMMORTAL 0
 #define PDS_SET_IMMORTAL(op) ((void)(op))
 #endif
 

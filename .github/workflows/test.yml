@@ -1,10 +1,6 @@
 name: Tests
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+on: push
 
 jobs:
   test:
@@ -14,7 +10,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.13"]
+        python-version:
+          ["3.10", "3.11", "3.12", "3.13", "3.13t", "3.14", "3.14t"]
 
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +20,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Set PYTHON_GIL=0 for free-threaded builds (Unix)
+        if: endsWith(matrix.python-version, 't') && runner.os != 'Windows'
+        run: |
+          echo "PYTHON_GIL=0" >> "$GITHUB_ENV"
+
+      - name: Set PYTHON_GIL=0 for free-threaded builds (Windows)
+        if: endsWith(matrix.python-version, 't') && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          echo "PYTHON_GIL=0" >> $env:GITHUB_ENV
 
       - name: Install dependencies
         run: |

@@ -15,7 +15,7 @@ from spork.compiler.macros import (
     MACRO_ENV,
     is_symbol,
     macroexpand_all,
-    process_import_macros,
+    process_ns_macros,
 )
 from spork.compiler.macros import (
     process_defmacros as _process_defmacros_base,
@@ -851,7 +851,18 @@ def compile_ns(args, form_loc=None):
                             stmts.append(refer_call)
                         else:
                             # Generate individual symbol bindings
+                            # Get the namespace's macros dict to skip macro symbols
+                            # (macros are handled at compile-time by process_ns_macros)
+                            ns_macros = {}
+                            ns_info_for_macros = get_namespace(req_ns)
+                            if ns_info_for_macros:
+                                ns_macros = ns_info_for_macros.macros or {}
+
                             for sym in refer:
+                                # Skip macros - they're compile-time only
+                                if sym in ns_macros:
+                                    continue
+
                                 ctx.ns_refers[sym] = req_ns
                                 # sym = __spork_ns_get__("req_ns", "sym")
                                 sym_assign = ast.Assign(
@@ -8603,8 +8614,8 @@ def compile_forms_to_code(src: str, filename: str = "<string>"):
     # Process defmacros (creates a local macro environment)
     local_macro_env = dict(MACRO_ENV)
     forms = process_defmacros(forms, local_macro_env)
-    # Process import-macros, which may add to local macro env
-    forms = process_import_macros(forms, local_macro_env)
+    # Process ns :require clauses to load macros at compile-time
+    forms = process_ns_macros(forms, local_macro_env, ctx.current_file)
     # Phase 2: Macroexpand with local macro environment
     forms = macroexpand_all(forms, local_macro_env)
     # Phase 3 & 4: Analyze & Lower
@@ -8672,7 +8683,7 @@ def export_file(path: str):
     forms = read_str(src)
     local_macro_env = dict(MACRO_ENV)
     forms = process_defmacros(forms, local_macro_env)
-    forms = process_import_macros(forms, local_macro_env)
+    forms = process_ns_macros(forms, local_macro_env, path)
     forms = macroexpand_all(forms, local_macro_env)
     mod = compile_module(forms, filename=path)
     # Convert AST to Python source code

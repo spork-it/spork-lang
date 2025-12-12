@@ -1,0 +1,57 @@
+; Test :refer :all imports all macros from a module
+; This tests that (:require [module :refer :all]) imports both defs AND macros
+
+(ns tests.test-require-refer-all
+  (:require [tests.test-macros :refer :all]))
+
+(print "=== Testing :refer :all with macros ===\n")
+
+; ============================================================================
+; 1. Test that macros from test-macros are available via :refer :all
+; ============================================================================
+
+(print "--- 1. Macros imported via :refer :all ---")
+
+; 'when' macro from test-macros
+(def result1 (when true "when-works"))
+(print "when true 'when-works':" result1)
+(assert (= result1 "when-works"))
+
+; 'unless' macro from test-macros
+(def result2 (unless false "unless-works"))
+(print "unless false 'unless-works':" result2)
+(assert (= result2 "unless-works"))
+
+; '->' threading macro from test-macros
+(def result3 (-> 10 (+ 5)))
+(print "-> 10 (+ 5):" result3)
+(assert (= result3 15))
+
+(print "✓ All macros imported via :refer :all work\n")
+
+; ============================================================================
+; 2. Test combined usage of :refer :all macros
+; ============================================================================
+
+(print "--- 2. Combined macro usage ---")
+
+(def result4 (when true (-> 3 (* 7))))
+(print "when true (-> 3 (* 7)):" result4)
+(assert (= result4 21))
+
+(def result5 (unless false (-> 100 (- 58))))
+(print "unless false (-> 100 (- 58)):" result5)
+(assert (= result5 42))
+
+(print "✓ Combined macros work\n")
+
+; ============================================================================
+; Summary
+; ============================================================================
+
+(print "=== All :refer :all Tests Passed! ===")
+(print "✓ when macro imported via :refer :all")
+(print "✓ unless macro imported via :refer :all")
+(print "✓ -> threading macro imported via :refer :all")
+(print "✓ Combined usage works")
+(print "")

@@ -140,7 +140,7 @@ class SporkLoader(importlib.abc.Loader):
         # Setup runtime environment in module (always, not cached)
         setup_runtime_env(module.__dict__)
 
-        # Expose this module's macro env for import-macros
+        # Expose this module's macro env for :require macro loading
         module.__dict__["__spork_macros__"] = macro_env
 
         # Execute the code
@@ -203,7 +203,7 @@ def compile_file_to_python(src: str, src_path: str) -> tuple[str, dict[str, Any]
     from spork.compiler.macros import (
         MACRO_ENV,
         macroexpand_all,
-        process_import_macros,
+        process_ns_macros,
     )
     from spork.compiler.macros import (
         process_defmacros as _process_defmacros_base,
@@ -223,8 +223,8 @@ def compile_file_to_python(src: str, src_path: str) -> tuple[str, dict[str, Any]
         forms, local_macro_env, compile_defn, normalize_name
     )
 
-    # Process import-macros
-    forms = process_import_macros(forms, local_macro_env)
+    # Process ns :require clauses to load macros at compile-time
+    forms = process_ns_macros(forms, local_macro_env, ctx.current_file)
 
     # Phase 2: Macroexpand
     forms = macroexpand_all(forms, local_macro_env)

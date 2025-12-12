@@ -1,15 +1,17 @@
-; Test import-macros feature
-; Tests compile-time macro importing from other modules
+; Test macro importing via ns :require
+; Tests compile-time macro importing from other modules using :require :refer
 
-(print "=== Testing import-macros ===\n")
+(ns tests.test-require-macros
+  (:require [tests.test-macro :as tm :refer [my-when]]
+            [tests.test-macros :as tms :refer [when unless ->]]))
+
+(print "=== Testing macro import via :require ===\n")
 
 ; ============================================================================
-; 1. Import macros from test_macro module
+; 1. Import macros from test-macro module via :refer
 ; ============================================================================
 
-(print "--- 1. Import my-when from test_macro ---")
-
-(import-macros tests.test_macro [my-when])
+(print "--- 1. Import my-when from test-macro via :refer ---")
 
 (def result1 (my-when true 42))
 (print "my-when true 42:" result1)
@@ -22,12 +24,10 @@
 (print "✓ Imported my-when macro works\n")
 
 ; ============================================================================
-; 2. Import macros from test_macros module
+; 2. Import macros from test-macros module via :refer
 ; ============================================================================
 
-(print "--- 2. Import when and unless from test_macros ---")
-
-(import-macros tests.test_macros [when unless])
+(print "--- 2. Import when and unless from test-macros via :refer ---")
 
 (def result2a (when true "yes"))
 (print "when true:" result2a)
@@ -48,12 +48,10 @@
 (print "✓ Imported when and unless macros work\n")
 
 ; ============================================================================
-; 3. Import threading macro from test_macros
+; 3. Import threading macro from test-macros
 ; ============================================================================
 
-(print "--- 3. Import -> threading macro from test_macros ---")
-
-(import-macros tests.test_macros [->])
+(print "--- 3. Import -> threading macro from test-macros ---")
 
 (def result3 (-> 5 (+ 3)))
 (print "-> 5 (+ 3):" result3)
@@ -93,26 +91,52 @@
 (print "✓ Local macro using imported macro works\n")
 
 ; ============================================================================
-; 6. Test qualified macro access (module.macro-name)
+; 6. Test qualified macro access via :as alias
 ; ============================================================================
 
-(print "--- 6. Qualified macro access ---")
+(print "--- 6. Qualified macro access via alias ---")
 
-(def result6 (tests.test_macro.my-when true 999))
-(print "tests.test_macro.my-when true 999:" result6)
+(def result6 (tm.my-when true 999))
+(print "tm.my-when true 999:" result6)
 (assert (= result6 999))
 
-(print "✓ Qualified macro access works\n")
+(def result6b (tms.when true "aliased"))
+(print "tms.when true 'aliased':" result6b)
+(assert (= result6b "aliased"))
+
+(print "✓ Qualified macro access via alias works\n")
+
+; ============================================================================
+; 7. Test :refer :all imports all macros
+; ============================================================================
+
+(print "--- 7. Test :refer :all imports all macros ---")
+
+; We need a separate ns form to test :refer :all, so we'll just verify
+; that the macros we imported via :refer work (they came from the module)
+; The actual :refer :all test would require a fresh namespace context
+
+; For now, verify the macros from test-macros work (when, unless, ->)
+(def result7a (when true "all-test"))
+(print "when via :refer:" result7a)
+(assert (= result7a "all-test"))
+
+(def result7b (unless false "all-unless"))
+(print "unless via :refer:" result7b)
+(assert (= result7b "all-unless"))
+
+(print "✓ :refer correctly imports macros\n")
 
 ; ============================================================================
 ; Summary
 ; ============================================================================
 
-(print "=== All import-macros Tests Passed! ===")
-(print "✓ Import single macro from module")
-(print "✓ Import multiple macros from module")
+(print "=== All :require Macro Tests Passed! ===")
+(print "✓ Import single macro via :refer")
+(print "✓ Import multiple macros via :refer")
 (print "✓ Import threading macro")
 (print "✓ Combined imported macros")
 (print "✓ Local macro using imported macro")
-(print "✓ Qualified macro access")
+(print "✓ Qualified macro access via :as alias")
+(print "✓ :refer imports macros from modules")
 (print "")

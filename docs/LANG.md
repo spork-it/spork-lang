@@ -877,16 +877,26 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
 (print (math.sin 0.5))
 ```
 
-### Import Macros
+### Importing Macros
 
-Macros currently have a separate import mechanism since they operate at compile-time:
+Macros are imported via the standard `:require` form, just like regular functions. The compiler automatically detects whether a referred symbol is a macro or a regular def:
 
 ```clojure
-; Macros require special import (compile-time)
-(import-macros my.macros [my-macro])
-```
+; Import macros via :require :refer - compiler handles discovery
+(ns my.app
+  (:require [my.macros :refer [my-macro]]     ; my-macro is automatically recognized as a macro
+            [other.lib :as lib :refer [foo]])) ; foo could be a macro or a function
 
-> Note: Since the (ns ...) form has stabalized, macro imports may be moved there in the future.
+; Use the macro
+(my-macro some args)
+
+; Qualified macro access via alias
+(lib.some-macro arg)
+
+; :refer :all imports all macros and defs
+(ns another.app
+  (:require [my.macros :refer :all]))
+```
 
 ### Dot Notation for Namespace Access
 
@@ -1446,6 +1456,6 @@ When a statement-like construct (`let`, `try`, `with`) appears in expression con
 | Variable Scope | Function/global | Block (`let`) | IIFE simulation |
 | Function Arity | Default args | Overloading | Runtime dispatch |
 | Destructuring | Tuple unpacking | Deep map/vec | Recursive assignment |
-| Imports | `import` | `import` + `import-macros` | Compile-time macro loading |
+| Imports | `import` | `ns :require` | Unified import with auto macro discovery |
 | Protocols | ABC | `defprotocol` | Runtime dispatch table |
 | Transients | N/A | `transient`/`persistent!` | Mutable batch operations |

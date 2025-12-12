@@ -12,6 +12,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+from spork.runtime.types import normalize_name
+
 
 class NamespaceProxy:
     """
@@ -96,12 +98,19 @@ def ns_to_relpath(ns: str) -> str:
     """
     Convert a namespace name to a relative file path.
 
+    Hyphens in namespace names are converted to underscores in file paths,
+    following the Clojure convention.
+
     Examples:
         "my.app.core" -> "my/app/core.spork"
+        "my.app-utils" -> "my/app_utils.spork"
         "spork.pds" -> "spork/pds.spork"
         "utils" -> "utils.spork"
     """
-    return ns.replace(".", os.sep) + ".spork"
+    # Split by dots, normalize each segment (hyphen -> underscore), rejoin as path
+    segments = ns.split(".")
+    normalized_segments = [normalize_name(seg) for seg in segments]
+    return os.sep.join(normalized_segments) + ".spork"
 
 
 def relpath_to_ns(relpath: str) -> str:

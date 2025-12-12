@@ -196,8 +196,8 @@ The command will be run from the project root directory."
     "if" "do" "while" "for" "loop" "recur" "match"
     "throw" "try" "catch" "finally"
     "async-for" "await" "yield" "yield-from"
-    "import-macros" "import" "quote" "quasiquote"
-    "unquote" "unquote-splicing" "with")
+    "quote" "quasiquote" "unquote"
+    "unquote-splicing" "with")
   "Special forms and core macros in Spork.")
 
 (defconst spork--constants

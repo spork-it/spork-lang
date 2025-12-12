@@ -276,7 +276,6 @@ class ReplBackend:
                             "defmacro",
                             "defclass",
                             "import",
-                            "import-macros",
                             "ns",
                         }
                         if first.name in statement_forms:

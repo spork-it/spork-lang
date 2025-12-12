@@ -1,4 +1,5 @@
 ; Test macro system
+(ns tests.test-macros)
 
 (defmacro when [test body]
   `(if ~test ~body nil))

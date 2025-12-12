@@ -1,4 +1,6 @@
 ;; Test macro with hyphenated name
+(ns tests.test-macro)
+
 (defmacro my-when [test & body]
   `(if ~test (do ~@body) nil))
 

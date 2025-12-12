@@ -15,6 +15,12 @@
 // Guard to ensure singletons are only created once (for sub-interpreter safety)
 static int _singletons_initialized = 0;
 
+#if PY_VERSION_HEX >= 0x030C0000
+#define PDS_SINGLETONS_ARE_IMMORTAL 1
+#else
+#define PDS_SINGLETONS_ARE_IMMORTAL 0
+#endif
+
 // =============================================================================
 // IMMORTALIZATION HELPER
 // =============================================================================
@@ -35,6 +41,27 @@ static int _singletons_initialized = 0;
 #if defined(_MSC_VER)
 #include <intrin.h>
 #endif
+
+// =============================================================================
+// SENTINEL TYPE
+// =============================================================================
+// A minimal type for identity/sentinel objects.
+
+typedef struct {
+    PyObject_HEAD
+} PdsSentinel;
+
+static void PdsSentinel_dealloc(PdsSentinel *self) {
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static PyTypeObject PdsSentinelType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "spork.runtime.pds._Sentinel",
+    .tp_basicsize = sizeof(PdsSentinel),
+    .tp_dealloc = (destructor)PdsSentinel_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+};
 
 // === Generic __class_getitem__ for type annotations ===
 // This enables Vector[int], Map[str, int], Cons[T] syntax
@@ -2463,7 +2490,7 @@ static PyObject *DoubleVector_transient(DoubleVector *self, PyObject *Py_UNUSED(
     TransientDoubleVector *t = PyObject_New(TransientDoubleVector, &TransientDoubleVectorType);
     if (!t) return NULL;
 
-    t->id = PyObject_New(PyObject, &PyBaseObject_Type);
+    t->id = PyObject_New(PyObject, &PdsSentinelType);
     if (!t->id) {
         Py_DECREF(t);
         return NULL;
@@ -3529,7 +3556,7 @@ static PyObject *IntVector_transient(IntVector *self, PyObject *Py_UNUSED(ignore
     TransientIntVector *t = PyObject_New(TransientIntVector, &TransientIntVectorType);
     if (!t) return NULL;
 
-    t->id = PyObject_New(PyObject, &PyBaseObject_Type);
+    t->id = PyObject_New(PyObject, &PdsSentinelType);
     if (!t->id) {
         Py_DECREF(t);
         return NULL;
@@ -3738,7 +3765,7 @@ static PyObject *Vector_transient(Vector *self, PyObject *Py_UNUSED(ignored)) {
     TransientVector *t = PyObject_New(TransientVector, &TransientVectorType);
     if (!t) return NULL;
 
-    t->id = PyObject_New(PyObject, &PyBaseObject_Type);
+    t->id = PyObject_New(PyObject, &PdsSentinelType);
     if (!t->id) {
         Py_DECREF(t);
         return NULL;
@@ -4375,7 +4402,7 @@ static PyObject *TransientVector_sort(TransientVector *self, PyObject *args, PyO
 
     // Rebuild the transient vector from scratch with sorted elements
     // Create a fresh edit id
-    PyObject *new_id = PyObject_New(PyObject, &PyBaseObject_Type);
+    PyObject *new_id = PyObject_New(PyObject, &PdsSentinelType);
     if (!new_id) {
         Py_DECREF(list);
         return NULL;
@@ -6329,7 +6356,7 @@ static PyObject *Map_transient(Map *self, PyObject *Py_UNUSED(ignored)) {
     TransientMap *t = PyObject_New(TransientMap, &TransientMapType);
     if (!t) return NULL;
 
-    t->id = PyObject_New(PyObject, &PyBaseObject_Type);
+    t->id = PyObject_New(PyObject, &PdsSentinelType);
     if (!t->id) {
         Py_DECREF(t);
         return NULL;
@@ -7757,7 +7784,7 @@ static PyObject *Set_transient(Set *self, PyObject *Py_UNUSED(ignored)) {
     TransientSet *t = PyObject_New(TransientSet, &TransientSetType);
     if (!t) return NULL;
 
-    t->id = PyObject_New(PyObject, &PyBaseObject_Type);
+    t->id = PyObject_New(PyObject, &PdsSentinelType);
     if (!t->id) {
         Py_DECREF(t);
         return NULL;
@@ -9080,7 +9107,7 @@ static PyObject *SortedVector_transient(SortedVector *self, PyObject *Py_UNUSED(
     TransientSortedVector *t = PyObject_New(TransientSortedVector, &TransientSortedVectorType);
     if (!t) return NULL;
 
-    t->id = PyObject_New(PyObject, &PyBaseObject_Type);
+    t->id = PyObject_New(PyObject, &PdsSentinelType);
     if (!t->id) {
         Py_DECREF(t);
         return NULL;
@@ -9495,7 +9522,7 @@ static PyObject *pds_set(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    t->id = PyObject_New(PyObject, &PyBaseObject_Type);
+    t->id = PyObject_New(PyObject, &PdsSentinelType);
     if (!t->id) {
         Py_DECREF(t);
         Py_DECREF(iter);
@@ -9709,6 +9736,7 @@ static int pds_traverse(PyObject *m, visitproc visit, void *arg) {
     PdsState *st = pds_get_state(m);
     if (st == NULL) return 0;
 
+#if !PDS_SINGLETONS_ARE_IMMORTAL
     Py_VISIT(st->_MISSING);
     Py_VISIT(st->EMPTY_VECTOR);
     Py_VISIT(st->EMPTY_DOUBLE_VECTOR);
@@ -9720,6 +9748,7 @@ static int pds_traverse(PyObject *m, visitproc visit, void *arg) {
     Py_VISIT(st->EMPTY_DOUBLE_NODE);
     Py_VISIT(st->EMPTY_LONG_NODE);
     Py_VISIT(st->EMPTY_BIN);
+#endif
 
     return 0;
 }
@@ -9728,6 +9757,7 @@ static int pds_clear(PyObject *m) {
     PdsState *st = pds_get_state(m);
     if (st == NULL) return 0;
 
+#if !PDS_SINGLETONS_ARE_IMMORTAL
     Py_CLEAR(st->_MISSING);
     Py_CLEAR(st->EMPTY_VECTOR);
     Py_CLEAR(st->EMPTY_DOUBLE_VECTOR);
@@ -9739,13 +9769,27 @@ static int pds_clear(PyObject *m) {
     Py_CLEAR(st->EMPTY_DOUBLE_NODE);
     Py_CLEAR(st->EMPTY_LONG_NODE);
     Py_CLEAR(st->EMPTY_BIN);
+#else
+    st->_MISSING = NULL;
+    st->EMPTY_VECTOR = NULL;
+    st->EMPTY_DOUBLE_VECTOR = NULL;
+    st->EMPTY_LONG_VECTOR = NULL;
+    st->EMPTY_MAP = NULL;
+    st->EMPTY_SET = NULL;
+    st->EMPTY_SORTED_VECTOR = NULL;
+    st->EMPTY_NODE = NULL;
+    st->EMPTY_DOUBLE_NODE = NULL;
+    st->EMPTY_LONG_NODE = NULL;
+    st->EMPTY_BIN = NULL;
+#endif
 
     return 0;
 }
 
 static void pds_free(void *m) {
-    // Call pds_clear to release Python objects before module is freed.
+#if !PDS_SINGLETONS_ARE_IMMORTAL
     pds_clear((PyObject *)m);
+#endif
 }
 
 static int pds_exec(PyObject *m);
@@ -9776,6 +9820,9 @@ static int pds_exec(PyObject *m) {
     if (st == NULL) {
         return -1;
     }
+
+    // Initialize sentinel type first (used for identity objects)
+    if (PyType_Ready(&PdsSentinelType) < 0) return -1;
 
     // Initialize types
     if (PyType_Ready(&ConsType) < 0) return -1;
@@ -9832,8 +9879,7 @@ static int pds_exec(PyObject *m) {
     } else {
         // First initialization - create all singletons
 
-        // Create sentinel
-        st->_MISSING = PyObject_New(PyObject, &PyBaseObject_Type);
+        st->_MISSING = PyObject_New(PyObject, &PdsSentinelType);
         if (!st->_MISSING) return -1;
 
         // Create empty node

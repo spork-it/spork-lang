@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.1.8"
 description = "A Lisp to Python transpiler with persistent data structures"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Grant Wade", email = "grant@spork.sh"}
 ]
@@ -40,8 +40,8 @@ classifiers = [
 
 # Runtime dependencies for spork dist command
 dependencies = [
-    "build>=1.0",
-    "setuptools>=61.0",
+    "build>=1",
+    "setuptools>=77",
     "wheel",
 ]
 

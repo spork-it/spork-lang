@@ -6,6 +6,15 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+// For atomic operations in free-threaded Python 3.13+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
+#include <stdatomic.h>
+#define HAVE_STDATOMIC 1
+#endif
+
+// Guard to ensure singletons are only created once (for sub-interpreter safety)
+static int _singletons_initialized = 0;
+
 #if defined(_MSC_VER)
 #include <intrin.h>
 #endif
@@ -2021,9 +2030,16 @@ static Py_hash_t DoubleVector_hash(DoubleVector *self) {
 
 // Buffer Protocol Implementation for DoubleVector
 static int DoubleVector_flatten(DoubleVector *self) {
+    // Optimistic check - use atomic load for thread safety in free-threaded Python
+#if HAVE_STDATOMIC
+    if (atomic_load_explicit((_Atomic(double *)*)&self->flat_buffer_cache, memory_order_acquire) != NULL) {
+        return 0;  // Already flattened
+    }
+#else
     if (self->flat_buffer_cache != NULL) {
         return 0;  // Already flattened
     }
+#endif
 
     if (self->cnt == 0) {
         return 0;  // Empty, no buffer needed
@@ -2044,7 +2060,22 @@ static int DoubleVector_flatten(DoubleVector *self) {
         }
     }
 
+    // Atomic CAS: Try to swap NULL with our new buffer
+    // If another thread beat us, free ours and use theirs
+#if HAVE_STDATOMIC
+    double *expected = NULL;
+    if (!atomic_compare_exchange_strong_explicit(
+            (_Atomic(double *)*)&self->flat_buffer_cache,
+            &expected,
+            buffer,
+            memory_order_release,
+            memory_order_acquire)) {
+        // We lost the race; another thread set it. Free ours.
+        free(buffer);
+    }
+#else
     self->flat_buffer_cache = buffer;
+#endif
     return 0;
 }
 
@@ -3067,9 +3098,16 @@ static Py_hash_t IntVector_hash(IntVector *self) {
 
 // Buffer Protocol for IntVector
 static int IntVector_flatten(IntVector *self) {
+    // Optimistic check - use atomic load for thread safety in free-threaded Python
+#if HAVE_STDATOMIC
+    if (atomic_load_explicit((_Atomic(int64_t *)*)&self->flat_buffer_cache, memory_order_acquire) != NULL) {
+        return 0;
+    }
+#else
     if (self->flat_buffer_cache != NULL) {
         return 0;
     }
+#endif
 
     if (self->cnt == 0) {
         return 0;
@@ -3089,7 +3127,22 @@ static int IntVector_flatten(IntVector *self) {
         }
     }
 
+    // Atomic CAS: Try to swap NULL with our new buffer
+    // If another thread beat us, free ours and use theirs
+#if HAVE_STDATOMIC
+    int64_t *expected = NULL;
+    if (!atomic_compare_exchange_strong_explicit(
+            (_Atomic(int64_t *)*)&self->flat_buffer_cache,
+            &expected,
+            buffer,
+            memory_order_release,
+            memory_order_acquire)) {
+        // We lost the race; another thread set it. Free ours.
+        free(buffer);
+    }
+#else
     self->flat_buffer_cache = buffer;
+#endif
     return 0;
 }
 
@@ -9682,6 +9735,10 @@ static int pds_exec(PyObject *m);
 
 static PyModuleDef_Slot pds_slots[] = {
     {Py_mod_exec, pds_exec},
+#if PY_VERSION_HEX >= 0x030D0000
+    // Python 3.13+: Declare this module as free-threading safe
+    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
+#endif
     {0, NULL}
 };
 
@@ -9740,69 +9797,106 @@ static int pds_exec(PyObject *m) {
     if (PyType_Ready(&TransientSetType) < 0) return -1;
     if (PyType_Ready(&SetIteratorType) < 0) return -1;
 
-    // Create sentinel
-    st->_MISSING = PyObject_New(PyObject, &PyBaseObject_Type);
-    if (!st->_MISSING) return -1;
+    // Create singletons only once to ensure sub-interpreter safety.
+    // If already initialized, reuse the existing global singletons.
+    if (_singletons_initialized) {
+        // Reuse existing singletons - just copy globals to module state
+        st->_MISSING = _MISSING;
+        st->EMPTY_NODE = (PyObject *)EMPTY_NODE;
+        st->EMPTY_VECTOR = (PyObject *)EMPTY_VECTOR;
+        st->EMPTY_DOUBLE_NODE = (PyObject *)EMPTY_DOUBLE_NODE;
+        st->EMPTY_DOUBLE_VECTOR = (PyObject *)EMPTY_DOUBLE_VECTOR;
+        st->EMPTY_LONG_NODE = (PyObject *)EMPTY_LONG_NODE;
+        st->EMPTY_LONG_VECTOR = (PyObject *)EMPTY_LONG_VECTOR;
+        st->EMPTY_BIN = (PyObject *)EMPTY_BIN;
+        st->EMPTY_MAP = (PyObject *)EMPTY_MAP;
+        st->EMPTY_SET = (PyObject *)EMPTY_SET;
+        st->EMPTY_SORTED_VECTOR = (PyObject *)EMPTY_SORTED_VECTOR;
+    } else {
+        // First initialization - create all singletons
 
-    // Create empty node
-    st->EMPTY_NODE = (PyObject *)VectorNode_create(NULL);
-    if (!st->EMPTY_NODE) return -1;
+        // Create sentinel
+        st->_MISSING = PyObject_New(PyObject, &PyBaseObject_Type);
+        if (!st->_MISSING) return -1;
 
-    // Create empty vector
-    st->EMPTY_VECTOR = (PyObject *)Vector_create(0, BITS, (VectorNode *)st->EMPTY_NODE, NULL, NULL);
-    if (!st->EMPTY_VECTOR) return -1;
+        // Create empty node
+        st->EMPTY_NODE = (PyObject *)VectorNode_create(NULL);
+        if (!st->EMPTY_NODE) return -1;
 
-    // Create empty double vector node and vector
-    st->EMPTY_DOUBLE_NODE = (PyObject *)DoubleVectorNode_create(NULL);
-    if (!st->EMPTY_DOUBLE_NODE) return -1;
+        // Create empty vector
+        st->EMPTY_VECTOR = (PyObject *)Vector_create(0, BITS, (VectorNode *)st->EMPTY_NODE, NULL, NULL);
+        if (!st->EMPTY_VECTOR) return -1;
 
-    st->EMPTY_DOUBLE_VECTOR = (PyObject *)DoubleVector_create(0, BITS, (DoubleVectorNode *)st->EMPTY_DOUBLE_NODE, NULL, 0, NULL);
-    if (!st->EMPTY_DOUBLE_VECTOR) return -1;
+        // Create empty double vector node and vector
+        st->EMPTY_DOUBLE_NODE = (PyObject *)DoubleVectorNode_create(NULL);
+        if (!st->EMPTY_DOUBLE_NODE) return -1;
 
-    // Create empty long vector node and vector
-    st->EMPTY_LONG_NODE = (PyObject *)IntVectorNode_create(NULL);
-    if (!st->EMPTY_LONG_NODE) return -1;
+        st->EMPTY_DOUBLE_VECTOR = (PyObject *)DoubleVector_create(0, BITS, (DoubleVectorNode *)st->EMPTY_DOUBLE_NODE, NULL, 0, NULL);
+        if (!st->EMPTY_DOUBLE_VECTOR) return -1;
 
-    st->EMPTY_LONG_VECTOR = (PyObject *)IntVector_create(0, BITS, (IntVectorNode *)st->EMPTY_LONG_NODE, NULL, 0, NULL);
-    if (!st->EMPTY_LONG_VECTOR) return -1;
+        // Create empty long vector node and vector
+        st->EMPTY_LONG_NODE = (PyObject *)IntVectorNode_create(NULL);
+        if (!st->EMPTY_LONG_NODE) return -1;
 
-    // Create empty bitmap indexed node
-    st->EMPTY_BIN = (PyObject *)BitmapIndexedNode_create(0, NULL, NULL);
-    if (!st->EMPTY_BIN) return -1;
+        st->EMPTY_LONG_VECTOR = (PyObject *)IntVector_create(0, BITS, (IntVectorNode *)st->EMPTY_LONG_NODE, NULL, 0, NULL);
+        if (!st->EMPTY_LONG_VECTOR) return -1;
 
-    // Create empty map
-    st->EMPTY_MAP = (PyObject *)Map_create(0, NULL, NULL);
-    if (!st->EMPTY_MAP) return -1;
+        // Create empty bitmap indexed node
+        st->EMPTY_BIN = (PyObject *)BitmapIndexedNode_create(0, NULL, NULL);
+        if (!st->EMPTY_BIN) return -1;
 
-    // Create empty set
-    st->EMPTY_SET = (PyObject *)Set_create(0, NULL, NULL);
-    if (!st->EMPTY_SET) return -1;
+        // Create empty map
+        st->EMPTY_MAP = (PyObject *)Map_create(0, NULL, NULL);
+        if (!st->EMPTY_MAP) return -1;
 
-    // Create empty sorted vector
-    st->EMPTY_SORTED_VECTOR = (PyObject *)PyObject_New(SortedVector, &SortedVectorType);
-    if (!st->EMPTY_SORTED_VECTOR) return -1;
-    {
-        SortedVector *sv = (SortedVector *)st->EMPTY_SORTED_VECTOR;
-        sv->root = NULL;
-        sv->cnt = 0;
-        sv->key_fn = NULL;
-        sv->reverse = 0;
+        // Create empty set
+        st->EMPTY_SET = (PyObject *)Set_create(0, NULL, NULL);
+        if (!st->EMPTY_SET) return -1;
+
+        // Create empty sorted vector
+        st->EMPTY_SORTED_VECTOR = (PyObject *)PyObject_New(SortedVector, &SortedVectorType);
+        if (!st->EMPTY_SORTED_VECTOR) return -1;
+        {
+            SortedVector *sv = (SortedVector *)st->EMPTY_SORTED_VECTOR;
+            sv->root = NULL;
+            sv->cnt = 0;
+            sv->key_fn = NULL;
+            sv->reverse = 0;
+        }
+
+        // Immortalize singletons for Python 3.12+ to prevent refcount contention
+        // in multi-threaded code. Immortal objects don't have their refcounts modified.
+#if PY_VERSION_HEX >= 0x030C0000
+        Py_SET_REFCNT(st->_MISSING, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_NODE, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_VECTOR, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_DOUBLE_NODE, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_DOUBLE_VECTOR, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_LONG_NODE, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_LONG_VECTOR, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_BIN, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_MAP, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_SET, _Py_IMMORTAL_REFCNT);
+        Py_SET_REFCNT(st->EMPTY_SORTED_VECTOR, _Py_IMMORTAL_REFCNT);
+#endif
+
+        // Update global aliases for backward compatibility with existing code
+        // These are set once and never change, ensuring sub-interpreter safety
+        _MISSING = st->_MISSING;
+        EMPTY_NODE = (VectorNode *)st->EMPTY_NODE;
+        EMPTY_VECTOR = (Vector *)st->EMPTY_VECTOR;
+        EMPTY_DOUBLE_NODE = (DoubleVectorNode *)st->EMPTY_DOUBLE_NODE;
+        EMPTY_DOUBLE_VECTOR = (DoubleVector *)st->EMPTY_DOUBLE_VECTOR;
+        EMPTY_LONG_NODE = (IntVectorNode *)st->EMPTY_LONG_NODE;
+        EMPTY_LONG_VECTOR = (IntVector *)st->EMPTY_LONG_VECTOR;
+        EMPTY_BIN = (BitmapIndexedNode *)st->EMPTY_BIN;
+        EMPTY_MAP = (Map *)st->EMPTY_MAP;
+        EMPTY_SET = (Set *)st->EMPTY_SET;
+        EMPTY_SORTED_VECTOR = (SortedVector *)st->EMPTY_SORTED_VECTOR;
+
+        // Mark as initialized
+        _singletons_initialized = 1;
     }
-
-    // Update global aliases for backward compatibility with existing code
-    // TODO: Remove these in future versions to avoid global state now that we have module state
-    //       This requires updating all code that uses these globals to access via module state
-    _MISSING = st->_MISSING;
-    EMPTY_NODE = (VectorNode *)st->EMPTY_NODE;
-    EMPTY_VECTOR = (Vector *)st->EMPTY_VECTOR;
-    EMPTY_DOUBLE_NODE = (DoubleVectorNode *)st->EMPTY_DOUBLE_NODE;
-    EMPTY_DOUBLE_VECTOR = (DoubleVector *)st->EMPTY_DOUBLE_VECTOR;
-    EMPTY_LONG_NODE = (IntVectorNode *)st->EMPTY_LONG_NODE;
-    EMPTY_LONG_VECTOR = (IntVector *)st->EMPTY_LONG_VECTOR;
-    EMPTY_BIN = (BitmapIndexedNode *)st->EMPTY_BIN;
-    EMPTY_MAP = (Map *)st->EMPTY_MAP;
-    EMPTY_SET = (Set *)st->EMPTY_SET;
-    EMPTY_SORTED_VECTOR = (SortedVector *)st->EMPTY_SORTED_VECTOR;
 
     // Add types to module
     Py_INCREF(&ConsType);

@@ -8,6 +8,7 @@ version = "0.1.8"
 description = "A Lisp to Python transpiler with persistent data structures"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
 authors = [
     {name = "Grant Wade", email = "grant@spork.sh"}
 ]
@@ -36,7 +37,6 @@ classifiers = [
     "Topic :: Software Development :: Interpreters",
     "Topic :: Software Development :: Libraries",
 ]
-license-files = ["LICENSE"]
 
 # Runtime dependencies for spork dist command
 dependencies = [

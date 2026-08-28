@@ -138,7 +138,7 @@ from spork.runtime.json import (
 )
 
 # Re-export PDS (persistent data structures)
-from spork_pds import (  # pyright: ignore[reportMissingModuleSource]
+from spork.pds import (
     EMPTY_DOUBLE_VECTOR,
     EMPTY_LONG_VECTOR,
     EMPTY_MAP,

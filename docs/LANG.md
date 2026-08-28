@@ -860,7 +860,7 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
     [my.utils :refer [helper-fn]]
     [external.lib :refer :all])
   (:import
-    [spork_pds :as pds]
+    [spork.pds :as pds]
     [array :as arr]
     [os.path :as osp]
     [collections :refer [defaultdict Counter]]

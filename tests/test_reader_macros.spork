@@ -1,5 +1,8 @@
 ; Test file for Reader Macros
 
+(ns test-reader-macros
+  (:import [spork.pds :as pds]))
+
 (print "=== Testing Reader Macros ===\n")
 
 ; =============================================================================
@@ -61,7 +64,7 @@
 
 ; Slice returns a Vector
 (print "Slice result type:" (type (get my-vec #[0 3])))
-(assert (= (str (type (get my-vec #[0 3]))) "<class 'spork_pds.Vector'>") "slice of vector should return vector")
+(assert (isinstance (get my-vec #[0 3]) pds.Vector) "slice of vector should return vector")
 
 (print "Slice literals with Vectors: PASS\n")
 

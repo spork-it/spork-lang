@@ -19,7 +19,7 @@ Categories:
 from abc import ABC
 from typing import Any, Iterator, Optional
 
-from spork_pds import (
+from spork.pds import (
     EMPTY_MAP,
     EMPTY_SET,
     EMPTY_SORTED_VECTOR,

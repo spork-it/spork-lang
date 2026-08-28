@@ -76,7 +76,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install dist/*.whl
           cd "$RUNNER_TEMP"
-          python -c "import spork_pds; from spork.runtime import Vector; assert Vector is spork_pds.Vector"
+          python -c "import spork.pds as pds; from spork.runtime import Vector; assert Vector is pds.Vector"
           python -m spork -c "(print (+ 1 2))"
 
   publish:

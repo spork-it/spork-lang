@@ -592,7 +592,7 @@ def verify_python(example: Example) -> None:
         """
 import sys, types
 import spork
-from spork_pds import *
+from spork.pds import *
 module = types.ModuleType("my_spork_module")
 module.greet = lambda name: f"Hello, {name}!"
 sys.modules["my_spork_module"] = module

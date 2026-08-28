@@ -108,7 +108,7 @@ from spork.runtime.core import (
     zero_q,
     zipmap,
 )
-from spork_pds import (  # pyright: ignore[reportMissingModuleSource]
+from spork.pds import (
     EMPTY_DOUBLE_VECTOR,
     EMPTY_LONG_VECTOR,
     EMPTY_MAP,
@@ -204,7 +204,7 @@ def spork_kwargs_map(d):
         A Spork Map with Keyword keys
     """
 
-    # TODO: Add mapping input support to spork_pds.hash_map() for this operation.
+    # TODO: Add mapping input support to spork.pds.hash_map() for this operation.
     items = []
     for k, v in d.items():
         key_name = k.replace("_", "-")

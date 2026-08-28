@@ -3,6 +3,11 @@ Spork - A Lisp to Python transpiler with persistent data structures.
 """
 
 import sys
+from pkgutil import extend_path
+
+# Allow separately distributed projects, such as spork-pds, to contribute
+# modules to the spork namespace even when installed in another location.
+__path__ = extend_path(__path__, __name__)
 
 # Import persistent data structures from the runtime (backed by spork-pds).
 try:
@@ -164,7 +169,7 @@ from spork.compiler import (
 
 install_import_hook()
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 __all__ = [
     # Data structures

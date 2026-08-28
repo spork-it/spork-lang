@@ -99,10 +99,10 @@ from my_spork_module import greet
 print(greet("Python"))
 ```
 
-The persistent collections are a separate public package and can be used without the language runtime:
+Spork exposes the separately distributed persistent collections under the `spork.pds` namespace:
 
 ```python
-from spork_pds import vec
+from spork.pds import vec
 
 original = vec(1, 2, 3)
 updated = original.conj(4)

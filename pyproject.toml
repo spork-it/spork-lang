@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spork-lang"
-version = "0.3.0"
+version = "0.3.1"
 description = "A Lisp to Python transpiler with persistent data structures"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,7 +42,7 @@ classifiers = [
 dependencies = [
     "build>=1",
     "setuptools>=77",
-    "spork-pds>=0.1.0,<0.2.0",
+    "spork-pds>=0.1.2,<0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -62,6 +62,10 @@ Changelog = "https://github.com/spork-it/spork-lang/releases"
 spork = "spork.cli:main"
 
 [tool.setuptools]
+# Keep editable installs on a plain sys.path entry so separately distributed
+# spork namespace portions remain discoverable alongside this regular package.
+package-dir = {"" = "."}
+
 # Include the package and all subpackages
 packages = [
     "spork",

@@ -11,10 +11,11 @@ A major mode for [Spork](https://github.com/spork-it/spork-lang) with full nREPL
 
 ### Manual
 
-1. Copy `spork-mode.el` to your Emacs load path
-2. Add to your init file:
+1. Add this directory to your Emacs load path (or copy `spork-mode.el` into an existing load-path directory).
+2. Load the mode from your init file:
 
 ```elisp
+(add-to-list 'load-path "/path/to/spork-lang/editors/emacs")
 (require 'spork-mode)
 ```
 
@@ -22,7 +23,7 @@ A major mode for [Spork](https://github.com/spork-it/spork-lang) with full nREPL
 
 ```elisp
 (use-package spork-mode
-  :load-path "/path/to/spork/editors/emacs"
+  :load-path "/path/to/spork-lang/editors/emacs"
   :mode "\\.spork\\'")
 ```
 

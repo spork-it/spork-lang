@@ -1,6 +1,12 @@
 # Spork Language Reference
 
-Spork is a Lisp dialect that compiles to Python, featuring persistent data structures, macros, and seamless Python interop.
+Spork is a Lisp dialect hosted on CPython. It compiles forms to Python AST, uses Python objects and exceptions directly, and supplies Lisp syntax, macros, and persistent collections.
+
+> **Version note:** Spork is alpha software. This reference describes the current `main` branch and may be ahead of the latest PyPI release.
+
+Use this document for syntax and semantics. See the [Standard Library Reference](STDLIB.md) for functions and macros, and [Projects and CLI](PROJECTS.md) for `spork.it` and command-line workflows.
+
+Examples use `; => value` for exact, machine-checked results. When an operation is lazy, the comment shows its logical contents after realization; use `vec` or `doall` when a concrete vector is required.
 
 ## Table of Contents
 
@@ -95,8 +101,8 @@ true        ; Python True
 false       ; Python False
 nil         ; Python None
 
-; Keyword argument splat (for function calls)
-*{:name "Alice" :age 30}        ; splats as name="Alice", age=30
+; Keyword argument splat (inside a function call)
+(dict *{:name "Alice" :age 30}) ; => {"name" "Alice" "age" 30}
 ```
 
 ---
@@ -118,27 +124,27 @@ The core types are:
 
 ```clojure
 [1 2 3]              ; literal syntax -> Vector
-(vec 1 2 3)          ; constructor function
+(vec 1 2 3)          ; => [1 2 3]
 
 ; Operations
 (nth v 0)            ; get element by index
 (conj v 4)           ; add element (returns new vector)
 (assoc v 1 99)       ; set element (returns new vector)
-(pop v)              ; remove last element
+(.pop v)             ; remove last element
 (count v)            ; length
 (+ v1 v2)            ; concatenation
 
 ; Type-specialized vectors for numeric performance
 ; Note: vec-f64 and vec_f64 are equivalent due to identifier normalization
-(vec-f64 1.0 2.0 3.0)  ; DoubleVector (float64)
-(vec-i64 1 2 3)        ; IntVector (int64)
+(isinstance (vec-f64 1.0 2.0 3.0) DoubleVector) ; => true
+(isinstance (vec-i64 1 2 3) IntVector)           ; => true
 ```
 
 ### Maps
 
 ```clojure
 {:a 1 :b 2}          ; literal syntax -> Map
-(hash-map :a 1 :b 2) ; constructor function
+(hash-map :a 1 :b 2) ; => {:a 1 :b 2}
 
 ; Operations
 (get m :a)           ; get value (nil if missing)
@@ -154,7 +160,7 @@ The core types are:
 
 ```clojure
 #{1 2 3}             ; literal syntax -> Set
-(hash-set [1 2 3])   ; constructor from iterable
+(hash-set [1 2 3])   ; => #{1 2 3}
 
 ; Operations
 (conj s 4)           ; add element (returns new set)
@@ -180,7 +186,7 @@ The core types are:
 
 ```clojure
 '(1 2 3)             ; quoted list
-(cons 0 lst)         ; prepend element
+(cons 0 '(1 2 3))   ; => (0 1 2 3)
 
 ; Operations
 (first lst)          ; head
@@ -189,19 +195,21 @@ The core types are:
 
 ### SortedVector
 
-Persistent sorted vectors maintain elements in sorted order using a Red-Black tree. All operations are O(log n).
+Persistent sorted vectors maintain elements in sorted order using a red-black tree. Indexed lookup, insertion, removal, membership, and rank queries are O(log n); full iteration is O(n). Duplicates are retained.
+
+`sorted-vec` is the idiomatic Spork spelling. It resolves to the Python binding `sorted_vec` through identifier normalization, which is also why the value's representation uses an underscore.
 
 ```clojure
 ; Creating sorted vectors
-(sorted_vec [3 1 4 1 5 9])    ; => sorted_vec(1, 1, 3, 4, 5, 9)
-(sorted_vec)                   ; empty sorted vector
+(sorted-vec [3 1 4 1 5 9])    ; => sorted_vec(1, 1, 3, 4, 5, 9)
+(sorted-vec)                   ; => sorted_vec()
 
 ; With key function (sort by result of key-fn)
-(sorted_vec ["banana" "apple" "cherry"] :key len)
+(sorted-vec ["banana" "apple" "cherry"] *{:key len})
 ; => sorted_vec("apple", "banana", "cherry")
 
 ; Reverse order
-(sorted_vec [3 1 4] :reverse true)  ; => sorted_vec(4, 3, 1)
+(sorted-vec [3 1 4] *{:reverse true})  ; => sorted_vec(4, 3, 1)
 
 ; Basic operations
 (conj sv 2)          ; add element, maintains sorted order
@@ -253,7 +261,7 @@ All collections support the sequence protocol:
 ; Basic let
 (let [x 1
       y 2]
-  (+ x y))
+  (+ x y))  ; => 3
 
 ; Sequential binding (later bindings see earlier ones)
 (let [x 1
@@ -263,7 +271,7 @@ All collections support the sequence protocol:
 ; Destructuring in let
 (let [[a b] [1 2]
       {:keys [name]} {:name "Alice"}]
-  (str name ": " a ", " b))
+  (fmt "{}: {}, {}" name a b))  ; => "Alice: 1, 2"
 ```
 
 ### Do Blocks
@@ -365,10 +373,10 @@ All collections support the sequence protocol:
 ; => sorted_vec(5, 4, 3, 1, 1)
 
 ; Combine :key and :reverse
-[sorted-for [item items] 
+[sorted-for [item items]
             {:name (:name item) :score (:score item)}
             :key :score :reverse true]
-; => sorted by score, highest first
+; => [{:name "two" :score 20} {:name "one" :score 10}]
 
 ; Real-world example: rank GitHub repos by stars
 [sorted-for [repo repos]
@@ -384,7 +392,7 @@ All collections support the sequence protocol:
        acc 0]
   (if (>= i 10)
     acc
-    (recur (inc i) (+ acc i))))
+    (recur (inc i) (+ acc i))))  ; => 45
 
 ; recur MUST be in tail position
 ```
@@ -408,9 +416,9 @@ All collections support the sequence protocol:
 The `#(...)` reader macro provides a concise syntax for simple anonymous functions:
 
 ```clojure
-; Using % for the single argument
-(map #(+ % 1) [1 2 3])              ; => [2 3 4]
-(filter #(> % 5) [3 6 2 8])         ; => [6 8]
+; map and filter are lazy; realize them when a vector is needed
+(doall (map #(+ % 1) [1 2 3]))      ; => [2 3 4]
+(doall (filter #(> % 5) [3 6 2 8])) ; => [6 8]
 
 ; Multiple args: %1, %2, etc.
 (reduce #(+ %1 %2) [1 2 3 4])       ; => 10
@@ -431,7 +439,7 @@ See [Reader Macros](#reader-macros) for more details.
 ; With docstring
 (defn greet [name]
   "Returns a greeting string."
-  (str "Hello, " name "!"))
+  (fmt "Hello, {}!" name))
 ```
 
 ### Multi-Arity Functions
@@ -441,7 +449,7 @@ See [Reader Macros](#reader-macros) for more details.
   ([name]
    (greet name "Hello"))
   ([name greeting]
-   (str greeting ", " name "!")))
+   (fmt "{}, {}!" greeting name)))
 
 (greet "Alice")           ; => "Hello, Alice!"
 (greet "Alice" "Hi")      ; => "Hi, Alice!"
@@ -458,12 +466,12 @@ See [Reader Macros](#reader-macros) for more details.
 
 ; Mixed positional and rest
 (defn log [level & msgs]
-  (print level ":" (apply str msgs)))
+  (print level ":" (.join "" (map str msgs))))
 ```
 
 ### Keyword Arguments
 
-Keyword arguments use the `*{:key value}` syntax - a map prefixed with `*` that splats as keyword arguments. There is also a shorthand for keyword-only arguments using `*` followed by `:keyword value`. As well as splatting a map using `*{mapname}` this will map the keys to symbols or kwargs.
+At a call site, `*{:key value}` converts a map to Python keyword arguments. The inline form `* :key value` is equivalent. A map variable can be splatted as `*{options}`, and literal entries and map variables may be combined inside one splat.
 
 ```clojure
 ; Keyword-only arguments (after *)
@@ -471,15 +479,19 @@ Keyword arguments use the `*{:key value}` syntax - a map prefixed with `*` that 
   {:name name :age age :email email})
 
 ; Call with *{...} syntax for keyword args
-(create-user "Alice" * :age 30 :email "alice@example.com")
+(create-user "Alice" *{:age 30 :email "alice@example.com"})
+; => {:name "Alice" :age 30 :email "alice@example.com"}
 
 ; Keyword-only with defaults
 (defn config [host * (port 8080) (debug false)]
   {:host host :port port :debug debug})
 
-(config "localhost")                            ; uses defaults
-(config "example.com" *{:port 3000})            ; override port only
-(config "example.com" * :port 3000 :debug true) ; override port only
+(config "localhost")
+; => {:host "localhost" :port 8080 :debug false}
+(config "example.com" *{:port 3000})
+; => {:host "example.com" :port 3000 :debug false}
+(config "example.com" * :port 3000 :debug true)
+; => {:host "example.com" :port 3000 :debug true}
 
 ; Multiple kwarg splats are allowed (after positional args)
 (make-request "POST" "/api" *{:headers h} *{:body b :timeout 30})
@@ -488,10 +500,11 @@ Keyword arguments use the `*{:key value}` syntax - a map prefixed with `*` that 
 (defn flexible [required ** opts]
   {:required required :opts opts})
 
-(flexible "value" *{:a 1 :b 2})               ; opts = {"a": 1, "b": 2}
+(flexible "value" *{:a 1 :b 2})
+; => {:required "value" :opts {:a 1 :b 2}}
 
 ; Works with Python functions too
-(.format "{name} is {age}" *{:name "Alice" :age 30})
+(.format "{name} is {age}" *{:name "Alice" :age 30}) ; => "Alice is 30"
 ```
 
 ### Destructuring in Parameters
@@ -501,7 +514,7 @@ Keyword arguments use the `*{:key value}` syntax - a map prefixed with `*` that 
   (+ x y))
 
 (defn greet-person [{:keys [name age]}]
-  (str name " is " age " years old"))
+  (fmt "{} is {} years old" name age))
 ```
 
 ---
@@ -529,7 +542,7 @@ Spork supports Python-compatible type annotations using the `^type` prefix synta
 ```clojure
 ; Annotated parameters
 (defn greet [^str name]
-  (str "Hello, " name))
+  (fmt "Hello, {}" name))
 
 ; Multiple annotations
 (defn add [^int x ^int y]
@@ -537,7 +550,7 @@ Spork supports Python-compatible type annotations using the `^type` prefix synta
 
 ; Mixed annotated and unannotated
 (defn format-message [^str prefix message]
-  (str prefix ": " message))
+  (fmt "{}: {}" prefix message))
 
 ; Compiles to:
 ; def add(x: int, y: int):
@@ -552,16 +565,16 @@ Spork supports Python-compatible type annotations using the `^type` prefix synta
   (* x x))
 
 (defn ^str greet [^str name]
-  (str "Hello, " name "!"))
+  (fmt "Hello, {}!" name))
 
 ; Compiles to:
 ; def square(x: int) -> int:
 ;     return x * x
 ```
 
-### Generic Types 
+### Generic Types
 
-Common generic types are available without imports:
+Common Python and `typing` generic types are available without imports. Annotations are emitted as Python annotations; they do not enforce values at runtime.
 
 ```clojure
 ; List, Dict, Set, Tuple (Python typing)
@@ -633,13 +646,13 @@ Spork's persistent data structure types support generic subscripting for type an
 ```clojure
 (def ^(Vector int) nums [1 2 3])
 (def ^(Map str int) scores {"alice" 100})
-(def ^(Set str) tags #{"a" "b" "c"})
 (def ^(Cons int) items (cons 1 (cons 2 nil)))
 
-; Type-specialized vectors for numeric data
-; These are automatically selected when using ^(Vector float) or ^(Vector int)
-(def ^(Vector float) floats [1.0 2.0 3.0])  ; -> DoubleVector
-(def ^(Vector int) ints [1 2 3])            ; -> IntVector
+; For annotated vector literals, these two forms select specialized storage
+(def ^(Vector float) floats [1.0 2.0 3.0])
+(def ^(Vector int) ints [1 2 3])
+(isinstance floats DoubleVector) ; => true
+(isinstance ints IntVector)      ; => true
 ```
 
 | Type | Description |
@@ -647,7 +660,8 @@ Spork's persistent data structure types support generic subscripting for type an
 | `Vector` | Persistent vector (generic) |
 | `Map` | Persistent hash map |
 | `DoubleVector` | Vector of float64 (with NumPy buffer protocol) |
-| `IntVector` | Vector of int64 (with NumPy buffer protocol) |
+| `IntVector` | Vector of int64 (with read-only buffer protocol) |
+| `SortedVector` | Persistent ordered collection |
 | `Cons` | Linked list cell |
 
 ### Runtime Introspection
@@ -657,8 +671,9 @@ Type annotations are available at runtime via `__annotations__`:
 ```clojure
 (defn ^int add [^int x ^int y] (+ x y))
 
-(print (. add __annotations__))
-; => {'x': <class 'int'>, 'y': <class 'int'>, 'return': <class 'int'>}
+(= (get (. add __annotations__) "x") int)      ; => true
+(= (get (. add __annotations__) "y") int)      ; => true
+(= (get (. add __annotations__) "return") int) ; => true
 ```
 
 ---
@@ -667,6 +682,7 @@ Type annotations are available at runtime via `__annotations__`:
 
 ### Match Expression
 
+<!-- verify-docs: skip=grammar-template -->
 ```clojure
 (match value
   pattern1 result1
@@ -685,16 +701,16 @@ Type annotations are available at runtime via `__annotations__`:
 
 ; Type patterns
 (match x
-  ^int n (str "integer: " n)
-  ^str s (str "string: " s)
+  (^int n) (fmt "integer: {}" n)
+  (^str s) (fmt "string: {}" s)
   _ "unknown")
 
 ; Sequence patterns
 (match coll
   [] "empty"
-  [x] (str "one: " x)
-  [x y] (str "two: " x ", " y)
-  [x & rest] (str "many, first: " x))
+  [x] (fmt "one: {}" x)
+  [x y] (fmt "two: {}, {}" x y)
+  [x & rest] (fmt "many, first: {}" x))
 
 ; Map patterns
 (match m
@@ -713,12 +729,12 @@ Type annotations are available at runtime via `__annotations__`:
 
 ```clojure
 (defn area
-  ([{:type :circle :radius r}]
-   (* 3.14 r r))
-  ([{:type :rectangle :width w :height h}]
-   (* w h))
-  ([{:type :square :side s}]
-   (* s s)))
+  ([{:keys [type radius]} :when (= type :circle)]
+   (* 3.14 radius radius))
+  ([{:keys [type width height]} :when (= type :rectangle)]
+   (* width height))
+  ([{:keys [type side]} :when (= type :square)]
+   (* side side)))
 ```
 
 ---
@@ -750,18 +766,21 @@ Type annotations are available at runtime via `__annotations__`:
 
 ### Decorators
 
+Import Python decorators and helpers before using them. Function decorators follow the function name inside `defn`.
+
 ```clojure
+(ns example.classes
+  (:import [dataclasses :refer [dataclass field]]))
+
 (defclass ^dataclass Person []
   (field name str)
   (field age int 0))
 
 (defclass Counter []
-  ^staticmethod
-  (defn create []
+  (defn ^staticmethod create []
     (Counter))
 
-  ^classmethod
-  (defn from-value [cls value]
+  (defn ^classmethod from-value [cls value]
     (let [c (cls)]
       (set! c.value value)
       c)))
@@ -770,6 +789,9 @@ Type annotations are available at runtime via `__annotations__`:
 ### Fields (for dataclasses)
 
 ```clojure
+(ns example.config
+  (:import [dataclasses :refer [dataclass field]]))
+
 (defclass ^dataclass Config []
   (field host str "localhost")
   (field port int 8080)
@@ -822,8 +844,8 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
 (area my-circle)
 (perimeter my-rectangle)
 
-; Check if type satisfies protocol
-(satisfies? IShape my-object)
+; Explicit extensions also register the type with the protocol ABC
+(isinstance my-object IShape)
 ```
 
 ---
@@ -847,6 +869,7 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
 
 ### Require Options (for Spork namespaces)
 
+<!-- verify-docs: skip=namespace-fragments -->
 ```clojure
 ; Alias - access with dot notation: pds.vec, short.foo
 [some.long.module :as short]
@@ -872,9 +895,9 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
     [os.path :as osp]))               ; import os.path as osp
 
 ; Access with dot notation
-(print os.getcwd)
-(print (j.dumps {:a 1}))
-(print (math.sin 0.5))
+(print (os.getcwd))
+(print (j.dumps (dict [["a" 1]])))
+(print (s 0.5))
 ```
 
 ### Importing Macros
@@ -905,9 +928,9 @@ Unlike Clojure, Spork uses dot notation for all namespace/module access:
 ```clojure
 ; All namespace/module access uses dot notation
 (ns my.app
-  (:require [std.string :as str]
-            [math :as m])
-  (:import [numpy :as np]))
+  (:require [std.string :as str])
+  (:import [math :as m]
+           [numpy :as np]))
 
 ; Access via dots (not slashes)
 (str.join ", " ["a" "b" "c"])  ; => "a, b, c"
@@ -965,11 +988,12 @@ Use `#` suffix to generate unique symbols:
 ```clojure
 (defn ^async fetch-data [url]
   (let [response (await (http.get url))]
-    response.json))
+    (await (.json response))))
 
-; Async for
-(async-for [item (async-iterator)]
-  (process item))
+; async-for must appear inside an async function
+(defn ^async consume-items []
+  (async-for [item (async-iterator)]
+    (process item)))
 ```
 
 ### Generators
@@ -1007,6 +1031,7 @@ Use `#` suffix to generate unique symbols:
 
 ### Throw
 
+<!-- verify-docs: expect-error=ValueError -->
 ```clojure
 (throw (ValueError "invalid input"))
 ```
@@ -1030,7 +1055,7 @@ Transients provide **mutable** versions of persistent collections for efficient 
 (def tv (transient v))  ; Create mutable version
 
 ; SortedVector transients preserve sort options
-(def sv (sorted_vec [3 1 4] :key abs :reverse true))
+(def sv (sorted-vec [3 1 4] *{:key abs :reverse true}))
 (def tsv (transient sv))
 ```
 
@@ -1054,10 +1079,11 @@ Transients provide **mutable** versions of persistent collections for efficient 
 (disj! ts 2)         ; Remove element
 
 ; SortedVector operations
-(def tsv (transient (sorted_vec [1 3 5])))
-(conj! tsv 2)    ; Add element (maintains sort order)
-(conj! tsv 4)    ; => now contains 1, 2, 3, 4, 5
-(conj! tsv 3)    ; Remove element
+(def tsv (transient (sorted-vec [1 3 5])))
+(conj! tsv 2)       ; Add element (maintains sort order)
+(conj! tsv 4)
+(disj! tsv 3)       ; Remove one matching element
+(persistent! tsv)   ; => sorted_vec(1, 2, 4, 5)
 ```
 
 ### Converting Back to Persistent
@@ -1084,7 +1110,7 @@ The recommended way to work with transients is the `with-mutable` macro, which h
 ; => [1 2 3 4 5]
 ```
 
-> Note: Inside `with-mutable`, vectors/maps/sets behave like mutable collections and expose a Python-like API for better compatibility with outside code. 
+> Inside `with-mutable`, transient vectors, maps, and sets expose Python mutable collection APIs. Typed-vector and sorted-vector transients have smaller, type-specific APIs.
 
 ### Python Protocol Support
 
@@ -1103,14 +1129,16 @@ This enables using Python methods directly on transients:
 (with-mutable [v []]
   (.extend v [1 2 3])
   (.append v 4)
-  (print (len v))        ; 4
-  (print (in 2 v)))      ; True
+  (assert (= (len v) 4))
+  (assert (in 2 v)))
+; => [1 2 3 4]
 
 ; TransientMap: .get, .keys, .values, .items, len, in, iteration
 (with-mutable [m {}]
   (assoc! m :a 1)
-  (print (.get m :a))    ; 1
+  (assert (= (.get m :a) 1))
   (for [k m] (print k))) ; iterates keys
+; => {:a 1}
 
 ; TransientSet: .add, .discard, .remove, .clear, len, in, iteration
 (with-mutable [s #{}]
@@ -1118,6 +1146,7 @@ This enables using Python methods directly on transients:
   (.add s 2)
   (.discard s 1)
   (.remove s 2))         ; raises KeyError if missing
+; => #{}
 ```
 
 You can pass transients to Python libraries expecting mutable collections:
@@ -1153,8 +1182,10 @@ Use `*{...}` or `* :key val :key val` to pass keyword arguments to Python (and S
 
 ```clojure
 ; Basic keyword arguments
-(some-func 1 2 *{:name "Alice" :age 30})
-; => some_func(1, 2, name="Alice", age=30)
+(def call-result (some-func 1 2 *{:name "Alice" :age 30}))
+(get call-result 0)              ; => (1 2)
+(get (get call-result 1) "name") ; => "Alice"
+(get (get call-result 1) "age")  ; => 30
 
 ; Works with Python methods
 (.format "{name} is {age}" *{:name "Bob" :age 25})
@@ -1178,8 +1209,14 @@ obj.attr              ; get attribute
 
 ; Method calls
 (.method obj arg1 arg2)
-(. obj method arg1 arg2)
+
+; General attribute/index form
+(. obj attr)
+(. coll index)
+(. coll (slice start stop))
 ```
+
+The leading-dot method form places the object first in source but emits a normal Python bound-method call: `(.upper text)` corresponds to `text.upper()`.
 
 ### Python Builtins
 
@@ -1187,13 +1224,13 @@ Common Python built-in functions are available:
 
 ```clojure
 (print "hello")
-(len coll)
-(type obj)
-(isinstance obj SomeClass)
-(str x)
-(int s)
-(list coll)
-(dict pairs)
+(len [1 2 3])                    ; => 3
+(= (type 42) int)                ; => true
+(isinstance obj SomeClass)       ; => true
+(str 42)                         ; => "42"
+(int "42")                       ; => 42
+(list [1 2 3])                   ; => [1 2 3]
+(dict [["name" "Alice"]])       ; => {"name" "Alice"}
 ```
 
 ### Operators
@@ -1284,6 +1321,7 @@ Spork provides **source-mapped error reporting**. When runtime errors occur, tra
 
 Given this Spork code:
 
+<!-- verify-docs: expect-error=ZeroDivisionError -->
 ```clojure
 ;; example.spork
 (defn divide [a b]
@@ -1299,7 +1337,7 @@ Given this Spork code:
 (deep-stack)
 ```
 
-Running it produces:
+Running it produces a traceback whose source-mapped portion is:
 
 ```
 Error: division by zero
@@ -1336,6 +1374,7 @@ Spork surfaces Python's standard exception types with Spork source locations:
 
 ### Undefined Variable Errors
 
+<!-- verify-docs: expect-error=NameError -->
 ```clojure
 (defn calculate [x]
   (+ x undefined-var))
@@ -1343,7 +1382,7 @@ Spork surfaces Python's standard exception types with Spork source locations:
 (calculate 10)
 ```
 
-Produces:
+Relevant traceback excerpt:
 
 ```
 Error: name 'undefined_var' is not defined
@@ -1357,6 +1396,7 @@ Note that the error message shows the normalized Python name (`undefined_var`) b
 
 ### Type Errors
 
+<!-- verify-docs: expect-error=TypeError -->
 ```clojure
 (defn add-numbers [a b]
   (+ a b))
@@ -1364,7 +1404,7 @@ Note that the error message shows the normalized Python name (`undefined_var`) b
 (add-numbers 10 "oops")
 ```
 
-Produces:
+Relevant traceback excerpt:
 
 ```
 Error: unsupported operand type(s) for +: 'int' and 'str'
@@ -1376,6 +1416,7 @@ TypeError: unsupported operand type(s) for +: 'int' and 'str'
 
 ### Assertion Errors
 
+<!-- verify-docs: expect-error=AssertionError -->
 ```clojure
 (defn validate-positive [n]
   (assert (> n 0) "Expected positive number")
@@ -1384,7 +1425,7 @@ TypeError: unsupported operand type(s) for +: 'int' and 'str'
 (validate-positive -5)
 ```
 
-Produces:
+Relevant traceback excerpt:
 
 ```
 Error: Expected positive number
@@ -1397,6 +1438,7 @@ AssertionError: Expected positive number
 
 Syntax errors are caught at compile time and include location information:
 
+<!-- verify-docs: expect-error=SyntaxError -->
 ```clojure
 (defn broken [x]
   (let [y 10]
@@ -1404,10 +1446,10 @@ Syntax errors are caught at compile time and include location information:
 ; Missing closing parens
 ```
 
-Produces:
+Relevant error:
 
 ```
-SyntaxError: unterminated list, expected )
+SyntaxError: unterminated list at line 2, expected )
 ```
 
 ### How Source Mapping Works

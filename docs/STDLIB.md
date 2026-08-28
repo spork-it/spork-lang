@@ -1,17 +1,35 @@
 # Spork Standard Library Reference
 
-This document provides comprehensive documentation for the Spork standard library, including built-in types, core functions, prelude macros, and standard library modules.
+This reference covers the values and functions available in every Spork namespace, the automatically loaded prelude macros, reader syntax, and the bundled `std.*` modules.
+
+> **Version note:** Spork is alpha software. This reference describes the current `main` branch and may be ahead of the latest PyPI release.
+
+For special forms and language semantics, use the [Language Reference](LANG.md). For project commands and `spork.it`, use [Projects and CLI](PROJECTS.md).
+
+## Conventions
+
+- Hyphenated Spork names normalize to underscored Python bindings: `take-while` and `take_while` resolve to the same function.
+- `; => value` is an exact, machine-checked expectation. For a lazy operation, it shows logical contents after realization rather than the raw Python generator representation.
+- Use `vec` or `doall` to realize a lazy result as a persistent vector. Use `dorun` to consume it only for side effects.
+- Collection iteration order is not guaranteed for maps and sets. Examples showing one order should not be used as ordering assertions.
 
 ## Table of Contents
 
 1. [Built-in Types](#built-in-types)
 2. [Core Functions](#core-functions)
+   - [Sequence operations](#sequence-operations)
+   - [Transient operations](#transient-operations)
+   - [Lazy sequences](#lazy-sequence-functions)
+   - [Reducers and transformations](#predicates-on-sequences)
+   - [Numeric and bitwise functions](#numeric-functions)
 3. [Reader Macros](#reader-macros)
 4. [Prelude Macros](#prelude-macros)
 5. [Standard Library Modules](#standard-library-modules)
+   - [`std.string`](#stdstring)
+   - [`std.map`](#stdmap)
+   - [`std.json`](#stdjson)
 
 ---
-
 
 ## Built-in Types
 
@@ -24,7 +42,7 @@ Persistent vectors provide efficient random access and updates. Vectors are crea
 ```clojure
 ; Creating vectors
 [1 2 3 4 5]           ; literal syntax
-(vec 1 2 3)           ; constructor function
+(vec 1 2 3)           ; => [1 2 3]
 
 ; Basic operations
 (conj [1 2] 3)        ; => [1 2 3]
@@ -34,30 +52,31 @@ Persistent vectors provide efficient random access and updates. Vectors are crea
 (count [1 2 3])       ; => 3
 (first [1 2 3])       ; => 1
 (rest [1 2 3])        ; => (2 3)
-(peek [1 2 3])        ; => 3
-(pop [1 2 3])         ; => [1 2]
+(last [1 2 3])        ; => 3
+(.pop [1 2 3])        ; => [1 2]
 ```
 
 **Specialized Vectors:**
 ```clojure
 ; DoubleVector - Optimized for 64-bit floats
-(vec-f64 1.0 2.0 3.0)  ; => DoubleVector
+(isinstance (vec-f64 1.0 2.0 3.0) DoubleVector) ; => true
 
-; type annotations can also be used to hint the type
-(def ^(Vector double) v [1.0 2.0 3.0])
+; an annotated vector literal can select specialized storage
+(def ^(Vector float) v [1.0 2.0 3.0])
+(isinstance v DoubleVector) ; => true
 
-; IntVector - Optimized for 64-bit integers  
-(vec-i64 1 2 3)        ; => IntVector
+; IntVector - Optimized for 64-bit integers
+(isinstance (vec-i64 1 2 3) IntVector) ; => true
 ```
 
 ### Map
 
-Persistent hash maps with keyword keys. Maps are created using curly brace syntax.
+Persistent hash maps accept any hashable key. Maps are created using curly brace syntax.
 
 ```clojure
 ; Creating maps
 {:a 1 :b 2}              ; literal syntax
-(hash-map :a 1 :b 2)     ; constructor function
+(hash-map :a 1 :b 2)     ; => {:a 1 :b 2}
 
 ; Basic operations
 (assoc {:a 1} :b 2)      ; => {:a 1 :b 2}
@@ -69,8 +88,8 @@ Persistent hash maps with keyword keys. Maps are created using curly brace synta
 (:missing {:a 1} "nope") ; => "nope" (with default)
 (count {:a 1 :b 2})      ; => 2
 (contains? {:a 1} :a)    ; => true
-(keys {:a 1 :b 2})       ; => (:a :b)
-(vals {:a 1 :b 2})       ; => (1 2)
+(.keys {:a 1 :b 2})      ; iterable view of keys
+(.values {:a 1 :b 2})    ; iterable view of values
 ```
 
 ### Set
@@ -80,7 +99,7 @@ Persistent sets. Sets are created using `#{}` syntax.
 ```clojure
 ; Creating sets
 #{1 2 3}               ; literal syntax
-(hash-set 1 2 3)       ; constructor function
+(hash-set [1 2 3])     ; => #{1 2 3}
 
 ; Basic operations
 (conj #{1 2} 3)        ; => #{1 2 3}
@@ -97,7 +116,7 @@ Persistent sets. Sets are created using `#{}` syntax.
 
 ### Cons (Linked List)
 
-Singly-linked lists created by `cons` or returned by lazy sequence operations.
+Singly linked lists created by `cons`, quoting, and eager sequence conversion with `seq`.
 
 ```clojure
 ; Creating lists
@@ -109,7 +128,7 @@ Singly-linked lists created by `cons` or returned by lazy sequence operations.
 (first (cons 1 (cons 2 nil)))  ; => 1
 (rest (cons 1 (cons 2 nil)))   ; => (2)
 (first nil)                    ; => nil
-(rest nil)                     ; => ()
+(rest nil)                     ; => nil
 ```
 
 ### Keyword
@@ -142,31 +161,32 @@ Represents identifiers in Spork code. Used for variable and function names.
 
 ### SortedVector
 
-Persistent sorted vectors maintain elements in sorted order using a Red-Black tree. All operations are O(log n).
+Persistent sorted vectors retain duplicates in sorted order using a red-black tree. Indexed lookup, insertion, removal, membership, and rank queries are O(log n); full iteration is O(n). `sorted-vec` is the idiomatic spelling, while representations use the normalized runtime name `sorted_vec`.
 
 ```clojure
 ; Creating sorted vectors
 (sorted-vec [3 1 4 1 5 9])      ; => sorted_vec(1, 1, 3, 4, 5, 9)
-(sorted-vec)                     ; empty sorted vector
+(sorted-vec)                     ; => sorted_vec()
 
 ; With key function (sort by result of key-fn)
-(sorted-vec ["banana" "apple" "cherry"] :key len)
+(sorted-vec ["banana" "apple" "cherry"] *{:key len})
 ; => sorted_vec("apple", "banana", "cherry")
 
 ; With keyword as key (for sorting maps/dicts)
-(sorted-vec [{:name "Bob" :age 25} {:name "Alice" :age 30}] :key :age)
-; => sorted by age
+(sorted-vec [{:name "Bob" :age 25} {:name "Alice" :age 30}] *{:key :age})
+; => [{:name "Bob" :age 25} {:name "Alice" :age 30}]
 
 ; Reverse order
-(sorted-vec [3 1 4] :reverse true)  ; => sorted_vec(4, 3, 1)
+(sorted-vec [3 1 4] *{:reverse true})  ; => sorted_vec(4, 3, 1)
 
 ; Combine key and reverse
-(sorted-vec items :key :score :reverse true)  ; highest scores first
+(sorted-vec items *{:key :score :reverse true})
+; => [{:name "two" :score 20} {:name "one" :score 10}]
 ```
 
 **Basic Operations:**
 ```clojure
-(def sv (sorted_vec [5 2 8 1 9]))
+(def sv (sorted-vec [5 2 8 1 9]))
 
 (count sv)           ; => 5
 (first sv)           ; => 1 (minimum element)
@@ -179,7 +199,7 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 
 **Adding and Removing Elements:**
 ```clojure
-(def sv (sorted_vec [1 3 5]))
+(def sv (sorted-vec [1 3 5]))
 
 (conj sv 2)          ; => sorted_vec(1, 2, 3, 5) - inserts in sorted position
 (conj sv 3)          ; => sorted_vec(1, 3, 3, 5) - duplicates allowed
@@ -189,7 +209,7 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 
 **Search Operations:**
 ```clojure
-(def sv (sorted_vec [10 20 30 40 50]))
+(def sv (sorted-vec [10 20 30 40 50]))
 
 (contains? sv 30)    ; => true (O(log n) search)
 (contains? sv 25)    ; => false
@@ -202,12 +222,12 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 **Iteration:**
 ```clojure
 ; Iterates in sorted order
-(for [x (sorted_vec [3 1 4 1 5])]
+(for [x (sorted-vec [3 1 4 1 5])]
   (print x))
-; prints: 1 1 3 4 5
+; prints one value per line: 1, 1, 3, 4, 5
 
 ; Convert to vector
-(vec (sorted_vec [3 1 4]))  ; => [1 3 4]
+(vec (sorted-vec [3 1 4]))  ; => [1 3 4]
 ```
 
 **Sorted Vector Comprehension:**
@@ -228,6 +248,7 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 [sorted-for [item items]
             {:name (:name item) :score (:score item)}
             :key :score :reverse true]
+; => [{:name "two" :score 20} {:name "one" :score 10}]
 ```
 
 **Transient Operations:**
@@ -242,7 +263,7 @@ Persistent sorted vectors maintain elements in sorted order using a Red-Black tr
 (def result (persistent! tsv))  ; => sorted_vec(1, 2, 4, 5)
 
 ; Transient preserves key and reverse settings
-(def sv (sorted-vec items :key :score :reverse true))
+(def sv (sorted-vec items *{:key :score :reverse true}))
 (def tsv (transient sv))   ; still sorts by :score, reversed
 ```
 
@@ -270,21 +291,24 @@ Returns the first element of a collection, or `nil` if empty.
 (first "hello")      ; => "h"
 (first [])           ; => nil
 (first nil)          ; => nil
-(first {:a 1 :b 2})  ; => [:a 1] (first entry)
+
+; The first map key is unspecified
+(def first-key (first {:a 1 :b 2}))
+(contains? {:a 1 :b 2} first-key) ; => true
 ```
 
 #### `rest`
-Returns a sequence of all elements except the first. Returns empty sequence (not nil) if collection has 0 or 1 elements.
+Returns a sequence of all elements except the first. Returns `nil` when there is no remaining element.
 ```clojure
 (rest [1 2 3])    ; => (2 3)
-(rest [1])        ; => ()
-(rest [])         ; => ()
-(rest nil)        ; => ()
+(rest [1])        ; => nil
+(rest [])         ; => nil
+(rest nil)        ; => nil
 (rest "hello")    ; => ("e" "l" "l" "o")
 ```
 
 #### `seq`
-Returns a sequence on the collection, or `nil` if empty. Useful for testing if a collection has elements.
+Eagerly converts an iterable to a `Cons` sequence, or returns `nil` for an empty input. Map entries become two-element vectors. Use the original lazy functions when eager conversion is not needed.
 ```clojure
 (seq [1 2 3])     ; => (1 2 3)
 (seq [])          ; => nil
@@ -294,8 +318,8 @@ Returns a sequence on the collection, or `nil` if empty. Useful for testing if a
 
 ; Common pattern for checking if collection has elements
 (if (seq coll)
-  (println "has elements")
-  (println "empty"))
+  (print "has elements")
+  (print "empty"))
 ```
 
 #### `nth`
@@ -312,15 +336,13 @@ Returns the element at index n (0-based). Throws error if index out of bounds un
 ```
 
 #### `conj`
-Adds element(s) to a collection. Position depends on collection type: end for vectors, front for lists.
+Adds one element to a collection. The position depends on the collection type: the end for vectors, sorted position for sorted vectors, and the front for lists.
 ```clojure
 ; Vectors add at end
 (conj [1 2] 3)           ; => [1 2 3]
-(conj [1 2] 3 4 5)       ; => [1 2 3 4 5]
 
 ; Lists add at front
 (conj '(1 2) 0)          ; => (0 1 2)
-(conj '(2 3) 1 0)        ; => (0 1 2 3)
 
 ; Sets add element
 (conj #{1 2} 3)          ; => #{1 2 3}
@@ -336,7 +358,6 @@ Associates a key with a value. Works on maps (any key) and vectors (index).
 ; Maps
 (assoc {:a 1} :b 2)           ; => {:a 1 :b 2}
 (assoc {:a 1} :a 99)          ; => {:a 99} (replace)
-(assoc {} :x 1 :y 2 :z 3)     ; => {:x 1 :y 2 :z 3}
 
 ; Vectors (by index)
 (assoc [1 2 3] 1 42)          ; => [1 42 3]
@@ -348,7 +369,6 @@ Removes a key from a map. Returns map unchanged if key not present.
 ```clojure
 (dissoc {:a 1 :b 2} :a)       ; => {:b 2}
 (dissoc {:a 1 :b 2} :c)       ; => {:a 1 :b 2} (key not present)
-(dissoc {:a 1 :b 2 :c 3} :a :c)  ; => {:b 2} (multiple keys)
 ```
 
 #### `disj`
@@ -356,11 +376,13 @@ Removes an element from a set. Returns set unchanged if element not present.
 ```clojure
 (disj #{1 2 3} 2)        ; => #{1 3}
 (disj #{1 2 3} 5)        ; => #{1 2 3} (not present)
-(disj #{1 2 3 4} 2 4)    ; => #{1 3} (multiple elements)
+
+; Also removes one matching value from a SortedVector
+(disj (sorted-vec [1 2 2 3]) 2) ; => sorted_vec(1, 2, 3)
 ```
 
 #### `get`
-Returns the value for a key, with optional default. Works on maps, vectors (by index), sets, and strings.
+Returns the value for a key, with optional default. Works on maps, indexed collections, slices, and strings.
 ```clojure
 ; Maps
 (get {:a 1 :b 2} :a)         ; => 1
@@ -371,10 +393,6 @@ Returns the value for a key, with optional default. Works on maps, vectors (by i
 (get [1 2 3] 1)              ; => 2
 (get [1 2 3] 10)             ; => nil
 (get [1 2 3] 10 :oops)       ; => :oops
-
-; Sets (membership check returning the element)
-(get #{:a :b :c} :a)         ; => :a
-(get #{:a :b :c} :d)         ; => nil
 
 ; Strings
 (get "hello" 1)              ; => "e"
@@ -414,7 +432,7 @@ Returns an empty collection of the same type.
 (empty [1 2 3])         ; => []
 (empty {:a 1 :b 2})     ; => {}
 (empty #{1 2 3})        ; => #{}
-(empty '(1 2 3))        ; => ()
+(empty '(1 2 3))        ; => nil
 ```
 
 #### `into`
@@ -429,12 +447,11 @@ Pours all elements from one collection into another. Useful for converting betwe
 ; Build map from pairs
 (into {} [[:a 1] [:b 2]])    ; => {:a 1 :b 2}
 
-; Add to existing collection
+; Add to an existing collection
 (into [0] [1 2 3])           ; => [0 1 2 3]
-(into {:a 1} {:b 2 :c 3})    ; => {:a 1 :b 2 :c 3}
 
-; With transducer
-(into [] (map inc) [1 2 3])  ; => [2 3 4]
+; Realize a lazy transformation into a chosen collection
+(into [] (map inc [1 2 3]))   ; => [2 3 4]
 ```
 
 ### Transient Operations
@@ -532,7 +549,7 @@ SortedVector has its own transient type with methods that maintain sorted order:
 (def result (persistent! tsv))  ; => sorted_vec(1, 2, 4, 5, 6, 7)
 
 ; Transient preserves key function and reverse settings
-(def sv (sorted-vec items :key :score :reverse true))
+(def sv (sorted-vec items *{:key :score :reverse true}))
 (def tsv (transient sv))
 (conj! tsv new-item)  ; still sorted by :score in reverse
 ```
@@ -613,7 +630,7 @@ You can also pass transients to Python libraries that expect mutable collections
 
 ### Lazy Sequence Functions
 
-These functions return lazy sequences that compute elements on demand.
+These functions return Python generators. Calling one does not realize its result; use `vec`, `doall`, iteration, or a reducer to consume it. `partition`, `partition-all`, `reverse`, and sorting helpers materialize their input when consumed and therefore are not suitable for infinite inputs.
 
 #### `map`
 Applies a function to each element of one or more collections.
@@ -625,7 +642,8 @@ Applies a function to each element of one or more collections.
 ; Multiple collections (stops at shortest)
 (map + [1 2 3] [10 20 30])     ; => (11 22 33)
 (map + [1 2] [10 20 30])       ; => (11 22)
-(map vector [1 2 3] [:a :b :c]) ; => ([1 :a] [2 :b] [3 :c])
+(map (fn [a b] [a b]) [1 2 3] [:a :b :c])
+; => ([1 :a] [2 :b] [3 :c])
 
 ; With anonymous function
 (map (fn [x] (* x x)) [1 2 3 4])  ; => (1 4 9 16)
@@ -640,7 +658,7 @@ Returns elements for which predicate returns true.
 (filter even? [1 2 3 4 5 6])      ; => (2 4 6)
 (filter odd? [1 2 3 4 5 6])       ; => (1 3 5)
 (filter pos? [-2 -1 0 1 2])       ; => (1 2)
-(filter string? [1 "a" 2 "b"])    ; => ("a" "b")
+(filter #(isinstance % str) [1 "a" 2 "b"]) ; => ("a" "b")
 
 ; Filter with keyword (truthy values)
 (filter :active [{:active true :name "A"}
@@ -648,8 +666,8 @@ Returns elements for which predicate returns true.
                  {:active true :name "C"}])
 ; => ({:active true :name "A"} {:active true :name "C"})
 
-; Filter with set (membership)
-(filter #{2 4 6} [1 2 3 4 5 6])   ; => (2 4 6)
+; Filter with set membership
+(filter #(contains? #{2 4 6} %) [1 2 3 4 5 6]) ; => (2 4 6)
 ```
 
 #### `take`
@@ -695,12 +713,12 @@ Concatenates sequences together.
 ```
 
 #### `repeat`
-Returns a sequence of x repeated n times (or infinitely if no n given).
+Returns a sequence of `x` repeated `n` times, using `(repeat x n)`. Without `n`, the result is infinite.
 ```clojure
-(repeat 3 "x")              ; => ("x" "x" "x")
-(repeat 5 0)                ; => (0 0 0 0 0)
+(repeat "x" 3)              ; => ("x" "x" "x")
+(repeat 0 5)                ; => (0 0 0 0 0)
 (take 4 (repeat :a))        ; => (:a :a :a :a) (infinite)
-(vec (repeat 3 [1 2]))      ; => [[1 2] [1 2] [1 2]]
+(vec (repeat [1 2] 3))      ; => [[1 2] [1 2] [1 2]]
 ```
 
 #### `cycle`
@@ -716,17 +734,16 @@ Returns infinite sequence: x, (f x), (f (f x)), ...
 ```clojure
 (take 5 (iterate inc 0))        ; => (0 1 2 3 4)
 (take 5 (iterate #(* 2 %) 1))   ; => (1 2 4 8 16)
-(take 4 (iterate rest [1 2 3])) ; => ([1 2 3] (2 3) (3) ())
+(take 4 (iterate rest [1 2 3])) ; => ([1 2 3] (2 3) (3) nil)
 ```
 
 #### `range`
-Returns a range of numbers.
+Returns an integer range with Python's `range` semantics. With no arguments it is an infinite generator starting at zero.
 ```clojure
 (range 5)            ; => (0 1 2 3 4)
 (range 1 5)          ; => (1 2 3 4)
 (range 0 10 2)       ; => (0 2 4 6 8)
 (range 10 0 -1)      ; => (10 9 8 7 6 5 4 3 2 1)
-(range 0 1 0.2)      ; => (0 0.2 0.4 0.6 0.8)
 (take 5 (range))     ; => (0 1 2 3 4) (infinite)
 ```
 
@@ -744,34 +761,37 @@ Interposes separator between elements.
 ```clojure
 (interpose :sep [1 2 3])          ; => (1 :sep 2 :sep 3)
 (interpose ", " ["a" "b" "c"])    ; => ("a" ", " "b" ", " "c")
-(apply str (interpose "-" [1 2 3]))  ; => "1-2-3"
+(apply + (map str (interpose "-" [1 2 3]))) ; => "1-2-3"
 ```
 
 #### `partition`
 Partitions into groups of n elements. Drops incomplete final group.
 ```clojure
-(partition 2 [1 2 3 4 5 6])       ; => ((1 2) (3 4) (5 6))
-(partition 2 [1 2 3 4 5])         ; => ((1 2) (3 4)) (drops 5)
-(partition 3 [1 2 3 4 5 6 7 8 9]) ; => ((1 2 3) (4 5 6) (7 8 9))
+(partition 2 [1 2 3 4 5 6])       ; => ([1 2] [3 4] [5 6])
+(partition 2 [1 2 3 4 5])         ; => ([1 2] [3 4]) (drops 5)
+(partition 3 [1 2 3 4 5 6 7 8 9]) ; => ([1 2 3] [4 5 6] [7 8 9])
 
-; With step (sliding window)
-(partition 2 1 [1 2 3 4])         ; => ((1 2) (2 3) (3 4))
-(partition 3 1 [1 2 3 4 5])       ; => ((1 2 3) (2 3 4) (3 4 5))
+; Optional step follows the collection (sliding window)
+(partition 2 [1 2 3 4] 1)         ; => ([1 2] [2 3] [3 4])
+(partition 3 [1 2 3 4 5] 1)       ; => ([1 2 3] [2 3 4] [3 4 5])
 ```
 
 #### `partition-all`
 Like partition but includes incomplete final group.
 ```clojure
-(partition-all 2 [1 2 3 4 5])     ; => ((1 2) (3 4) (5))
-(partition-all 3 [1 2 3 4 5])     ; => ((1 2 3) (4 5))
-(partition-all 3 [1 2])           ; => ((1 2))
+(partition-all 2 [1 2 3 4 5])     ; => ([1 2] [3 4] [5])
+(partition-all 3 [1 2 3 4 5])     ; => ([1 2 3] [4 5])
+(partition-all 3 [1 2])           ; => ([1 2])
+
+; Optional step follows the collection
+(partition-all 3 [1 2 3 4] 1)     ; => ([1 2 3] [2 3 4] [3 4] [4])
 ```
 
 #### `keep`
 Returns non-nil results of (f item).
 ```clojure
 (keep #(if (even? %) %) [1 2 3 4 5 6])  ; => (2 4 6)
-(keep identity [1 nil 2 nil 3])         ; => (1 2 3)
+(keep (fn [x] x) [1 nil 2 nil 3])      ; => (1 2 3)
 (keep :name [{:name "A"} {} {:name "B"}])  ; => ("A" "B")
 
 ; Difference from filter: keep uses the RESULT of f
@@ -791,8 +811,9 @@ Like keep but f receives index and item.
 #### `map-indexed`
 Like map but f receives index and item.
 ```clojure
-(map-indexed vector [:a :b :c])       ; => ([0 :a] [1 :b] [2 :c])
-(map-indexed #(str %1 ": " %2) ["a" "b" "c"])  
+(map-indexed (fn [i x] [i x]) [:a :b :c])
+; => ([0 :a] [1 :b] [2 :c])
+(map-indexed #(.format "{}: {}" %1 %2) ["a" "b" "c"])
 ; => ("0: a" "1: b" "2: c")
 
 (map-indexed (fn [i x] {:index i :value x}) [10 20 30])
@@ -827,7 +848,7 @@ Flattens nested sequences into a single flat sequence.
 #### `mapcat`
 Maps then concatenates results. Equivalent to (apply concat (map f coll)).
 ```clojure
-(mapcat #(repeat 2 %) [1 2 3])       ; => (1 1 2 2 3 3)
+(mapcat #(repeat % 2) [1 2 3])       ; => (1 1 2 2 3 3)
 (mapcat reverse [[1 2] [3 4]])       ; => (2 1 4 3)
 (mapcat #(range %) [1 2 3])          ; => (0 0 1 0 1 2)
 
@@ -845,39 +866,38 @@ Returns first truthy result of (pred item), or nil if none.
 (some #(> % 5) [1 2 3 4])        ; => nil
 (some #(> % 5) [1 2 6 4])        ; => true
 
-; With set (finds element if present)
-(some #{3 5 7} [1 2 3 4])        ; => 3
-(some #{:a :b} [:c :d :a])       ; => :a
+; Find an element using set membership
+(some #(if (contains? #{3 5 7} %) %) [1 2 3 4]) ; => 3
 
 ; Return actual matching value
 (some #(if (> % 5) %) [1 3 6 2]) ; => 6
 ```
 
-#### `every?`
-Returns true if (pred item) is truthy for all items.
+#### `every`
+Returns true if `(pred item)` is truthy for every item. Empty inputs, including `nil`, return true.
 ```clojure
-(every? even? [2 4 6 8])         ; => true
-(every? even? [2 4 5 6])         ; => false
-(every? pos? [1 2 3])            ; => true
-(every? string? ["a" "b" "c"])   ; => true
-(every? identity [1 2 nil 3])    ; => false
+(every even? [2 4 6 8])         ; => true
+(every even? [2 4 5 6])         ; => false
+(every pos? [1 2 3])            ; => true
+(every #(isinstance % str) ["a" "b" "c"]) ; => true
+(every (fn [x] x) [1 2 nil 3]) ; => false
 ```
 
-#### `not-every?`
-Returns true if (pred item) is false for at least one item.
+#### `not-every`
+Returns true if the predicate is falsy for at least one item.
 ```clojure
-(not-every? even? [2 4 6 8])     ; => false
-(not-every? even? [2 4 5 6])     ; => true
-(not-every? pos? [1 -1 2])       ; => true
+(not-every even? [2 4 6 8])     ; => false
+(not-every even? [2 4 5 6])     ; => true
+(not-every pos? [1 -1 2])       ; => true
 ```
 
-#### `not-any?`
-Returns true if (pred item) is false for all items.
+#### `not-any`
+Returns true if the predicate is falsy for every item.
 ```clojure
-(not-any? even? [1 3 5 7])       ; => true
-(not-any? even? [1 3 4 5])       ; => false
-(not-any? neg? [1 2 3])          ; => true
-(not-any? string? [1 2 3])       ; => true
+(not-any even? [1 3 5 7])       ; => true
+(not-any even? [1 3 4 5])       ; => false
+(not-any neg? [1 2 3])          ; => true
+(not-any #(isinstance % str) [1 2 3]) ; => true
 ```
 
 ### Reduction Functions
@@ -890,11 +910,11 @@ Reduces a collection using a function. With 2 args, uses first element as initia
 (reduce + 0 [1 2 3 4])           ; => 10 (explicit init)
 (reduce + 100 [1 2 3 4])         ; => 110
 
-; Product
-(reduce * [1 2 3 4])             ; => 24
+; Product (`*` is call syntax, so wrap it when passing it as a value)
+(reduce #(* %1 %2) [1 2 3 4])    ; => 24
 
 ; Build string
-(reduce str ["a" "b" "c"])       ; => "abc"
+(reduce + ["a" "b" "c"])         ; => "abc"
 
 ; Custom accumulator
 (reduce (fn [acc x] (conj acc (* x 2)))
@@ -910,7 +930,7 @@ Returns lazy sequence of intermediate reduce values.
 ```clojure
 (reductions + [1 2 3 4])         ; => (1 3 6 10)
 (reductions + 0 [1 2 3 4])       ; => (0 1 3 6 10)
-(reductions * [1 2 3 4])         ; => (1 2 6 24)
+(reductions #(* %1 %2) [1 2 3 4]) ; => (1 2 6 24)
 (reductions conj [] [1 2 3])     ; => ([] [1] [1 2] [1 2 3])
 ```
 
@@ -957,74 +977,76 @@ Returns reversed sequence.
 (reverse [1 2 3 4])              ; => (4 3 2 1)
 (reverse "hello")                ; => ("o" "l" "l" "e" "h")
 (reverse '(a b c))               ; => (c b a)
-(apply str (reverse "hello"))    ; => "olleh"
+(apply + (reverse "hello"))      ; => "olleh"
 ```
 
 #### `sort`
-Returns sorted sequence.
+Realizes its input and returns a sorted `Vector`. Optional Python-style `:key` and `:reverse-order` keyword arguments control ordering.
 ```clojure
-(sort [3 1 4 1 5 9 2 6])         ; => (1 1 2 3 4 5 6 9)
-(sort ["c" "a" "b"])             ; => ("a" "b" "c")
-(sort > [3 1 4 1 5])             ; => (5 4 3 1 1) (descending)
-(sort < [3 1 4 1 5])             ; => (1 1 3 4 5) (ascending, default)
+(sort [3 1 4 1 5 9 2 6])                    ; => [1 1 2 3 4 5 6 9]
+(sort ["c" "a" "b"])                        ; => ["a" "b" "c"]
+(sort [3 1 4 1 5] * :reverse-order true)     ; => [5 4 3 1 1]
+(sort ["aaa" "b" "cc"] * :key len)           ; => ["b" "cc" "aaa"]
 ```
 
 #### `sort-by`
-Sorts by key function.
+Realizes its input and returns a `Vector` ordered by a key function.
 ```clojure
-(sort-by count ["aaa" "b" "cc"]) ; => ("b" "cc" "aaa")
+(sort-by count ["aaa" "b" "cc"]) ; => ["b" "cc" "aaa"]
 (sort-by :age [{:age 30} {:age 20} {:age 25}])
-; => ({:age 20} {:age 25} {:age 30})
+; => [{:age 20} {:age 25} {:age 30}]
 
 (sort-by :name [{:name "Charlie"} {:name "Alice"} {:name "Bob"}])
-; => ({:name "Alice"} {:name "Bob"} {:name "Charlie"})
-
-; With comparator
-(sort-by count > ["a" "bbb" "cc"])  ; => ("bbb" "cc" "a")
+; => [{:name "Alice"} {:name "Bob"} {:name "Charlie"}]
 ```
 
+Use `sort` with `:reverse-order true` when descending order is required.
+
 #### `split-at`
-Splits at index, returns pair of sequences.
+Realizes the input and returns a Python tuple containing two vectors.
 ```clojure
-(split-at 2 [1 2 3 4 5])         ; => [(1 2) (3 4 5)]
-(split-at 0 [1 2 3])             ; => [() (1 2 3)]
-(split-at 10 [1 2 3])            ; => [(1 2 3) ()]
+(split-at 2 [1 2 3 4 5])         ; => ([1 2], [3 4 5])
+(split-at 0 [1 2 3])             ; => ([], [1 2 3])
+(split-at 10 [1 2 3])            ; => ([1 2 3], [])
 ```
 
 #### `split-with`
-Splits where predicate becomes false.
+Realizes the input and returns two vectors split at the first falsy predicate result.
 ```clojure
-(split-with #(< % 3) [1 2 3 4 1 2])  ; => [(1 2) (3 4 1 2)]
-(split-with pos? [1 2 0 3 4])        ; => [(1 2) (0 3 4)]
-(split-with even? [2 4 6 7 8])       ; => [(2 4 6) (7 8)]
+(split-with #(< % 3) [1 2 3 4 1 2]) ; => ([1 2], [3 4 1 2])
+(split-with pos? [1 2 0 3 4])        ; => ([1 2], [0 3 4])
+(split-with even? [2 4 6 7 8])       ; => ([2 4 6], [7 8])
 ```
 
 ### Sequence Realization
 
 #### `doall`
-Forces realization of lazy sequence, returns it. Use when you need the results and side effects.
+Consumes an iterable and returns its results as a persistent `Vector`.
 ```clojure
-(doall (map println [1 2 3]))    ; prints 1, 2, 3; returns (nil nil nil)
+(doall (map print [1 2 3]))      ; => [nil nil nil]
+; also prints each value on its own line
 (def realized (doall (map inc (range 5))))
-realized  ; => (1 2 3 4 5)
+realized                          ; => [1 2 3 4 5]
 ```
 
 #### `dorun`
 Forces realization, returns nil. Use for side effects when you don't need the results.
 ```clojure
-(dorun (map println [1 2 3]))    ; prints 1, 2, 3; returns nil
+(dorun (map print [1 2 3]))      ; => nil
+; also prints each value on its own line
 
 ; More memory efficient than doall when you don't need results
 (dorun (map #(save-to-db %) large-collection))
 ```
 
 #### `realized?`
-Returns true if lazy sequence has been realized.
+Distinguishes raw Python generator objects from concrete or sequence values. It returns false for a generator even after that generator has been partly or fully consumed; it does not track realization progress.
 ```clojure
 (def lazy-nums (map inc [1 2 3]))
 (realized? lazy-nums)            ; => false
-(first lazy-nums)                ; force first element
-(realized? lazy-nums)            ; => true (at least partially)
+(first lazy-nums)                ; => 2 (and consumes that element)
+(realized? lazy-nums)            ; => false
+(realized? (doall lazy-nums))    ; => true
 ```
 
 ### Numeric Functions
@@ -1045,25 +1067,24 @@ Increment/decrement by 1.
 Arithmetic operations. Support variable number of arguments.
 ```clojure
 ; Addition
-(+)             ; => 0 (identity)
 (+ 5)           ; => 5
 (+ 1 2)         ; => 3
 (+ 1 2 3 4 5)   ; => 15
 
 ; Subtraction
-(- 5)           ; => -5 (negation)
+(- 5)           ; => 5 (a single operand is unchanged)
+(- 0 5)         ; => -5
 (- 10 3)        ; => 7
 (- 10 3 2 1)    ; => 4
 
 ; Multiplication
-(*)             ; => 1 (identity)
 (* 5)           ; => 5
 (* 2 3)         ; => 6
 (* 2 3 4)       ; => 24
 
 ; Division
-(/ 10 2)        ; => 5
-(/ 20 2 2)      ; => 5
+(/ 10 2)        ; => 5.0
+(/ 20 2 2)      ; => 5.0
 (/ 7 2)         ; => 3.5
 ```
 
@@ -1077,16 +1098,16 @@ Modulus (remainder). Result has same sign as divisor.
 ```
 
 #### `quot`
-Integer quotient (truncates toward zero).
+Integer floor division, matching Python's `//` semantics.
 ```clojure
 (quot 10 3)     ; => 3
 (quot 11 3)     ; => 3
-(quot -10 3)    ; => -3
-(quot 10 -3)    ; => -3
+(quot -10 3)    ; => -4
+(quot 10 -3)    ; => -4
 ```
 
 #### `max` / `min`
-Maximum.minimum of arguments.
+Return the maximum or minimum of arguments, or of one iterable argument.
 ```clojure
 (max 1 5 3)         ; => 5
 (max -1 -5 -3)      ; => -1
@@ -1120,8 +1141,8 @@ Bitwise operations have both verbose names and symbol aliases for a more traditi
 (& 5 3)                ; => 1       (0101 & 0011 = 0001)
 
 ; Bitwise AND NOT (clear bits)
-(bit-and-not 7 2)      ; => 5       (0111 & ~0010 = 0101)
-(bit-and-not 15 3)     ; => 12      (1111 & ~0011 = 1100)
+(difference 7 2)       ; => 5       (0111 & ~0010 = 0101)
+(difference 15 3)      ; => 12      (1111 & ~0011 = 1100)
 
 ; Bitwise XOR - bit-xor or ^
 (bit-xor 5 3)          ; => 6       (0101 ^ 0011 = 0110)
@@ -1152,7 +1173,7 @@ Bitwise operations have both verbose names and symbol aliases for a more traditi
 | `bit-shift-left`  | `<<`   | Left shift               |
 | `bit-shift-right` | `>>`   | Right shift              |
 
-These symbol operators also work with sets:
+The `difference` function performs numeric AND-NOT and set difference. The symbol operators also work with sets:
 
 ```clojure
 (def s1 #{1 2 3})
@@ -1195,7 +1216,7 @@ Creates an anonymous function with implicit arguments. Unlike Python's `lambda`,
 
 ```clojure
 ; Single argument
-(map #(+ % 1) [1 2 3])              ; => [2 3 4]
+(doall (map #(+ % 1) [1 2 3]))      ; => [2 3 4]
 
 ; Multiple arguments
 (reduce #(+ %1 %2) [1 2 3 4])       ; => 10
@@ -1204,14 +1225,15 @@ Creates an anonymous function with implicit arguments. Unlike Python's `lambda`,
 (def sum-all #(apply + %&))
 (sum-all 1 2 3 4 5)                 ; => 15
 
-; Works great with filter
-(filter #(> % 5) [3 6 2 8 1 9])     ; => [6 8 9]
+; Works with filter
+(doall (filter #(> % 5) [3 6 2 8 1 9])) ; => [6 8 9]
 
 ; Multi-statement bodies work because of hoisting
-(map #(do
-        (println "Processing:" %)
-        (* % 2))
-     [1 2 3])
+(doall
+  (map #(do
+          (print "Processing:" %)
+          (* % 2))
+       [1 2 3]))
 ```
 
 **How Hoisting Works:**
@@ -1275,15 +1297,16 @@ Reads and discards the next form completely. The form is parsed but never compil
 [1 #_2 3 #_4 5]                     ; => [1 3 5]
 
 ; Discard complex nested forms
-(def x #_(some-expensive-call) 42)  ; x = 42
+(def x #_(some-expensive-call) 42)
+x                                      ; => 42
 
 ; Useful for debugging - disable parts of a map
 {:name "Alice"
  #_:debug #_true
  :age 30}                           ; => {:name "Alice" :age 30}
 
-; Discard multiple consecutive forms
-(+ 1 #_#_2 3 4)                     ; => 5 (both 2 and 3 discarded)
+; Nested discard markers still consume one following form
+(+ 1 #_#_2 3 4)                     ; => 8 (`#_#_2` discards only 2)
 ```
 
 ---
@@ -1313,12 +1336,7 @@ Parses the string as a template with embedded Spork expressions inside `{}`. Com
 #f"Count: {(count items)}"         ; => "Count: 3"
 ```
 
-**Escaping Braces:**
-
-To include literal braces, double them:
-```clojure
-#f"Use {{braces}} for interpolation"  ; => "Use {braces} for interpolation"
-```
+Embedded forms must be balanced Spork expressions. Literal-brace escaping is not currently part of the documented syntax.
 
 ---
 
@@ -1328,7 +1346,7 @@ Creates a `pathlib.Path` object directly. Provides a clean syntax for filesystem
 
 ```clojure
 (def src-path #p"src/main.spork")
-(print (type src-path))             ; => <class 'pathlib.PosixPath'>
+(isinstance src-path (type #p"."))  ; => true
 
 ; Path operations
 (.joinpath #p"base" "subdir" "file.txt")  ; => base/subdir/file.txt
@@ -1336,14 +1354,15 @@ Creates a `pathlib.Path` object directly. Provides a clean syntax for filesystem
 (. #p"file.txt" suffix)                    ; => ".txt"
 (. #p"file.txt" stem)                      ; => "file"
 
-; Path predicates
-(.exists #p"./README.md")           ; => true/false
-(.is-dir #p"./src")                 ; => true/false
-(.is-file #p"./main.py")            ; => true/false
+; Path predicates depend on the current filesystem
+(.exists #p"./README.md")
+(.is-dir #p"./src")
+(.is-file #p"./main.py")
 
 ; Reading/writing
-(.read-text #p"config.txt")         ; => file contents as string
-(.write-text #p"out.txt" "content") ; writes to file
+(.read-text #p"config.txt")         ; returns file contents as a string
+(.write-text #p"out.txt" "content") ; => 7
+(.read-text #p"out.txt")             ; => "content"
 ```
 
 ---
@@ -1354,7 +1373,7 @@ Creates a compiled regex pattern (`re.Pattern`). The pattern is **validated at c
 
 ```clojure
 (def pattern #r"\d{3}-\d{4}")
-(.search pattern "Call 555-1234")   ; => match object
+(.group (.search pattern "Call 555-1234") 0) ; => "555-1234"
 
 ; Find all matches
 (.findall #r"\d+" "a1b22c333")      ; => ["1", "22", "333"]
@@ -1367,8 +1386,12 @@ Creates a compiled regex pattern (`re.Pattern`). The pattern is **validated at c
 ; Common patterns
 (.sub #r"\s+" " " "too   many   spaces")  ; => "too many spaces"
 (.split #r"[,;]" "a,b;c,d")               ; => ["a", "b", "c", "d"]
+```
 
-; Invalid regex causes compile-time error
+Invalid regular expressions fail during compilation:
+
+<!-- verify-docs: expect-error=SyntaxError -->
+```clojure
 #r"[invalid"                        ; SyntaxError at compile time!
 ```
 
@@ -1380,7 +1403,7 @@ Parses a UUID string into a `uuid.UUID` object. Validated at compile time.
 
 ```clojure
 (def id #uuid"550e8400-e29b-41d4-a716-446655440000")
-(print (type id))                   ; => <class 'uuid.UUID'>
+(= (type id) (type #uuid"00000000-0000-0000-0000-000000000000")) ; => true
 (. id version)                      ; => 4
 (. id hex)                          ; => "550e8400e29b41d4a716446655440000"
 
@@ -1388,11 +1411,15 @@ Parses a UUID string into a `uuid.UUID` object. Validated at compile time.
 (= #uuid"550e8400-e29b-41d4-a716-446655440000"
    #uuid"550e8400-e29b-41d4-a716-446655440000")  ; => true
 
-; Different UUID formats accepted
-#uuid"550e8400e29b41d4a716446655440000"         ; without hyphens
-#uuid"{550e8400-e29b-41d4-a716-446655440000}"   ; with braces
+; Different UUID formats compare equal
+(= id #uuid"550e8400e29b41d4a716446655440000")       ; => true
+(= id #uuid"{550e8400-e29b-41d4-a716-446655440000}") ; => true
+```
 
-; Invalid UUIDs caught at compile time
+Invalid UUIDs fail during compilation:
+
+<!-- verify-docs: expect-error=SyntaxError -->
+```clojure
 #uuid"not-a-uuid"                   ; SyntaxError at compile time!
 ```
 
@@ -1400,17 +1427,17 @@ Parses a UUID string into a `uuid.UUID` object. Validated at compile time.
 
 #### `#inst"..."` — Instant Literal
 
-Parses an ISO-8601 datetime string into a timezone-aware `datetime.datetime` object.
+Parses an ISO-8601 string into a `datetime.datetime` object. A `Z` suffix or explicit offset produces an aware datetime; a date or time without an offset produces a naive datetime.
 
 ```clojure
 (def created #inst"2025-12-10T00:00:00Z")
-(print (type created))              ; => <class 'datetime.datetime'>
+(= (type created) (type #inst"2000-01-01")) ; => true
 
 ; Access components
 (. created year)                    ; => 2025
 (. created month)                   ; => 12
 (. created day)                     ; => 10
-(. created tzinfo)                  ; => UTC
+(str (. created tzinfo))             ; => "UTC"
 
 ; With time
 (def event #inst"2024-06-15T14:30:45Z")
@@ -1418,14 +1445,18 @@ Parses an ISO-8601 datetime string into a timezone-aware `datetime.datetime` obj
 (. event minute)                    ; => 30
 (. event second)                    ; => 45
 
-; Timezone offsets
-#inst"2024-01-01T12:00:00+05:30"   ; => datetime with +05:30 offset
-#inst"2024-01-01T12:00:00-08:00"   ; => datetime with -08:00 offset
+; Timezone offsets, in seconds east or west of UTC
+(.total-seconds (.utcoffset #inst"2024-01-01T12:00:00+05:30")) ; => 19800.0
+(.total-seconds (.utcoffset #inst"2024-01-01T12:00:00-08:00")) ; => -28800.0
 
-; Date-only (midnight UTC)
-#inst"2024-01-01"                  ; => 2024-01-01 00:00:00+00:00
+; Date-only (naive midnight)
+(str #inst"2024-01-01")             ; => "2024-01-01 00:00:00"
+```
 
-; Invalid formats caught at compile time
+Invalid date/time formats fail during compilation:
+
+<!-- verify-docs: expect-error=SyntaxError -->
+```clojure
 #inst"not-a-date"                   ; SyntaxError at compile time!
 ```
 
@@ -1438,34 +1469,28 @@ Evaluates the form **during compilation** and injects the result into the AST. T
 ```clojure
 ; Compute at compile time
 (def computed #=(+ 100 200))        ; compiled as (def computed 300)
+computed                               ; => 300
 
 ; String operations
 (def upper #=(.upper "hello"))      ; compiled as (def upper "HELLO")
-
-; Useful for build-time constants
-(def build-date #=(str (datetime.datetime.now)))
+upper                                  ; => "HELLO"
 
 ; Mathematical constants
 (def tau #=(* 2 3.14159265359))     ; computed once at compile time
-
-; Environment-based configuration
-(def debug-mode #=(= (os.getenv "DEBUG" "") "1"))
+tau                                    ; => 6.28318530718
 ```
 
 **Available Environment:**
 
-The expression runs in the compiler's macro execution environment, which has access to:
-- Python builtins (`str`, `int`, `list`, `dict`, etc.)
-- Standard library modules that have been imported
-- Previously defined macros and constants
+The expression runs in the compiler's macro execution environment. It includes selected Python builtins, persistent collection constructors, and Spork's core sequence and arithmetic helpers. Ordinary runtime definitions and modules imported by the surrounding `ns` form are not automatically available to `#=`.
 
 **Use Cases:**
 - Build-time constants
 - Compile-time string processing
-- Embedding version numbers or build dates
+- Embedding generated literal values
 - Pre-computing expensive constant values
 
-**Caution:** Be careful with side effects, as the code runs at compile time, not runtime.
+**Caution:** `#=` executes trusted code at compile time. Avoid side effects and environment-dependent values when reproducible builds matter.
 
 ---
 
@@ -1479,7 +1504,7 @@ The prelude is automatically loaded in every Spork namespace. No import required
 Executes body only if test is truthy. Returns nil if test is falsy.
 ```clojure
 (when (> x 0)
-  (println "positive")
+  (print "positive")
   x)
 
 (when true "yes")       ; => "yes"
@@ -1532,8 +1557,8 @@ Multi-way conditional. Evaluates each test in order, returns corresponding expre
 Thread-first: inserts x as second item (first argument) in each form.
 ```clojure
 (-> 5
-    (+ 3)      ; (+ 5 3) => 8
-    (* 2))     ; (* 8 2) => 16
+    (+ 3)
+    (* 2))     ; => 16
 
 (-> {:a 1}
     (assoc :b 2)
@@ -1547,11 +1572,14 @@ Thread-first: inserts x as second item (first argument) in each form.
 
 ; Without arrow:
 (conj (conj (assoc {:a 1} :b 2) [:c 3]) [:d 4])
+; => {:a 1 :b 2 :c 3 :d 4}
+
 ; With arrow:
 (-> {:a 1}
     (assoc :b 2)
     (conj [:c 3])
     (conj [:d 4]))
+; => {:a 1 :b 2 :c 3 :d 4}
 ```
 
 #### `->>`
@@ -1635,7 +1663,6 @@ Eager map that returns a vector.
 ```clojure
 (mapv inc [1 2 3])          ; => [2 3 4]
 (mapv str [1 2 3])          ; => ["1" "2" "3"]
-(mapv + [1 2 3] [4 5 6])    ; => [5 7 9]
 ```
 
 #### `filterv`
@@ -1648,11 +1675,11 @@ Eager filter that returns a vector.
 #### `doseq`
 Execute body for each element (for side effects). Returns nil.
 ```clojure
-(doseq {x [1 2 3]}
-  (println x))
-; prints: 1, 2, 3
+(doseq [x [1 2 3]]
+  (print x))
+; prints each value on its own line: 1, 2, 3
 
-(doseq {item items}
+(doseq [item items]
   (process item)
   (save item))
 ```
@@ -1660,14 +1687,14 @@ Execute body for each element (for side effects). Returns nil.
 #### `for-all`
 List comprehension returning a vector.
 ```clojure
-(for-all {x [1 2 3]} (* x x))       ; => [1 4 9]
-(for-all {x [1 2 3]} [x (* x 10)])  ; => [[1 10] [2 20] [3 30]]
+(for-all [x [1 2 3]] (* x x))       ; => [1 4 9]
+(for-all [x [1 2 3]] [x (* x 10)])  ; => [[1 10] [2 20] [3 30]]
 ```
 
 ### Function Composition
 
 #### `comp`
-Composes functions right-to-left.
+Composes single-argument functions right to left.
 ```clojure
 ((comp str inc) 5)              ; => "6"
 ((comp inc inc inc) 0)          ; => 3
@@ -1686,17 +1713,18 @@ Partial function application.
 (def add10 (partial + 10))
 (add10 5)                       ; => 15
 
-(def greet (partial str "Hello, "))
+(def greet (partial + "Hello, "))
 (greet "World")                 ; => "Hello, World"
 ```
 
 #### `identity`
-Returns its argument unchanged.
+Expands to its argument unchanged.
 ```clojure
 (identity 42)                   ; => 42
 (identity nil)                  ; => nil
-(filter identity [1 nil 2 nil 3])  ; => (1 2 3)
 ```
+
+`identity` is a macro, not a first-class function binding. Use `(fn [x] x)` when an identity function must be passed as a value.
 
 #### `constantly`
 Returns a function that always returns x, regardless of arguments.
@@ -1714,7 +1742,7 @@ Returns function that returns opposite boolean.
 ((complement even?) 4)          ; => false
 
 (def odd? (complement even?))
-(filter (complement nil?) [1 nil 2 nil])  ; => (1 2)
+(filter (complement (fn [x] (= x nil))) [1 nil 2 nil]) ; => (1 2)
 ```
 
 ### Type Predicates
@@ -1748,7 +1776,7 @@ Returns function that returns opposite boolean.
 (seq? (rest [1 2])) ; => true
 (coll? [1 2 3])     ; => true
 (coll? {:a 1})      ; => true
-(dict? {"a" 1})     ; => true (Python dict)
+(dict? (dict [["a" 1]])) ; => true (Python dict)
 ```
 
 ### Collection Predicates and Accessors
@@ -1802,13 +1830,13 @@ Defines a protocol (interface).
 #### `extend-type`
 Extends a type to implement protocols.
 ```clojure
-(extend-type String
+(extend-type str
   Showable
-  (show [this] (str "String: " this)))
+  (show [this] (fmt "String: {}" this)))
 
 (extend-type Vector
   Showable
-  (show [this] (str "Vector with " (count this) " elements"))
+  (show [this] (fmt "Vector with {} elements" (count this)))
   Measurable
   (length [this] (count this)))
 ```
@@ -1817,14 +1845,14 @@ Extends a type to implement protocols.
 Extends a protocol to multiple types.
 ```clojure
 (extend-protocol Showable
-  String
+  str
   (show [this] this)
   
-  Integer
-  (show [this] (str "Number: " this))
+  int
+  (show [this] (fmt "Number: {}" this))
   
   Vector
-  (show [this] (str "[" (count this) " items]")))
+  (show [this] (fmt "[{} items]" (count this))))
 ```
 
 ---
@@ -1841,7 +1869,7 @@ String manipulation utilities.
 Joins collection elements with separator.
 ```clojure
 (str.join ", " ["a" "b" "c"])      ; => "a, b, c"
-(str.join "-" [1 2 3])             ; => "1-2-3"
+(str.join "-" ["1" "2" "3"])       ; => "1-2-3"
 (str.join "" ["a" "b" "c"])        ; => "abc"
 (str.join "\n" ["line1" "line2"])  ; => "line1\nline2"
 ```
@@ -2007,8 +2035,8 @@ Map manipulation utilities.
 #### `m.keys` / `m.vals`
 Get keys or values as vectors.
 ```clojure
-(m.keys {:a 1 :b 2 :c 3})         ; => [:a :b :c]
-(m.vals {:a 1 :b 2 :c 3})         ; => [1 2 3]
+(set (m.keys {:a 1 :b 2 :c 3})) ; => #{:a :b :c}
+(set (m.vals {:a 1 :b 2 :c 3})) ; => #{1 2 3}
 (m.keys {})                       ; => []
 (m.vals {})                       ; => []
 ```
@@ -2016,7 +2044,7 @@ Get keys or values as vectors.
 #### `m.entries`
 Get key-value pairs as vector of vectors.
 ```clojure
-(m.entries {:a 1 :b 2})           ; => [[:a 1] [:b 2]]
+(into {} (m.entries {:a 1 :b 2})) ; => {:a 1 :b 2}
 (m.entries {:x 10})               ; => [[:x 10]]
 ```
 
@@ -2046,7 +2074,7 @@ Get value from nested map.
 ```
 
 #### `m.get-in-or`
-Get-in with default value.
+Get-in with a default value. A stored `nil` is treated the same as a missing path.
 ```clojure
 (m.get-in-or {:a {:b 1}} [:a :b] 42)   ; => 1
 (m.get-in-or {:a {}} [:a :b] 42)       ; => 42
@@ -2104,7 +2132,7 @@ Merge using function to combine values for duplicate keys.
 ```clojure
 (m.merge-with + {:a 1} {:a 2})        ; => {:a 3}
 (m.merge-with + {:a 1 :b 2} {:a 3 :b 4})  ; => {:a 4 :b 6}
-(m.merge-with concat {:a [1]} {:a [2]})   ; => {:a [1 2]}
+(m.merge-with into {:a [1]} {:a [2]})     ; => {:a [1 2]}
 (m.merge-with into {:a #{1}} {:a #{2 3}}) ; => {:a #{1 2 3}}
 ```
 
@@ -2130,7 +2158,7 @@ Swap keys and values.
 Transform keys or values.
 ```clojure
 ; Map over keys
-(m.map-keys name {:a 1 :b 2})     ; => {"a" 1 "b" 2}
+(m.map-keys (fn [k] k.name) {:a 1 :b 2}) ; => {"a" 1 "b" 2}
 (m.map-keys str {1 :a 2 :b})      ; => {"1" :a "2" :b}
 (m.map-keys inc {1 :a 2 :b})      ; => {2 :a 3 :b}
 
@@ -2144,13 +2172,13 @@ Transform keys or values.
 Filter by predicate on keys or values.
 ```clojure
 ; Filter by keys
-(m.filter-keys keyword? {:a 1 "b" 2})     ; => {:a 1}
+(m.filter-keys #(isinstance % Keyword) {:a 1 "b" 2}) ; => {:a 1}
 (m.filter-keys #(= :a %) {:a 1 :b 2})     ; => {:a 1}
 
 ; Filter by values
 (m.filter-vals even? {:a 1 :b 2 :c 3 :d 4})  ; => {:b 2 :d 4}
 (m.filter-vals pos? {:a -1 :b 0 :c 1 :d 2})  ; => {:c 1 :d 2}
-(m.filter-vals some? {:a 1 :b nil :c 2})     ; => {:a 1 :c 2}
+(m.filter-vals #(not (= % nil)) {:a 1 :b nil :c 2}) ; => {:a 1 :c 2}
 ```
 
 #### `m.deep-merge`
@@ -2172,191 +2200,108 @@ Recursively merge nested maps.
 
 ---
 
-## Protocols
+### std.json
 
-Spork supports Clojure-style protocols for polymorphism.
+JSON serialization and parsing with automatic conversion for Spork values.
 
-### Defining Protocols
+**Usage:** `(ns my-file (:require [std.json :as json]))`
 
-```clojure
-(defprotocol Countable
-  "Protocol for things that can be counted"
-  (item-count [this] "Returns the count of items"))
+#### Encoding
 
-(defprotocol Serializable
-  (to-json [this])
-  (to-xml [this]))
-```
-
-### Structural Protocols
-
-Use `^structural` for duck-typed protocols (checks for method existence rather than explicit implementation):
+`json.dumps` returns compact JSON. `json.dumps-pretty` uses an indentation level of two. `json.generate` is an alias for `json.dumps`.
 
 ```clojure
-^structural
-(defprotocol Nameable
-  (get-name [this]))
+(def encoded (json.dumps {:name "Spork" :items [1 2 3]}))
+; typical encoded value: "{\"name\": \"Spork\", \"items\": [1, 2, 3]}"
+; JSON object key order follows the map's unspecified iteration order
+(json.loads encoded true) ; => {:name "Spork" :items [1 2 3]}
 
-; Any object with a get-name method satisfies this
+(json.dumps-pretty {:ready true})
+; => "{\n  \"ready\": true\n}"
+
+(json.generate {:status "ok"})
+; => "{\"status\": \"ok\"}"
 ```
 
-### Implementing Protocols
+The encoder converts values recursively:
+
+| Spork value | JSON representation |
+| --- | --- |
+| `Map` | object; keyword and symbol keys become strings |
+| `Vector`, `DoubleVector`, `IntVector`, `SortedVector` | array |
+| `Set` | array; order is unspecified |
+| `Cons` | array |
+| keyword used as a value | string with a leading `:` |
+| symbol used as a value | string |
+
+`json.dump` and `json.dump-pretty` write to a file-like object:
 
 ```clojure
-; Extend a single type to implement one or more protocols
-(extend-type String
-  Countable
-  (item-count [this] (len this))
-  
-  Serializable
-  (to-json [this] (str "\"" this "\""))
-  (to-xml [this] (str "<string>" this "</string>")))
+(with [out (open "data.json" "w")]
+  (json.dump-pretty {:name "Spork" :ready true} out))
 
-; Extend multiple types at once for one protocol
-(extend-protocol Countable
-  Vector
-  (item-count [this] (count this))
-  
-  Map
-  (item-count [this] (count this))
-  
-  String  
-  (item-count [this] (len this)))
+(json.loads (.read-text #p"data.json") true)
+; => {:name "Spork" :ready true}
 ```
 
-### Checking Protocol Support
+#### Decoding
+
+`json.loads` parses a string and recursively converts JSON objects to persistent `Map` values and arrays to persistent `Vector` values. `json.parse` is an alias for `json.loads`.
 
 ```clojure
-(satisfies? Countable [1 2 3])    ; => true
-(satisfies? Countable "hello")   ; => true
-(satisfies? Countable 42)        ; => false
+(def data (json.loads "{\"name\": \"Spork\", \"items\": [1, 2]}"))
+(get data "name")             ; => "Spork"
+(get data "items")            ; => [1 2]
+
+; Pass true to convert object keys to keywords at every nesting level
+(def keyed (json.loads "{\"ready\": true}" true))
+(:ready keyed)                 ; => true
+
+(json.parse "[1, 2, 3]")      ; => [1 2 3]
 ```
+
+`json.load` reads from a file-like object and accepts the same optional keywordization flag:
+
+```clojure
+(with [in (open "data.json" "r")]
+  (json.load in true))
+; => {:ready true}
+```
+
+JSON has no set or keyword type, so those distinctions do not round-trip automatically. Invalid JSON and unsupported encoded values raise the corresponding Python `json` exceptions.
 
 ---
 
-## Python Interop
+## Related Language Features
 
-Spork provides seamless Python interoperability.
+The following topics are language behavior rather than standard-library APIs and are documented in the [Language Reference](LANG.md):
 
-### Attribute Access
+- [protocol definitions and extension](LANG.md#9-protocols);
+- [namespaces, `:require`, and Python `:import`](LANG.md#10-namespaces--modules);
+- [keyword arguments and attribute access](LANG.md#15-python-interop);
+- [exceptions](LANG.md#13-exception-handling);
+- [async functions and generators](LANG.md#12-async--generators).
 
-```clojure
-; Get attribute
-(.-attribute obj)
-(.-__name__ some-class)
+### Common Python builtins
 
-; Set attribute  
-(set! (.-attribute obj) new-value)
-
-; Method calls
-(.method obj arg1 arg2)
-(.upper "hello")              ; => "HELLO"
-(.split "a,b,c" ",")          ; => ["a" "b" "c"]
-(.format "{} + {}" 1 2)       ; => "1 + 2"
-```
-
-### Keyword Arguments
-
-Use `*{...}` to pass keyword arguments to functions:
-
-```clojure
-; Basic keyword arguments
-(f 1 2 *{:name "Alice" :age 30})  ; => f(1, 2, name="Alice", age=30)
-
-; Multiple kwarg splats are allowed (after positional args)
-(f pos1 pos2 *{:a 1} *{:b 2 :c 3})
-
-; Works with Python functions
-(.format "{name} is {age}" *{:name "Bob" :age 25})  ; => "Bob is 25"
-
-; With Python's open()
-(open "file.txt" *{:mode "r" :encoding "utf-8"})
-```
-
-Or the shorthand `* :key val :key val`
-
-```clojure
-; Basic keyword arguments
-(f * :name "Alice" :age 30)
-
-; Multiple kwarg splats are allowed (after positional args)
-(f pos1 pos2 * :a 1 * :b 2 :c 3)
-
-; Splatting a map using *{mapname} maps the keys to symbols or kwargs
-(f pos1 pos2 * {:name "Alice" :age 30})
-
-; Splatting a map using *{mapname} maps the keys to symbols or kwargs
-(f pos1 pos2 *{:name "Alice" :age 30 mapob})
-```
-
-### Import (Python Modules)
-
-All imports must be declared inside the `(ns ...)` form using `:import`:
-
-```clojure
-(ns my.app
-  (:import
-    [json]                              ; import json
-    [os]                                ; import os
-    [os.path :as path]                  ; import os.path as path
-    [collections :as coll]              ; import collections as coll
-    [collections :refer [defaultdict Counter]]  ; from collections import ...
-    [os.path :refer [join exists]]))    ; from os.path import join, exists
-
-; Access with dot notation
-(json.dumps {:a 1})
-(path.join "a" "b")
-(os.getcwd)
-```
-
-### Type Checking
-
-```clojure
-(isinstance x str)
-(isinstance x int)
-(isinstance x (tuple list dict))  ; Multiple types
-
-(type obj)                ; Get type
-(type "hello")            ; => <class 'str'>
-```
-
-### Exception Handling
-
-```clojure
-(try
-  (risky-operation)
-  (catch ValueError e
-    (println "Value error:" (str e)))
-  (catch [KeyError IndexError] e
-    (println "Key or Index error:" (str e)))
-  (finally
-    (cleanup)))
-
-; Throw exceptions
-(throw (ValueError "Invalid input"))
-(throw (RuntimeError "Something went wrong"))
-```
-
-### Python Builtins
-
-All Python builtins are available:
+Python builtins remain accessible unless a Spork runtime binding overrides the same name. Notably, `map` and `filter` below are Spork's lazy helpers, while constructors such as `list`, `dict`, and `set` create Python built-in collections.
 
 ```clojure
 (print "hello" "world")
 (len [1 2 3])                 ; => 3
-(type obj)                    ; Get type
+(= (type obj) SomeClass)      ; => true
 (str 42)                      ; => "42"
 (int "42")                    ; => 42
 (float "3.14")                ; => 3.14
 (list (range 5))              ; => [0, 1, 2, 3, 4]
-(dict [[:a 1] [:b 2]])        ; Python dict
-(set [1 2 2 3])               ; Python set
+(dict [[:a 1] [:b 2]])        ; => {:a 1 :b 2}
+(set [1 2 2 3])               ; => #{1 2 3}
 (sorted [3 1 2])              ; => [1, 2, 3]
-(reversed [1 2 3])            ; iterator
-(enumerate ["a" "b" "c"])     ; iterator of (index, value)
-(zip [1 2] ["a" "b"])         ; iterator of pairs
-(map inc [1 2 3])             ; lazy sequence
-(filter even? [1 2 3 4])      ; lazy sequence
+(list (reversed [1 2 3]))     ; => [3 2 1]
+(list (enumerate ["a" "b" "c"])) ; => ([0 "a"] [1 "b"] [2 "c"])
+(list (zip [1 2] ["a" "b"])) ; => ([1 "a"] [2 "b"])
+(doall (map inc [1 2 3]))      ; => [2 3 4]
+(doall (filter even? [1 2 3 4])) ; => [2 4]
 (any [false false true])      ; => True
 (all [true true true])        ; => True
 (sum [1 2 3 4])               ; => 10
@@ -2365,7 +2310,8 @@ All Python builtins are available:
 (abs -5)                      ; => 5
 (round 3.7)                   ; => 4
 (callable inc)                ; => True
-(hasattr obj "method")        ; => True/False
-(getattr obj "attr" default)  ; Get attribute with default
-(setattr obj "attr" value)    ; Set attribute
+(hasattr obj "method")        ; => true
+(getattr obj "attr" default)  ; => 1
+(setattr obj "attr" 42)       ; Set attribute
+(getattr obj "attr")          ; => 42
 ```

@@ -1,5 +1,5 @@
 ;; Spork Project Manifest
-;; See https://spork.it.com for more information
+;; See ../../docs/PROJECTS.md for manifest documentation
 
 {:name "stars"
  :version "0.1.0"

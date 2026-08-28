@@ -1,48 +1,34 @@
-# async
+# Async HTTP example
 
-A Spork project
+This project demonstrates:
 
-## Getting Started
+- an `^async` Spork function;
+- `async-with` for Python asynchronous context managers;
+- `await` on Python coroutines;
+- imports from `aiohttp` and `asyncio`;
+- a dependency declared in `spork.it`.
 
-### Prerequisites
+## Run it
 
-- Python 3.10+
-- Spork language toolchain
-
-### Installation
+From this directory:
 
 ```bash
-# Install dependencies
 spork sync
-```
-
-### Usage
-
-```bash
-# Start the REPL
-spork repl
-
-# Run the main function
 spork run
-
-# Execute a specific file
-spork src/async/core.spork
 ```
 
-## Project Structure
+The example requests one JSON object from `jsonplaceholder.typicode.com`, so it requires network access. A successful run prints output similar to:
 
-```
-async/
-├── spork.it          # Project manifest
-├── src/
-│   └── async/
-│       └── core.spork
-├── tests/
-│   └── async/
-│       └── core_test.spork
-└── README.md
+```text
+Received data:
+{'userId': 1, 'id': 1, 'title': 'delectus aut autem', 'completed': False}
 ```
 
-## License
+The exact response is controlled by the remote service.
 
-MIT
+## Source
+
+- [`spork.it`](spork.it) declares `aiohttp` and the `async.core:main` entry point.
+- [`src/async/core.spork`](src/async/core.spork) contains the program.
+
+See [Projects and CLI](../../docs/PROJECTS.md) for manifest and environment details, and [Async & Generators](../../docs/LANG.md#12-async--generators) for the language forms.

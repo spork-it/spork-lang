@@ -6,14 +6,12 @@ with the standard directory structure and template files.
 
 The scaffolding creates:
     name/
-    ├── spork.it          # The project manifest
+    ├── spork.it           # The project manifest
     ├── src/
     │   └── name/
     │       └── core.spork # Hello world entry point
-    ├── tests/
-    │   └── name/
-    │       └── core_test.spork
-    └── .gitignore
+    ├── .gitignore
+    └── README.md
 """
 
 import os
@@ -70,16 +68,13 @@ def name_to_ns_segment(name: str) -> str:
 
 
 def name_to_dir_segment(name: str) -> str:
-    """
-    Convert a project name to a valid directory name.
+    """Convert a project name to its namespace source-directory segment.
 
-    Args:
-        name: Project name
-
-    Returns:
-        A valid directory name
+    Namespace lookup normalizes hyphens to underscores when mapping a namespace
+    to a file path, so ``hello-spork.core`` lives at
+    ``hello_spork/core.spork``.
     """
-    return normalize_project_name(name)
+    return normalize_project_name(name).replace("-", "_")
 
 
 def generate_spork_it(name: str, version: str = "0.1.0", description: str = "") -> str:
@@ -101,7 +96,7 @@ def generate_spork_it(name: str, version: str = "0.1.0", description: str = "") 
         desc_line = f'\n :description "{description}"'
 
     return f""";; Spork Project Manifest
-;; See https://spork.it.com for more information
+;; See https://github.com/spork-it/spork-lang/blob/main/docs/PROJECTS.md
 
 {{:name "{name}"
  :version "{version}"{desc_line}
@@ -264,9 +259,7 @@ spork src/{name_to_dir_segment(name)}/core.spork
 ├── src/
 │   └── {name_to_dir_segment(name)}/
 │       └── core.spork
-├── tests/
-│   └── {name_to_dir_segment(name)}/
-│       └── core_test.spork
+├── .gitignore
 └── README.md
 ```
 
@@ -291,7 +284,7 @@ def create_project(
         parent_dir: Parent directory to create project in (default: current directory)
         description: Project description
         version: Initial version (default: "0.1.0")
-        create_git: Whether to initialize a git repository (default: True)
+        create_git: Whether to initialize a git repository (default: False)
 
     Returns:
         Absolute path to the created project directory
@@ -303,7 +296,8 @@ def create_project(
     """
     # Normalize the name
     normalized_name = normalize_project_name(name)
-    dir_name = name_to_dir_segment(normalized_name)
+    dir_name = normalized_name
+    source_dir_name = name_to_dir_segment(normalized_name)
 
     # Determine project path
     if parent_dir is None:
@@ -320,7 +314,7 @@ def create_project(
     # Create directory structure
     os.makedirs(project_path)
 
-    src_dir = os.path.join(project_path, "src", dir_name)
+    src_dir = os.path.join(project_path, "src", source_dir_name)
     os.makedirs(src_dir)
 
     # TODO: Re-add once we have testing infrastructure

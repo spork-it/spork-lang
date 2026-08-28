@@ -47,7 +47,7 @@ $ spork
 Spork REPL - A Lisp for Python
 user> (+ 1 2 3)
 6
-user> (map inc [1 2 3])
+user> (doall (map inc [1 2 3]))
 [2 3 4]
 ```
 
@@ -55,9 +55,9 @@ Or create `hello.spork`:
 
 ```clojure
 (defn greet [name]
-  (print (fmt "Hello, {}!" name)))
+  (fmt "Hello, {}!" name))
 
-(greet "Spork")
+(print (greet "Spork"))
 ```
 
 Run it with:
@@ -73,8 +73,8 @@ Spork collections are immutable and structurally shared:
 (def original {:name "Spork" :version 1})
 (def updated (assoc original :version 2))
 
-(print original) ; {:name "Spork" :version 1}
-(print updated)  ; {:name "Spork" :version 2}
+(print original) ; {:name 'Spork' :version 1}
+(print updated)  ; {:name 'Spork' :version 2}
 ```
 
 ## Python interoperability
@@ -139,6 +139,7 @@ Run `spork --help` for the complete CLI reference.
 - [Documentation index](docs/README.md)
 - [Language reference](docs/LANG.md)
 - [Standard library reference](docs/STDLIB.md)
+- [Projects and CLI](docs/PROJECTS.md)
 - [Examples](examples/)
 - [Emacs mode](editors/emacs/) and [Neovim support](editors/nvim/)
 - [`spork-pds` API, design, and benchmarks](https://github.com/spork-it/spork-pds/tree/main/docs)

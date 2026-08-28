@@ -1,4 +1,4 @@
-.PHONY: help venv install-dev clean test test-one repl lsp \
+.PHONY: help venv install-dev clean test test-one verify-docs repl lsp \
         dist sdist wheel upload-test upload check-dist \
         clean-build clean-pyc clean-venv clean-all \
         pipx-install pipx-uninstall
@@ -19,6 +19,7 @@ help:
 	@echo "Testing:"
 	@echo "  test           - Run all .spork test files"
 	@echo "  test-one       - Run a single test (usage: make test-one TEST=tests/test_pds.spork)"
+	@echo "  verify-docs    - Execute documentation examples"
 	@echo "  repl           - Start the Spork REPL"
 	@echo "  lsp            - Start the Language Server Protocol server"
 	@echo ""
@@ -84,6 +85,9 @@ test: $(VENV)
 	else \
 		echo "All tests passed!"; \
 	fi
+
+verify-docs: $(VENV)
+	@$(PYTHON) tools/verify_docs.py
 
 test-one: $(VENV)
 	@if [ -z "$(TEST)" ]; then \

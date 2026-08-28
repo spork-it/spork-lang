@@ -1,6 +1,6 @@
 # spork.nvim
 
-Neovim plugin for [Spork](https://github.com/spork-lang/spork) - a Lisp that compiles to Python.
+Neovim support for [Spork](https://github.com/spork-it/spork-lang), a Lisp hosted on CPython. The plugin provides filetype, syntax, indentation, and LSP setup from this repository's `editors/nvim` directory.
 
 ## Features
 
@@ -13,28 +13,31 @@ Neovim plugin for [Spork](https://github.com/spork-lang/spork) - a Lisp that com
 
 - Neovim 0.8.0 or later
 - Spork CLI installed (`spork` command available)
-- [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) (for LSP features)
+- [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) is optional; without it, the plugin uses Neovim's built-in LSP client directly
 
 ## Installation
 
-### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
+### Using a local checkout
+
+Clone `spork-lang`, then point your plugin manager at its Neovim subdirectory.
+
+With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "spork-lang/spork",
+  dir = "/path/to/spork-lang/editors/nvim",
+  name = "spork.nvim",
   config = function()
-    -- Add the nvim plugin to runtimepath
-    vim.opt.runtimepath:append("/path/to/spork/editors/nvim")
     require("spork").setup()
   end,
 }
 ```
 
-### Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
+With [packer.nvim](https://github.com/wbthomason/packer.nvim):
 
 ```lua
 use {
-  "/path/to/spork/editors/nvim",
+  "/path/to/spork-lang/editors/nvim",
   config = function()
     require("spork").setup()
   end,
@@ -46,14 +49,14 @@ use {
 Add the plugin directory to your runtimepath in `init.lua`:
 
 ```lua
-vim.opt.runtimepath:append("/path/to/spork/editors/nvim")
+vim.opt.runtimepath:append("/path/to/spork-lang/editors/nvim")
 require("spork").setup()
 ```
 
 Or in `init.vim`:
 
 ```vim
-set runtimepath+=/path/to/spork/editors/nvim
+set runtimepath+=/path/to/spork-lang/editors/nvim
 lua require("spork").setup()
 ```
 

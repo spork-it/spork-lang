@@ -38,8 +38,7 @@
       (let [{:keys [name stars]} row]
         (print stars "-" name)))))
 
-(main)
-;; Example Output:
+;; Example output (timing and star counts vary):
 ; GitHub fetch took 0.1801389280008152s
 ; 92823 - tiangolo/fastapi
 ; 86079 - django/django

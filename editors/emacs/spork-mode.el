@@ -6,7 +6,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: languages, lisp, spork
-;; URL: https://github.com/yourusername/spork
+;; URL: https://github.com/spork-it/spork-lang
 
 ;;; Commentary:
 

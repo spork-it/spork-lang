@@ -4,22 +4,48 @@ on: push
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }} - Python ${{ matrix.python-version }}
+    name: >-
+      Test on ${{ matrix.os }} (${{ matrix.architecture }}) -
+      Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        # spork-pds 0.1.x publishes wheels for these CPython versions.
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - windows-latest
+          - windows-11-arm
+          - macos-15-intel
+          - macos-15
+        # Match the interpreter and architecture releases provided by spork-pds.
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        exclude:
+          # actions/setup-python does not provide CPython 3.10 for Windows ARM64.
+          - os: windows-11-arm
+            python-version: "3.10"
+        include:
+          - os: ubuntu-latest
+            architecture: x64
+          - os: ubuntu-24.04-arm
+            architecture: arm64
+          - os: windows-latest
+            architecture: x64
+          - os: windows-11-arm
+            architecture: arm64
+          - os: macos-15-intel
+            architecture: x64
+          - os: macos-15
+            architecture: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
           allow-prereleases: true
 
       - name: Set PYTHON_GIL=0 for free-threaded builds (Unix)

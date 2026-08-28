@@ -2,7 +2,7 @@
 
 The project README provides installation and a short tour. The documents here cover the language and tooling in more depth.
 
-> **Version note:** Spork is alpha software. These references describe the current `main` branch and may be ahead of the latest PyPI release.
+> **Version note:** These references describe the branch you are viewing and may be ahead of the latest PyPI release.
 
 ## Choose a starting point
 
@@ -55,8 +55,11 @@ Run `make verify-docs` from the repository root. The verifier executes runnable 
 ## Documentation conventions
 
 - Spork examples use `clojure` code fences for readable Lisp highlighting.
-- `; => value` is an exact, machine-checked expectation. Every such claim must produce a verifier assertion; use an ordinary prose comment for nondeterministic or descriptive results. For lazy operations, the value shows logical contents after realization rather than the raw generator representation.
+- `; => value` is an exact, machine-checked expectation. Every such claim must produce a verifier assertion; use an ordinary prose comment for nondeterministic or descriptive results. For lazy operations, the value shows logical contents after realization rather than the raw generator representation. Use `vec` or `doall` to realize a lazy result as a persistent vector, or `dorun` to consume it only for side effects.
 - Place `&lt;!-- verify-docs: expect-error=ExceptionType --&gt;` immediately before a Spork fence that must fail with that exception.
 - Place `&lt;!-- verify-docs: skip=reason --&gt;` immediately before a deliberately non-runnable Spork fence. The reason records why the fence is excluded.
 - Hyphenated names are preferred in Spork source. The compiler normalizes hyphens to underscores for Python, so `sorted-vec` resolves to the runtime binding `sorted_vec`.
+- Prefer dotted calls for namespace aliases, Python modules, classes, and named object receivers: `(json.loads text)`, `(Path.cwd)`, and `(response.json)`. The leading-dot `(.method receiver args...)` form remains supported for compatibility and for literal or computed receivers that cannot begin a dotted symbol.
+- Use `:require` only for Spork namespaces and `:import` only for Python modules. The compiler enforces this distinction.
 - `nil`, `true`, and `false` correspond to Python's `None`, `True`, and `False`.
+- Collection iteration order is not guaranteed for maps and sets. Examples showing one order should not be treated as ordering guarantees.

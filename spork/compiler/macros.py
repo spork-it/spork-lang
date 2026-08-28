@@ -440,8 +440,8 @@ def process_ns_macros(forms, macro_env, current_file=None):
 
     This runs BEFORE macroexpansion to ensure macros are available.
     For each :require clause:
-      - Resolve to Spork or Python module
-      - For Spork modules: compile them and get their __spork_macros__
+      - Resolve and compile the Spork namespace
+      - Read its __spork_macros__ mapping
       - For :refer [sym1 sym2]: if symbol is a macro, add to macro_env
       - For :as alias: register macros under qualified names (alias.macro-name)
       - For :refer :all: import all macros from the module
@@ -477,15 +477,10 @@ def process_ns_macros(forms, macro_env, current_file=None):
                 alias = req_info["alias"]
                 refer = req_info["refer"]
 
-                # Resolve to Spork or Python module
                 try:
-                    resolve_type, spork_path = resolve_require(req_ns, current_file)
+                    resolve_require(req_ns, current_file)
                 except FileNotFoundError:
-                    # Not found - will error later in compile_ns
-                    continue
-
-                if resolve_type != "spork":
-                    # Python modules don't have Spork macros
+                    # Not found - compile_ns will report the syntax error.
                     continue
 
                 # Load the Spork module at compile-time to get its macros

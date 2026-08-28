@@ -1,6 +1,6 @@
 (ns examples.readme
-  (:require [os]
-            [std.json :as j]))
+  (:require [std.json :as j])
+  (:import [os]))
 
 ;; Vectors
 (def v [1 2 3])
@@ -25,7 +25,7 @@
 
 ;; Method calls (dot syntax)
 (def text "hello world")
-(.upper text) ; "HELLO WORLD"
+(text.upper) ; "HELLO WORLD"
 
 ;; Attribute access
 (print os.name)
@@ -33,7 +33,7 @@
 ;; Mixing Python types (escape hatch)
 (def py-list (list [1 2 3])) ; Convert Spork Vector to Python list
 (print (fmt "py-list before: {}" py-list))
-(.append py-list 4)          ; Mutate it in place
+(py-list.append 4)          ; Mutate it in place
 
 (print (fmt "py-list after: {}" py-list))
 

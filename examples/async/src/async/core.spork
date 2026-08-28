@@ -5,8 +5,8 @@
 ;; Define an asynchronous function with the ^async metadata
 (defn ^async fetch-data [^str url]
   (async-with [session (aiohttp.ClientSession)]
-    (async-with [resp (.get session url)]
-      (await (.json resp)))))
+    (async-with [resp (session.get url)]
+      (await (resp.json)))))
 
 ;; Run it on the event loop
 (defn main []

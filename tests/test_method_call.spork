@@ -1,4 +1,4 @@
-;; Simple test for method call syntax
+;; Canonical dotted calls and backward-compatible leading-dot method calls
 
 (print "=== Testing Method Call Syntax ===\n")
 
@@ -6,7 +6,7 @@
 (def test-append
   (fn []
     (let [lst (list [1 2 3])]
-      (.append lst 4)
+      (lst.append 4)
       lst)))
 
 (print "test-append:" (test-append))
@@ -15,7 +15,7 @@
 (def test-string-methods
   (fn []
     (let [text "hello world"]
-      (.upper text))))
+      (text.upper))))
 
 (print "test-string-methods:" (test-string-methods))
 
@@ -23,7 +23,7 @@
 (def test-method-in-binding
   (fn []
     (let [text "one,two,three"
-          parts (.split text ",")]
+          parts (text.split ",")]
       parts)))
 
 (print "test-method-in-binding:" (test-method-in-binding))
@@ -32,8 +32,8 @@
 (def test-multiple-methods
   (fn []
     (let [text "  hello  "
-          trimmed (.strip text)
-          upper (.upper trimmed)]
+          trimmed (text.strip)
+          upper (trimmed.upper)]
       upper)))
 
 (print "test-multiple-methods:" (test-multiple-methods))
@@ -42,7 +42,7 @@
 (def test-replace
   (fn []
     (let [text "hello world"]
-      (.replace text "world" "python"))))
+      (text.replace "world" "python"))))
 
 (print "test-replace:" (test-replace))
 
@@ -52,5 +52,13 @@
     (+ 1 2 (.count (list [1 2 3 2 1]) 2))))
 
 (print "test-method-in-expr:" (test-method-in-expr))
+
+;; Both runtime spellings remain equivalent. `call` also normalizes
+;; Lisp-style method names just like dotted and leading-dot calls.
+(let [text "compatibility"
+      n 8]
+  (assert (= (text.upper) (.upper text)))
+  (assert (= (n.bit-length) (.bit-length n)))
+  (assert (= (n.bit-length) (call n bit-length))))
 
 (print "\n=== All Method Call Tests Passed! ===")

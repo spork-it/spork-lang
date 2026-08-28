@@ -5,8 +5,6 @@
 
 Spork is a Lisp hosted on CPython. It compiles to Python AST, interoperates directly with Python libraries, and adds macros, expression-oriented syntax, immutable collections, and project tooling.
 
-> **Alpha:** Spork is under active development and may introduce breaking changes between releases.
-
 ## Highlights
 
 - Direct access to Python modules and objects—no FFI layer or separate VM.

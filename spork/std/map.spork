@@ -6,15 +6,15 @@
 
 ; keys - get all keys from a map as a vector
 (defn keys [m]
-  (vec (.keys m)))
+  (vec (m.keys)))
 
 ; vals - get all values from a map as a vector
 (defn vals [m]
-  (vec (.values m)))
+  (vec (m.values)))
 
 ; entries - get all key-value pairs as a vector of vectors
 (defn entries [m]
-  (vec (map (fn [kv] [(first kv) (second kv)]) (.items m))))
+  (vec (map (fn [kv] [(first kv) (second kv)]) (m.items))))
 
 ; update - update a value in a map by applying f to the current value
 ; (m.update {:a 1} :a inc) => {:a 2}
@@ -73,7 +73,7 @@
   (reduce (fn [acc m]
             (reduce (fn [a kv] (assoc a (first kv) (second kv)))
                     acc
-                    (if m (.items m) [])))
+                    (if m (m.items) [])))
           {}
           maps))
 
@@ -88,7 +88,7 @@
                           (assoc a k (f (get a k) v))
                           (assoc a k v))))
                     acc
-                    (if m (.items m) [])))
+                    (if m (m.items) [])))
           {}
           maps))
 
@@ -101,7 +101,7 @@
                   new-k (get kmap k k)]
               (assoc acc new-k v)))
           {}
-          (.items m)))
+          (m.items)))
 
 ; invert - swap keys and values
 ; (m.invert {:a 1 :b 2}) => {1 :a 2 :b}
@@ -109,7 +109,7 @@
   (reduce (fn [acc kv]
             (assoc acc (second kv) (first kv)))
           {}
-          (.items m)))
+          (m.items)))
 
 ; map-keys - apply f to all keys
 ; (m.map-keys name {:a 1 :b 2}) => {"a" 1 "b" 2}
@@ -117,7 +117,7 @@
   (reduce (fn [acc kv]
             (assoc acc (f (first kv)) (second kv)))
           {}
-          (.items m)))
+          (m.items)))
 
 ; map-vals - apply f to all values
 ; (m.map-vals inc {:a 1 :b 2}) => {:a 2 :b 3}
@@ -125,7 +125,7 @@
   (reduce (fn [acc kv]
             (assoc acc (first kv) (f (second kv))))
           {}
-          (.items m)))
+          (m.items)))
 
 ; filter-keys - keep only entries where (pred key) is truthy
 (defn filter-keys [pred m]
@@ -134,7 +134,7 @@
               (assoc acc (first kv) (second kv))
               acc))
           {}
-          (.items m)))
+          (m.items)))
 
 ; filter-vals - keep only entries where (pred val) is truthy
 (defn filter-vals [pred m]
@@ -143,7 +143,7 @@
               (assoc acc (first kv) (second kv))
               acc))
           {}
-          (.items m)))
+          (m.items)))
 
 ; deep-merge - recursively merge nested maps
 (defn deep-merge [& maps]
@@ -156,6 +156,6 @@
                           (assoc a k (deep-merge existing v))
                           (assoc a k v))))
                     acc
-                    (if m (.items m) [])))
+                    (if m (m.items) [])))
           {}
           maps))

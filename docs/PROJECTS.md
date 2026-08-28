@@ -179,8 +179,6 @@ spork dist --no-build       # reuse existing compiled output
 spork dist --dist-dir artifacts
 ```
 
-Because project packaging is still alpha, inspect generated metadata and test the artifacts in a clean environment before publishing them.
-
 ## Standalone commands
 
 A manifest is not required for individual files or command-line expressions:

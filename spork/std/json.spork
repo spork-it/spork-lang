@@ -7,7 +7,7 @@
 ; Unlike Python's json module, loads/load return Spork Maps and Vectors
 ; instead of Python dicts and lists.
 ;
-; Usage: (require [std.json :as json])
+; Usage: (ns my.app (:require [std.json :as json]))
 ;
 ; Examples:
 ;   (json.dumps {:name "Spork" :version 1.0})  ; => '{"name": "Spork", "version": 1.0}'
@@ -15,7 +15,7 @@
 ;   (json.loads "{\"x\": 1}" true)              ; => {:x 1}   ; With keywordized keys
 
 (ns std.json
-  (:require [spork.runtime.json :as rt-json]))
+  (:import [spork.runtime.json :as rt-json]))
 
 ; dumps - serialize Spork data to a JSON string
 ; Maps, Vectors, Sets, and Keywords are automatically converted.

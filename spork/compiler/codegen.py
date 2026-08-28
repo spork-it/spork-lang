@@ -780,17 +780,15 @@ def compile_ns(args, form_loc=None):
         (ns my.app.core
           (:require
             [spork.pds :as pds]
-            [my.lib.helpers :as helpers :refer [foo bar]]
-            [math :as m]
-            [logging :refer [getLogger]])
+            [my.lib.helpers :as helpers :refer [foo bar]])
           (:import
             [numpy :as np]
             [os.path :as osp]
             [collections [defaultdict Counter]]
             [math :refer [sin cos]]))
 
-    :require - For Spork namespaces (loads macros) and Python modules
-    :import  - For Python modules only (no macro loading, just runtime imports)
+    :require - For Spork namespaces (loads macros and runtime definitions)
+    :import  - For Python modules (runtime imports only)
     """
     from spork.runtime.ns import (
         get_namespace,
@@ -828,7 +826,7 @@ def compile_ns(args, form_loc=None):
                 refer = req_info["refer"]
 
                 try:
-                    resolve_type, spork_path = resolve_require(req_ns, ctx.current_file)
+                    resolve_type, _ = resolve_require(req_ns, ctx.current_file)
                 except FileNotFoundError as e:
                     raise SyntaxError(str(e)) from e
 
@@ -925,41 +923,9 @@ def compile_ns(args, form_loc=None):
                                 stmts.append(sym_assign)
 
                 else:
-                    # Python module
-                    module_name = req_ns.replace("/", ".")
-
-                    if refer and refer != ":all":
-                        # from module import sym1, sym2
-                        names = [ast.alias(name=s, asname=None) for s in refer]
-                        import_stmt = ast.ImportFrom(
-                            module=module_name, names=names, level=0
-                        )
-                        set_location(import_stmt, form_loc)
-                        stmts.append(import_stmt)
-
-                        # Also track refers
-                        for sym in refer:
-                            ctx.ns_refers[sym] = req_ns
-
-                    if alias:
-                        # import module as alias
-                        import_stmt = ast.Import(
-                            names=[
-                                ast.alias(
-                                    name=module_name, asname=normalize_name(alias)
-                                )
-                            ]
-                        )
-                        set_location(import_stmt, form_loc)
-                        stmts.append(import_stmt)
-                        ctx.ns_aliases[alias] = req_ns
-                    elif not refer:
-                        # Just import module
-                        import_stmt = ast.Import(
-                            names=[ast.alias(name=module_name, asname=None)]
-                        )
-                        set_location(import_stmt, form_loc)
-                        stmts.append(import_stmt)
+                    raise AssertionError(
+                        ":require resolved a non-Spork target; use :import for Python"
+                    )
 
         elif isinstance(clause_head, Keyword) and clause_head.name == "import":
             # :import is for Python modules (runtime only, no macro loading)
@@ -8404,7 +8370,9 @@ def compile_call_form(args):
     obj_expr = compile_expr(obj_form)
 
     # Access the method as an attribute
-    method_expr = ast.Attribute(value=obj_expr, attr=method_form.name, ctx=ast.Load())
+    method_expr = ast.Attribute(
+        value=obj_expr, attr=normalize_name(method_form.name), ctx=ast.Load()
+    )
 
     # Compile call arguments
     compiled_args, compiled_keywords = compile_call_args(call_args)

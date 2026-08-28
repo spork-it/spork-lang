@@ -487,29 +487,129 @@ class ReplBackend:
         """Clear the input buffer."""
         self.buffer = ""
 
-    def get_completions(self, prefix: str) -> list[str]:
-        """
-        Get completions for the given prefix.
+    def _lookup_root_value(
+        self, name: str, extra_env: Optional[dict[str, Any]] = None
+    ) -> tuple[bool, Any]:
+        """Look up a root symbol, honoring document-local LSP bindings."""
+        candidates = [name]
+        normalized = normalize_name(name)
+        if normalized != name:
+            candidates.append(normalized)
 
-        Args:
-            prefix: The prefix to complete.
+        for env in (extra_env or {}, self.state.env):
+            for candidate in candidates:
+                if candidate in env:
+                    return True, env[candidate]
+        return False, None
 
-        Returns:
-            A list of possible completions.
-        """
-        completions = []
+    def _resolve_symbol_value(
+        self, symbol: str, extra_env: Optional[dict[str, Any]] = None
+    ) -> tuple[bool, Any]:
+        """Resolve ``root.attr`` using the same normalization as the compiler."""
+        parts = symbol.split(".")
+        found, value = self._lookup_root_value(parts[0], extra_env)
+        if not found:
+            return False, None
 
-        # Complete from environment
-        for key in self.state.env.keys():
-            if key.startswith(prefix) and not key.startswith("__"):
-                completions.append(key)
+        for part in parts[1:]:
+            try:
+                value = getattr(value, normalize_name(part))
+            except (AttributeError, TypeError):
+                return False, None
+        return True, value
 
-        # Complete from macros
-        for key in self.macro_env.keys():
-            if key.startswith(prefix):
-                completions.append(key)
+    def get_completions(
+        self, prefix: str, extra_env: Optional[dict[str, Any]] = None
+    ) -> list[str]:
+        """Get root-symbol or dotted-member completions for ``prefix``."""
+        completions: set[str] = set()
+
+        if "." in prefix and not prefix.startswith("."):
+            owner_name, member_prefix = prefix.rsplit(".", 1)
+            found, owner = self._resolve_symbol_value(owner_name, extra_env)
+            if found:
+                try:
+                    members = dir(owner)
+                except Exception:
+                    members = []
+
+                for member in members:
+                    if member.startswith("_"):
+                        continue
+                    # Attribute names are stored under normalized Python names.
+                    # Offer the preferred hyphenated Spork spelling at call sites.
+                    source_member = member.replace("_", "-")
+                    if source_member.startswith(member_prefix) or member.startswith(
+                        normalize_name(member_prefix)
+                    ):
+                        completions.add(f"{owner_name}.{source_member}")
+        else:
+            for env in (extra_env or {}, self.state.env):
+                for key in env:
+                    if key.startswith(prefix) and not key.startswith("__"):
+                        completions.add(key)
+
+        macro_sources = [self.macro_env]
+        if extra_env and isinstance(extra_env.get("__spork_lsp_macros__"), dict):
+            macro_sources.append(extra_env["__spork_lsp_macros__"])
+        for macro_env in macro_sources:
+            for key in macro_env:
+                if key.startswith(prefix):
+                    completions.add(key)
 
         return sorted(completions)
+
+    def _describe_resolved_symbol(
+        self,
+        symbol: str,
+        obj: Any,
+        extra_env: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Build hover metadata for an already resolved dotted symbol."""
+        import inspect
+        from types import ModuleType
+
+        from spork.runtime.ns import NamespaceProxy
+
+        info: dict[str, Any] = {"name": symbol}
+        owner = None
+        if "." in symbol:
+            _, owner = self._resolve_symbol_value(symbol.rsplit(".", 1)[0], extra_env)
+
+        if isinstance(owner, NamespaceProxy):
+            info["ns"] = object.__getattribute__(owner, "_ns_name")
+        elif isinstance(owner, ModuleType):
+            info["ns"] = owner.__name__
+        elif getattr(obj, "__module__", None):
+            info["ns"] = obj.__module__
+
+        if isinstance(obj, type):
+            info["type"] = "class"
+            info["doc"] = getattr(obj, "__doc__", None)
+        elif callable(obj):
+            info["type"] = "function"
+            info["doc"] = getattr(obj, "__doc__", None)
+            try:
+                info["arglists"] = [list(inspect.signature(obj).parameters)]
+            except (ValueError, TypeError):
+                pass
+            try:
+                source_file = inspect.getfile(obj)
+                _, start_line = inspect.getsourcelines(obj)
+                info["source"] = {
+                    "file": source_file,
+                    "line": start_line,
+                    "col": 0,
+                }
+            except (TypeError, OSError):
+                pass
+        else:
+            info["type"] = "var"
+            info["value-type"] = type(obj).__name__
+
+        if "ns" not in info:
+            info["ns"] = self.state.namespace
+        return info
 
     def get_doc(self, symbol: str) -> Optional[str]:
         """
@@ -536,7 +636,9 @@ class ReplBackend:
 
         return None
 
-    def get_symbol_info(self, symbol: str) -> dict[str, Any]:
+    def get_symbol_info(
+        self, symbol: str, extra_env: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         """
         Get rich metadata for a symbol.
 
@@ -577,14 +679,19 @@ class ReplBackend:
                         return ns_name
             return None
 
-        # Normalize the symbol name (hyphen to underscore) for Python lookup
-        py_name = normalize_name(symbol)
-
-        # Check if it's a macro
-        if symbol in self.macro_env:
-            macro = self.macro_env[symbol]
+        # Check REPL macros and macros imported by the current document.
+        document_macros = (
+            extra_env.get("__spork_lsp_macros__", {}) if extra_env else {}
+        )
+        document_macro_namespaces = (
+            extra_env.get("__spork_lsp_macro_namespaces__", {}) if extra_env else {}
+        )
+        macro = self.macro_env.get(symbol, document_macros.get(symbol))
+        if macro is not None:
             info["type"] = "macro"
-            info["ns"] = self.state.namespace  # Macros are in current namespace context
+            info["ns"] = document_macro_namespaces.get(
+                symbol, self.state.namespace
+            )
             info["doc"] = getattr(macro, "__doc__", None)
             # Try to get arglists from signature
             import inspect
@@ -595,6 +702,15 @@ class ReplBackend:
                 info["arglists"] = [params]
             except (ValueError, TypeError):
                 pass
+            return info
+
+        # Dotted symbols may name namespace members, Python module members,
+        # class members, or methods on document-local objects.
+        if "." in symbol:
+            found, obj = self._resolve_symbol_value(symbol, extra_env)
+            if found:
+                return self._describe_resolved_symbol(symbol, obj, extra_env)
+            info["status"] = "not-found"
             return info
 
         # Check if it's a protocol
@@ -622,11 +738,9 @@ class ReplBackend:
                 info["impls"] = [t.__name__ for t in impls.keys()]
                 return info
 
-        # Check in environment (try both original and normalized name)
-        obj = self.state.get_env_value(symbol)
-        if obj is None and py_name != symbol:
-            obj = self.state.get_env_value(py_name)
-        if obj is not None:
+        # Check the document-local bindings and then the REPL environment.
+        found, obj = self._lookup_root_value(symbol, extra_env)
+        if found:
             import inspect
 
             # Find which namespace this symbol is from
@@ -692,7 +806,9 @@ class ReplBackend:
 
         return None
 
-    def get_source_location(self, symbol: str) -> Optional[dict[str, Any]]:
+    def get_source_location(
+        self, symbol: str, extra_env: Optional[dict[str, Any]] = None
+    ) -> Optional[dict[str, Any]]:
         """
         Get source location for a symbol (file, line, col).
 
@@ -704,12 +820,12 @@ class ReplBackend:
         """
         import inspect
 
-        # Normalize the symbol name (hyphen to underscore) for Python lookup
-        py_name = normalize_name(symbol)
-
-        # Check if it's a macro
-        if symbol in self.macro_env:
-            macro = self.macro_env[symbol]
+        # Check REPL macros and macros imported by the current document.
+        document_macros = (
+            extra_env.get("__spork_lsp_macros__", {}) if extra_env else {}
+        )
+        macro = self.macro_env.get(symbol, document_macros.get(symbol))
+        if macro is not None:
             try:
                 source_file = inspect.getfile(macro)
                 source_lines, start_line = inspect.getsourcelines(macro)
@@ -721,11 +837,9 @@ class ReplBackend:
             except (TypeError, OSError):
                 pass
 
-        # Check in environment (try both original and normalized name)
-        obj = self.state.get_env_value(symbol)
-        if obj is None and py_name != symbol:
-            obj = self.state.get_env_value(py_name)
-        if obj is not None and callable(obj):
+        # Check document-local aliases and resolve dotted attributes.
+        found, obj = self._resolve_symbol_value(symbol, extra_env)
+        if found and callable(obj):
             try:
                 source_file = inspect.getfile(obj)
                 source_lines, start_line = inspect.getsourcelines(obj)

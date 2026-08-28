@@ -430,6 +430,117 @@ class TestSporkLanguageServer(unittest.TestCase):
         self.assertIn("defn", labels)
         self.assertIn("defmacro", labels)
 
+    def test_dotted_python_module_completion_and_hover(self):
+        """Complete and inspect members of an alias declared in the document."""
+        server, _, _ = self.create_server()
+        server._handle_initialize({"processId": 1234, "capabilities": {}})
+        server._init_backend()
+
+        uri = "file:///test.spork"
+        server._handle_did_open(
+            {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "spork",
+                    "version": 1,
+                    "text": (
+                        "(ns test.lsp (:import [json :as j] "
+                        "[pathlib :refer [Path]]))\n(j.lo)\n(Path.read-t"
+                    ),
+                }
+            }
+        )
+
+        completion = server._handle_completion(
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": 1, "character": 5},
+            }
+        )
+        labels = [item["label"] for item in completion["items"]]
+        self.assertIn("j.load", labels)
+        self.assertIn("j.loads", labels)
+
+        path_completion = server._handle_completion(
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": 2, "character": 12},
+            }
+        )
+        path_labels = [item["label"] for item in path_completion["items"]]
+        self.assertIn("Path.read-text", path_labels)
+
+        server._handle_did_change(
+            {
+                "textDocument": {"uri": uri, "version": 2},
+                "contentChanges": [
+                    {"text": '(ns test.lsp (:import [json :as j]))\n(j.loads "{}")'}
+                ],
+            }
+        )
+
+        hover = server._handle_hover(
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": 1, "character": 4},
+            }
+        )
+        self.assertIsNotNone(hover)
+        assert hover is not None
+        self.assertIn("j.loads", hover["contents"]["value"])
+
+        definition = server._handle_definition(
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": 1, "character": 4},
+            }
+        )
+        self.assertIsNotNone(definition)
+
+    def test_spork_namespace_completion_uses_source_spelling(self):
+        """Offer hyphenated Spork names for members stored with underscores."""
+        server, _, _ = self.create_server()
+        server._handle_initialize({"processId": 1234, "capabilities": {}})
+        server._init_backend()
+
+        uri = "file:///test.spork"
+        server._handle_did_open(
+            {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "spork",
+                    "version": 1,
+                    "text": (
+                        "(ns test.lsp (:require [std.json :as j] "
+                        "[tests.test-macro :as tm]))\n(j.dumps-p)\n(tm.my-w)"
+                    ),
+                }
+            }
+        )
+
+        completion = server._handle_completion(
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": 1, "character": 10},
+            }
+        )
+        labels = [item["label"] for item in completion["items"]]
+        self.assertIn("j.dumps-pretty", labels)
+
+        macro_completion = server._handle_completion(
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": 2, "character": 8},
+            }
+        )
+        macro_items = {
+            item["label"]: item for item in macro_completion["items"]
+        }
+        self.assertIn("tm.my-when", macro_items)
+        self.assertEqual(
+            macro_items["tm.my-when"]["detail"], "tests.test-macro"
+        )
+
     def test_hover(self):
         """Test hover functionality."""
         server, _, _ = self.create_server()

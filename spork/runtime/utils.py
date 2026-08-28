@@ -271,27 +271,9 @@ def __spork_require__(ns_name: str, current_file: Optional[str] = None) -> None:
     if namespace_loaded(ns_name):
         return
 
-    try:
-        kind, path = resolve_require(ns_name, current_file)
-    except FileNotFoundError:
-        # Try as Python module
-        import importlib
+    _, path = resolve_require(ns_name, current_file)
 
-        try:
-            importlib.import_module(ns_name)
-            return
-        except ImportError as err:
-            raise ImportError(f"Cannot find namespace or module: {ns_name}") from err
-
-    if kind == "python":
-        import importlib
-
-        importlib.import_module(ns_name)
-        return
-
-    # It's a Spork file - load it
-    # At this point, path is guaranteed to be a string (not None) for "spork" kind
-    assert path is not None, "Spork file path should not be None"
+    # Load the Spork namespace file.
 
     # Import here to avoid circular imports
     from spork.compiler.codegen import compile_forms_to_code, get_compile_context

@@ -23,8 +23,8 @@ setlocal lispwords=def,defn,defmacro,defclass,defprotocol,fn,let,if,do,loop,for,
 " Match parentheses, brackets, and braces
 setlocal matchpairs=(:),[:],{:}
 
-" Keyword characters for Spork symbols (includes - and ? and ! and *)
-setlocal iskeyword=@,48-57,_,-,?,!,*,+,/,<,>,=
+" Keyword characters for Spork symbols, including dotted member access
+setlocal iskeyword=@,48-57,_,-,.,?,!,*,+,/,<,>,=
 
 " Indentation
 setlocal expandtab
@@ -40,8 +40,8 @@ setlocal foldmethod=syntax
 setlocal suffixesadd=.spork
 
 " Define what constitutes a word for w/b/e motions
-" Spork symbols can contain hyphens and other special chars
-setlocal iskeyword+=-,?,!,*,+,/,<,>,=,:
+" Spork symbols can contain dots, hyphens, and other special chars
+setlocal iskeyword+=.,-,?,!,*,+,/,<,>,=,:
 
 " Undo buffer-local settings when filetype changes
 let b:undo_ftplugin = "setlocal comments< commentstring< formatoptions< lisp< lispwords< matchpairs< iskeyword< expandtab< shiftwidth< softtabstop< tabstop< autoindent< foldmethod< suffixesadd<"

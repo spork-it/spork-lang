@@ -72,9 +72,8 @@ class TextDocument:
         if not line_text or character > len(line_text):
             return None
 
-        # Find word boundaries
-        # Spork symbols can contain: letters, digits, -, _, /, ., ?, !, +, *, <, >, =, &, #, ^
-        # Based on LANG.md: identifiers like my-variable, valid?, math/sin are valid
+        # Find word boundaries. Dots are part of symbols so qualified names such
+        # as json.loads remain intact for completion, hover, and navigation.
         def is_symbol_char(c: str) -> bool:
             return c.isalnum() or c in "-_/.?!+*<>=:&^#"
 
@@ -121,6 +120,9 @@ class SporkLanguageServer:
 
     # Open documents: uri -> TextDocument
     documents: dict[str, TextDocument] = field(default_factory=dict)
+    document_bindings: dict[str, tuple[int, dict[str, Any]]] = field(
+        default_factory=dict
+    )
 
     # REPL backend for evaluation and symbol info
     backend: Any = None
@@ -283,6 +285,7 @@ class SporkLanguageServer:
             content=content,
         )
         self.documents[uri] = doc
+        self.document_bindings.pop(uri, None)
 
         # Validate the document
         self._validate_document(doc)
@@ -304,6 +307,7 @@ class SporkLanguageServer:
         if content_changes:
             doc.content = content_changes[-1].get("text", doc.content)
         doc.version = version
+        self.document_bindings.pop(uri, None)
 
         # Re-validate
         self._validate_document(doc)
@@ -317,6 +321,7 @@ class SporkLanguageServer:
 
         if uri in self.documents:
             del self.documents[uri]
+        self.document_bindings.pop(uri, None)
 
         # Clear diagnostics for closed document
         self._publish_diagnostics(uri, [])
@@ -331,6 +336,7 @@ class SporkLanguageServer:
 
         if uri in self.documents and text is not None:
             self.documents[uri].content = text
+            self.document_bindings.pop(uri, None)
             self._validate_document(self.documents[uri])
 
     # =========================================================================
@@ -350,6 +356,7 @@ class SporkLanguageServer:
 
         doc = self.documents[uri]
         prefix = self._get_completion_prefix(doc, line, character)
+        extra_env = self._get_document_bindings(doc)
 
         self._log(f"Completion requested at {line}:{character}, prefix: '{prefix}'")
 
@@ -358,11 +365,11 @@ class SporkLanguageServer:
         if self.backend:
             try:
                 # Get completions from backend
-                completions = self.backend.get_completions(prefix)
+                completions = self.backend.get_completions(prefix, extra_env=extra_env)
 
                 for name in completions:
                     # Determine the kind based on symbol info
-                    info = self.backend.get_symbol_info(name)
+                    info = self.backend.get_symbol_info(name, extra_env=extra_env)
                     sym_type = info.get("type", "var")
 
                     if sym_type == "function":
@@ -421,9 +428,12 @@ class SporkLanguageServer:
             # Quoting (from compile_expr)
             "quote",
             "quasiquote",
-            # Namespace/modules (from compile_toplevel)
+            # Namespace declaration and clause keywords
             "ns",
-            "import",
+            ":require",
+            ":import",
+            ":as",
+            ":refer",
             # Async/generators (from compile_stmt)
             "await",
             "yield",
@@ -542,8 +552,10 @@ class SporkLanguageServer:
             return None
 
         try:
-            # Get symbol info from backend
-            info = self.backend.get_symbol_info(word)
+            # Get symbol info from backend, including aliases declared by this file.
+            info = self.backend.get_symbol_info(
+                word, extra_env=self._get_document_bindings(doc)
+            )
 
             if info.get("status") == "not-found":
                 return None
@@ -554,11 +566,9 @@ class SporkLanguageServer:
             sym_type = info.get("type", "unknown")
             ns = info.get("ns", "")
 
-            # Type and name (Spork uses / as namespace separator like Clojure)
+            parts.append(f"**{word}** ({sym_type})")
             if ns:
-                parts.append(f"**{ns}/{word}** ({sym_type})")
-            else:
-                parts.append(f"**{word}** ({sym_type})")
+                parts.append(f"\nDefined in `{ns}`")
 
             # Arglists for functions - show in Spork style with brackets
             if "arglists" in info:
@@ -608,8 +618,10 @@ class SporkLanguageServer:
             return None
 
         try:
-            # Get source location from backend
-            location = self.backend.get_source_location(word)
+            # Get source location from backend, including aliases declared by this file.
+            location = self.backend.get_source_location(
+                word, extra_env=self._get_document_bindings(doc)
+            )
 
             if not location:
                 return None
@@ -708,6 +720,221 @@ class SporkLanguageServer:
             "range": make_range(line, col, end_line, end_col),
             "selectionRange": make_range(line, col, line, col + len(name.name)),
         }
+
+    def _find_namespace_form(self, content: str) -> Any:
+        """Read a complete top-level ``ns`` form even if later input is incomplete."""
+        from spork.compiler.reader import read_str
+        from spork.runtime.types import Symbol
+
+        start = None
+        depth = 0
+        in_string = False
+        in_comment = False
+        escaped = False
+
+        for index, char in enumerate(content):
+            if in_comment:
+                if char == "\n":
+                    in_comment = False
+                continue
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == ";":
+                in_comment = True
+                continue
+            if char == '"':
+                in_string = True
+                continue
+            if char == "(":
+                if depth == 0:
+                    start = index
+                depth += 1
+                continue
+            if char != ")" or depth == 0:
+                continue
+
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    forms = read_str(content[start : index + 1])
+                except Exception:
+                    forms = []
+                if (
+                    len(forms) == 1
+                    and isinstance(forms[0], list)
+                    and forms[0]
+                    and isinstance(forms[0][0], Symbol)
+                    and forms[0][0].name == "ns"
+                ):
+                    return forms[0]
+                start = None
+
+        return None
+
+    def _get_document_bindings(self, doc: TextDocument) -> dict[str, Any]:
+        """Resolve aliases and referred names declared by the document's ``ns`` form."""
+        cached = self.document_bindings.get(doc.uri)
+        if cached and cached[0] == doc.version:
+            return cached[1]
+
+        bindings: dict[str, Any] = {}
+        try:
+            import importlib
+
+            from spork.runtime.ns import (
+                get_namespace,
+                parse_require_spec,
+                resolve_require,
+            )
+            from spork.runtime.types import (
+                Keyword,
+                Symbol,
+                VectorLiteral,
+                normalize_name,
+            )
+            from spork.runtime.utils import __spork_ns_env__, __spork_require__
+
+            ns_form = self._find_namespace_form(doc.content)
+
+            if ns_form is not None:
+                for clause in ns_form[2:]:
+                    if not isinstance(clause, list) or not clause:
+                        continue
+                    head = clause[0]
+                    if not isinstance(head, Keyword):
+                        continue
+
+                    if head.name == "require":
+                        for spec in clause[1:]:
+                            req = parse_require_spec(spec)
+                            target_name = req["ns"]
+                            resolve_require(target_name, doc.path)
+                            __spork_require__(target_name, doc.path)
+                            target = __spork_ns_env__(target_name)
+                            ns_info = get_namespace(target_name)
+                            target_macros: dict[str, Any] = {}
+                            if ns_info and ns_info.macros:
+                                target_macros = ns_info.macros
+
+                            alias = req["alias"]
+                            referred = req["refer"]
+                            document_macros = bindings.setdefault(
+                                "__spork_lsp_macros__", {}
+                            )
+                            macro_namespaces = bindings.setdefault(
+                                "__spork_lsp_macro_namespaces__", {}
+                            )
+                            if alias:
+                                bindings[alias] = target
+                                for name, macro in target_macros.items():
+                                    qualified_name = f"{alias}.{name}"
+                                    document_macros[qualified_name] = macro
+                                    macro_namespaces[qualified_name] = target_name
+
+                            if referred == ":all":
+                                for name in dir(target):
+                                    if not name.startswith("_"):
+                                        bindings[name] = getattr(target, name)
+                                document_macros.update(target_macros)
+                                for name in target_macros:
+                                    macro_namespaces[name] = target_name
+                            elif referred:
+                                for name in referred:
+                                    if name in target_macros:
+                                        document_macros[name] = target_macros[name]
+                                        macro_namespaces[name] = target_name
+                                    else:
+                                        bindings[name] = getattr(
+                                            target, normalize_name(name)
+                                        )
+
+                    elif head.name == "import":
+                        for spec in clause[1:]:
+                            if not isinstance(spec, VectorLiteral) or not spec.items:
+                                continue
+                            items = spec.items
+                            if not isinstance(items[0], Symbol):
+                                continue
+
+                            module_name = items[0].name.replace("/", ".")
+                            module = importlib.import_module(module_name)
+                            alias = None
+                            referred: list[tuple[str, Optional[str]]] = []
+                            i = 1
+                            while i < len(items):
+                                item = items[i]
+                                if (
+                                    isinstance(item, Keyword)
+                                    and item.name == "as"
+                                    and i + 1 < len(items)
+                                    and isinstance(items[i + 1], Symbol)
+                                ):
+                                    alias = items[i + 1].name
+                                    i += 2
+                                    continue
+
+                                names = None
+                                if (
+                                    isinstance(item, Keyword)
+                                    and item.name == "refer"
+                                    and i + 1 < len(items)
+                                    and isinstance(items[i + 1], VectorLiteral)
+                                ):
+                                    names = items[i + 1]
+                                    i += 2
+                                elif isinstance(item, VectorLiteral):
+                                    names = item
+                                    i += 1
+                                elif isinstance(item, Symbol):
+                                    while i < len(items) and isinstance(items[i], Symbol):
+                                        referred.append((items[i].name, None))
+                                        i += 1
+                                else:
+                                    i += 1
+
+                                if names is not None:
+                                    j = 0
+                                    while j < len(names.items):
+                                        name_form = names.items[j]
+                                        if not isinstance(name_form, Symbol):
+                                            j += 1
+                                            continue
+                                        name = name_form.name
+                                        name_alias = None
+                                        if (
+                                            j + 2 < len(names.items)
+                                            and isinstance(names.items[j + 1], Keyword)
+                                            and names.items[j + 1].name == "as"
+                                            and isinstance(names.items[j + 2], Symbol)
+                                        ):
+                                            name_alias = names.items[j + 2].name
+                                            j += 3
+                                        else:
+                                            j += 1
+                                        referred.append((name, name_alias))
+
+                            if alias:
+                                bindings[alias] = module
+                            if referred:
+                                for name, name_alias in referred:
+                                    bindings[name_alias or name] = getattr(
+                                        module, normalize_name(name)
+                                    )
+                            elif not alias:
+                                root_name = module_name.split(".")[0]
+                                bindings[root_name] = importlib.import_module(root_name)
+
+        except Exception as exc:
+            self._log(f"Could not resolve document namespace bindings: {exc}")
+
+        self.document_bindings[doc.uri] = (doc.version, bindings)
+        return bindings
 
     # =========================================================================
     # Validation and Diagnostics

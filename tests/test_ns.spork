@@ -1,13 +1,16 @@
-;; Test namespace requiring another namespace
-;; Tests the (ns ...) and :require functionality
+;; Test separate Spork namespace and Python module loading
 
-(ns test.ns (:require [math :as m]
-                      [std.json :as json]))
+(ns test.ns
+  (:require [std.json :as json])
+  (:import [math :as m]
+           [statistics :as stats]))
 
 ;; Test Python module import
 (print "\nTesting Python module import:")
 (print "m.sqrt 16:" (m.sqrt 16))
+(assert (= (m.sqrt 16) (.sqrt m 16)) "Qualified and leading-dot module calls should agree")
 (print "m.pi:" m.pi)
+(assert (= (stats.mean [1 2 3]) 2) "Python modules load through :import")
 
 ;; Define something in this namespace
 (defn local-fn [x]

@@ -400,39 +400,18 @@ def clear_registry() -> None:
 # ============================================================================
 
 
-def is_python_module(name: str) -> bool:
-    """
-    Check if a name refers to an importable Python module.
-
-    Args:
-        name: Module name (e.g., "math", "collections.abc")
-
-    Returns:
-        True if the module can be imported as a Python module.
-    """
-    import importlib.util
-
-    try:
-        spec = importlib.util.find_spec(name)
-        return spec is not None
-    except (ModuleNotFoundError, ValueError):
-        return False
-
-
 def resolve_require(
     ns_name: str, current_file: Optional[str] = None
-) -> tuple[str, Optional[str]]:
+) -> tuple[str, str]:
     """
-    Resolve a require target to either a Spork file or Python module.
+    Resolve a require target to a Spork namespace file.
 
     Args:
-        ns_name: The namespace/module name to require
+        ns_name: The Spork namespace name to require
         current_file: The file doing the requiring (for relative resolution)
 
     Returns:
-        A tuple of (type, path) where:
-        - type is "spork" or "python"
-        - path is the absolute file path for Spork, or None for Python
+        A tuple of ("spork", absolute file path).
     """
     # Build extra roots from current file
     extra_roots = []
@@ -441,19 +420,13 @@ def resolve_require(
         if file_dir:
             extra_roots.append(file_dir)
 
-    # Try to find a Spork file first
     spork_file = find_spork_file_for_ns(ns_name, extra_roots=extra_roots)
     if spork_file:
         return ("spork", spork_file)
 
-    # Fall back to Python module
-    if is_python_module(ns_name):
-        return ("python", None)
-
-    # Not found
     raise FileNotFoundError(
-        f"Cannot resolve namespace '{ns_name}': "
-        f"no .spork file found and not a Python module"
+        f"Cannot resolve Spork namespace '{ns_name}': no .spork file found. "
+        "Use :import for Python modules."
     )
 
 

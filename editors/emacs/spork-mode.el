@@ -228,7 +228,7 @@ The command will be run from the project root directory."
   (let* ((special-forms-re (regexp-opt spork--special-forms 'symbols))
          (constants-re     (regexp-opt spork--constants 'symbols))
          (builtins-re      (regexp-opt spork--builtins 'symbols))
-         ;; symbol chars like foo-bar? or math/sin
+         ;; symbol chars like foo-bar? or math.sin
          (name-chars       "[:word:][-_!?+*/.[:word:]]*"))
     `(
       ;; (defn name [args] ...)

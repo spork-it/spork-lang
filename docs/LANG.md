@@ -861,7 +861,7 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
     [external.lib :refer :all])
   (:import
     [spork_pds :as pds]
-    [numpy :as np]
+    [array :as arr]
     [os.path :as osp]
     [collections :refer [defaultdict Counter]]
     [math :refer [sin cos]]))
@@ -930,12 +930,12 @@ Unlike Clojure, Spork uses dot notation for all namespace/module access:
 (ns my.app
   (:require [std.string :as str])
   (:import [math :as m]
-           [numpy :as np]))
+           [array :as arr]))
 
 ; Access via dots (not slashes)
 (str.join ", " ["a" "b" "c"])  ; => "a, b, c"
 (m.sqrt 16)                     ; => 4.0
-(np.array [1 2 3])              ; numpy array
+(arr.array "i" [1 2 3])         ; Python standard-library array
 ```
 
 ---

@@ -1,7 +1,7 @@
 (ns test-set
   (:import [operator]
            [builtins]
-           [spork.runtime.pds :as pds]))
+           [spork_pds :as pds]))
 
 (print "=== Testing Persistent Set ===\n")
 

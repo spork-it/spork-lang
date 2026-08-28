@@ -1,47 +1,21 @@
 # Spork Documentation
 
-Welcome to the Spork documentation! This folder contains comprehensive guides and references for the Spork programming language.
+## References
 
-## Documents
+- [Language Reference](LANG.md) — syntax, literals, control flow, functions, macros, pattern matching, protocols, async support, namespaces, and Python interoperability.
+- [Standard Library Reference](STDLIB.md) — core functions, sequence operations, transients, lazy sequences, reducers, predicates, and `std.*` modules.
+- [Future Ideas](IDEAS.md) — exploratory designs that are not part of the supported language.
 
-### [Language Reference](LANG.md)
+## Persistent data structures
 
-The complete language reference covering all aspects of Spork syntax and semantics:
+Spork consumes the separately released [`spork-pds`](https://github.com/spork-it/spork-pds) package. Its documentation lives with that project:
 
-- Lexical syntax and literals
-- Data structures (vectors, maps, sets, lists)
-- Special forms and control flow
-- Functions (multi-arity, variadic, keyword arguments)
-- Type annotations
-- Pattern matching
-- Classes and protocols
-- Namespaces and modules
-- Macros
-- Async and generators
-- Exception handling
-- Python interop
+- [`spork-pds` API reference](https://github.com/spork-it/spork-pds/blob/main/docs/API.md)
+- [`spork-pds` design](https://github.com/spork-it/spork-pds/blob/main/docs/DESIGN.md)
+- [`spork-pds` benchmarks](https://github.com/spork-it/spork-pds/blob/main/docs/BENCHMARKS.md)
 
-### [Standard Library Reference](STDLIB.md)
+## More resources
 
-Documentation for Spork's built-in types, core functions, and standard library modules:
-
-- Built-in types (Vector, Map, Set, Cons, Keyword, Symbol)
-- Sequence operations
-- Transient data structures
-- Lazy sequence functions
-- Reduction and transformation functions
-- Numeric and bitwise operations
-- Prelude macros
-- String utilities (`std.string`)
-- Map utilities (`std.map`)
-- Protocol system
-
-### [Benchmarks](BENCHMARKS.md)
-
-Performance benchmarks for Spork's persistent data structures:
-
-- Methodology and running instructions
-- Vector, Map, and Set benchmarks
-- Structural sharing comparisons
-- NumPy interop performance
-- Results across different data sizes
+- [Examples](../examples/)
+- [Emacs mode](../editors/emacs/)
+- [Neovim support](../editors/nvim/)

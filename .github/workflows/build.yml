@@ -1,4 +1,4 @@
-name: Build and Publish Wheels
+name: Build and Publish Distributions
 
 on:
   push:
@@ -6,91 +6,75 @@ on:
       - "v*"
 
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }} (${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
+  # spork-lang is pure Python; its single py3-none-any wheel supports every
+  # interpreter in the 3.10-3.14t test matrix. Native wheels come from spork-pds.
+  build:
+    name: Build universal Python 3 distributions
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up minimum supported Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install build tools
+        run: python -m pip install build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Check distributions
+        run: |
+          python -m twine check dist/*
+          test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
+          test "$(find dist -maxdepth 1 -name '*-py3-none-any.whl' | wc -l)" -eq 1
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: ./dist/*
+
+  test_distribution:
+    name: Test wheel on Python ${{ matrix.python-version }}
+    needs: build
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Linux x86_64
-          - os: ubuntu-latest
-            arch: x86_64
-            cibw_archs: x86_64
-          # Linux ARM64
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            cibw_archs: aarch64
-          # macOS x86_64
-          - os: macos-15
-            arch: x86_64
-            cibw_archs: x86_64
-          # macOS ARM64
-          - os: macos-15
-            arch: arm64
-            cibw_archs: arm64
-          # Windows x86_64
-          - os: windows-latest
-            arch: x86_64
-            cibw_archs: AMD64
-          # Windows ARM64
-          - os: windows-latest
-            arch: arm64
-            cibw_archs: ARM64
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
 
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==3.3.0
+      - name: Set PYTHON_GIL=0 for free-threaded Python
+        if: endsWith(matrix.python-version, 't')
+        run: echo "PYTHON_GIL=0" >> "$GITHUB_ENV"
 
-      - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
-        env:
-          CIBW_ARCHS: ${{ matrix.cibw_archs }}
-          CIBW_BUILD: cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*
-          CIBW_ENABLE: cpython-freethreading
-          CIBW_SKIP: "*-musllinux_*"
-          CIBW_BUILD_VERBOSITY: 1
-          CIBW_TEST_COMMAND: python -c "from spork.runtime import pds; print('C extension loaded successfully')" && python -m spork -c "(print (+ 1 2))"
-
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
+      - name: Download universal distribution
+        uses: actions/download-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.arch }}
-          path: ./wheelhouse/*.whl
+          name: distributions
+          path: dist
 
-  build_sdist:
-    name: Build source distribution
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install build dependencies
-        run: python -m pip install build
-
-      - name: Build sdist
-        run: python -m build --sdist
-
-      - name: Upload sdist
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdist
-          path: ./dist/*.tar.gz
+      - name: Install and smoke-test wheel
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          python -c "import spork_pds; from spork.runtime import Vector; assert Vector is spork_pds.Vector"
+          python -m spork -c "(print (+ 1 2))"
 
   publish:
     name: Publish to PyPI
-    needs: [build_wheels, build_sdist]
+    needs: [build, test_distribution]
     runs-on: ubuntu-latest
 
     environment:
@@ -100,18 +84,18 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download all artifacts
+      - name: Download distributions
         uses: actions/download-artifact@v4
         with:
+          name: distributions
           path: dist
-          merge-multiple: true
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
   release:
     name: Create GitHub Release
-    needs: [build_wheels, build_sdist]
+    needs: [build, test_distribution]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -119,11 +103,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download distributions
         uses: actions/download-artifact@v4
         with:
+          name: distributions
           path: dist
-          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

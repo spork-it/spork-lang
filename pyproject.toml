@@ -43,6 +43,7 @@ classifiers = [
 dependencies = [
     "build>=1",
     "setuptools>=77",
+    "spork-pds>=0.1.0,<0.2.0",
     "wheel",
 ]
 
@@ -51,6 +52,7 @@ dev = [
     "build",
     "twine",
     "numpy",
+    "pytest>=8",
 ]
 
 [project.urls]
@@ -58,7 +60,7 @@ Homepage = "https://github.com/spork-it/spork-lang"
 Documentation = "https://github.com/spork-it/spork-lang#readme"
 Repository = "https://github.com/spork-it/spork-lang"
 Issues = "https://github.com/spork-it/spork-lang/issues"
-Changelog = "https://github.com/grant-wade/spork/releases"
+Changelog = "https://github.com/spork-it/spork-lang/releases"
 
 [project.scripts]
 spork = "spork.cli:main"
@@ -76,10 +78,5 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-# Include C source files for building the extension
-"spork.runtime" = ["*.c"]
 # Include standard library Spork files
 "spork.std" = ["*.spork"]
-
-[tool.setuptools.exclude-package-data]
-"*" = ["*.pyc", "__pycache__", "*.so", "*.pyd"]

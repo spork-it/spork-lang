@@ -211,7 +211,7 @@ class VectorLiteral:
     """
     AST node representing a vector literal [...] in source code.
 
-    This is distinct from the runtime Vector type (pds.Vector).
+    This is distinct from the runtime Vector type (spork_pds.Vector).
     VectorLiteral is used during parsing and compilation, while Vector
     is the persistent data structure used at runtime.
 
@@ -285,7 +285,7 @@ class SetLiteral:
     """
     AST node representing a set literal #{...} in source code.
 
-    This is distinct from the runtime Set type (pds.Set).
+    This is distinct from the runtime Set type (spork_pds.Set).
 
     Attributes:
         items: List of elements in the set

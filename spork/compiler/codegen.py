@@ -740,7 +740,7 @@ def compile_ns(args, form_loc=None):
         (ns my.app.core)
         (ns my.app.core
           (:require
-            [spork.pds :as pds]
+            [spork_pds :as pds]
             [my.lib.helpers :as helpers :refer [foo bar]]
             [math :as m]
             [logging :refer [getLogger]])

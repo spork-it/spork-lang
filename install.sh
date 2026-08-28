@@ -7,9 +7,13 @@ VENV_DIR="$SPORK_HOME/venv"
 
 echo "Installing Spork to $SPORK_HOME"
 
-# Check for Python 3.9+
+# Check for Python 3.10+.
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "Error: Python 3 is required."
+    echo "Error: Python 3.10 or newer is required."
+    exit 1
+fi
+if ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 10))'; then
+    echo "Error: Python 3.10 or newer is required."
     exit 1
 fi
 

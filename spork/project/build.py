@@ -271,7 +271,7 @@ def generate_pyproject_toml(
 name = "{name}"
 version = "{version}"
 description = "Compiled output from Spork (.spork-out)"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [tool.spork]
 source-root = "{rel_to_root}"

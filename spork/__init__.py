@@ -4,7 +4,7 @@ Spork - A Lisp to Python transpiler with persistent data structures.
 
 import sys
 
-# Import persistent data structures from runtime (wraps C extension)
+# Import persistent data structures from the runtime (backed by spork-pds).
 try:
     from spork.runtime import (
         _MISSING,
@@ -140,8 +140,8 @@ except ImportError as e:
     print("Error: Spork runtime could not be loaded.", file=sys.stderr)
     print(f"  {e}", file=sys.stderr)
     print("", file=sys.stderr)
-    print("The C extension (pds) may not be built. Try:", file=sys.stderr)
-    print("  make build", file=sys.stderr)
+    print("The required spork-pds package may not be installed. Try:", file=sys.stderr)
+    print("  python -m pip install 'spork-pds>=0.1.0,<0.2.0'", file=sys.stderr)
     print("", file=sys.stderr)
     sys.exit(1)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dump host system information for benchmark documentation.
+Dump host system information for CI diagnostics.
 """
 
 import os

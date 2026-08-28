@@ -69,7 +69,7 @@ build-backend = "setuptools.build_meta"
 name = "{config.name}"
 version = "{config.version}"
 description = "{description}"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 {deps_str}
 
 [tool.setuptools]

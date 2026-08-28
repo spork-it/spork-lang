@@ -61,7 +61,7 @@
 
 ; Slice returns a Vector
 (print "Slice result type:" (type (get my-vec #[0 3])))
-(assert (= (str (type (get my-vec #[0 3]))) "<class 'spork.runtime.pds.Vector'>") "slice of vector should return vector")
+(assert (= (str (type (get my-vec #[0 3]))) "<class 'spork_pds.Vector'>") "slice of vector should return vector")
 
 (print "Slice literals with Vectors: PASS\n")
 

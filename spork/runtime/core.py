@@ -19,7 +19,7 @@ Categories:
 from abc import ABC
 from typing import Any, Iterator, Optional
 
-from spork.runtime.pds import (
+from spork_pds import (
     EMPTY_MAP,
     EMPTY_SET,
     EMPTY_SORTED_VECTOR,
@@ -1215,7 +1215,7 @@ def zipmap(keys, vals):
     """Return a Map with keys mapped to corresponding vals."""
     result = EMPTY_MAP
     if result is None:
-        # pds not initialized yet, return dict
+        # Persistent collections are not initialized yet; return a dict.
         return dict(zip(keys, vals))
     t = result.transient()
     for k, v in zip(keys, vals):
@@ -1439,11 +1439,17 @@ def spork_abs(x):
 
 
 def bit_or(*args):
-    """Bitwise OR. Also works as set union."""
+    """Bitwise OR. Also works as map merge and set union."""
     if len(args) == 0:
         return 0
     result = args[0]
     for x in args[1:]:
+        # spork-pds follows Python's operators and accepts mappings/set-like
+        # operands. Spork also accepts generic iterables for these operations.
+        if isinstance(result, Map) and not isinstance(x, Map):
+            x = Map(x)
+        elif isinstance(result, Set) and not isinstance(x, Set):
+            x = Set(x)
         result = result | x
     return result
 
@@ -1454,6 +1460,8 @@ def bit_and(*args):
         raise TypeError("bit-and requires at least 2 arguments")
     result = args[0]
     for x in args[1:]:
+        if isinstance(result, Set) and not isinstance(x, Set):
+            x = Set(x)
         result = result & x
     return result
 
@@ -1464,7 +1472,12 @@ def bit_and_not(*args):
         raise TypeError("bit-and-not requires at least 2 arguments")
     result = args[0]
     for x in args[1:]:
-        result = result & (~x)
+        if isinstance(result, Set):
+            if not isinstance(x, Set):
+                x = Set(x)
+            result = result - x
+        else:
+            result = result & (~x)
     return result
 
 
@@ -1474,6 +1487,8 @@ def bit_xor(*args):
         return 0
     result = args[0]
     for x in args[1:]:
+        if isinstance(result, Set) and not isinstance(x, Set):
+            x = Set(x)
         result = result ^ x
     return result
 

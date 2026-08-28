@@ -6,7 +6,7 @@ It is designed to be lightweight and independent of the compiler.
 
 Submodules:
 - types: Core type definitions (Symbol, Keyword, VectorLiteral, etc.)
-- pds: C extension persistent data structures
+- persistent data structures: provided by the spork-pds dependency
 - core: Standard library functions (first, rest, map, filter, etc.)
 - utils: Runtime utilities (spork_try, setup_runtime_env, etc.)
 - ns: Namespace management (loading, registering, finding namespaces)
@@ -138,7 +138,7 @@ from spork.runtime.json import (
 )
 
 # Re-export PDS (persistent data structures)
-from spork.runtime.pds import (  # pyright: ignore[reportMissingModuleSource]
+from spork_pds import (  # pyright: ignore[reportMissingModuleSource]
     EMPTY_DOUBLE_VECTOR,
     EMPTY_LONG_VECTOR,
     EMPTY_MAP,

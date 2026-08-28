@@ -103,7 +103,7 @@ nil         ; Python None
 
 ## 2. Data Structures
 
-Spork provides **persistent (immutable) data structures** implemented as a C extension for performance.
+Spork uses **persistent (immutable) data structures** from the released `spork-pds` C extension dependency.
 
 The core types are:
 - `Vector` - Persistent vector (32-way bit-partitioned trie)
@@ -835,10 +835,10 @@ Protocols provide polymorphic dispatch similar to Clojure protocols or type clas
 ```clojure
 (ns my.app.core
   (:require
-    [spork.pds :as pds]
     [my.utils :refer [helper-fn]]
     [external.lib :refer :all])
   (:import
+    [spork_pds :as pds]
     [numpy :as np]
     [os.path :as osp]
     [collections :refer [defaultdict Counter]]
@@ -1450,7 +1450,7 @@ When a statement-like construct (`let`, `try`, `with`) appears in expression con
 | Feature | Python | Spork | Implementation |
 |---------|--------|-------|----------------|
 | Tail Recursion | No (stack overflow) | Yes (`recur`) | Compiles to while loop |
-| Data Structures | Mutable | Immutable | C extension (HAMT) |
+| Data Structures | Mutable | Immutable | `spork-pds` C extension (HAMT) |
 | Conditionals | `if/elif/else` | `cond`, `match` | Decision tree compilation |
 | Metaprogramming | Decorators | Macros | AST transformation |
 | Variable Scope | Function/global | Block (`let`) | IIFE simulation |

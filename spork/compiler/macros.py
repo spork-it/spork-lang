@@ -89,7 +89,7 @@ from spork.runtime.core import (
     # Collection utilities
     zipmap,
 )
-from spork.runtime.pds import (
+from spork_pds import (
     EMPTY_MAP,
     EMPTY_SET,
     EMPTY_VECTOR,

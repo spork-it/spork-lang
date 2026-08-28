@@ -20,7 +20,7 @@ Usage:
 import json
 from typing import Any, TextIO
 
-from spork.runtime.pds import (
+from spork_pds import (
     Cons,
     DoubleVector,
     IntVector,

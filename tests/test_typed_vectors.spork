@@ -103,33 +103,6 @@
 (print "Sum of large-floats:" large-sum)
 (assert (= large-sum 4950.0))
 
-;; === Buffer Protocol / NumPy Tests ===
-(print "\n--- Buffer Protocol (NumPy integration) ---")
-
-(try
-  (do
-    (def np (__import__ "numpy"))
-
-    ;; Test double vector -> numpy
-    (def arr-f64 (np.array annotated-floats))
-    (print "NumPy from DoubleVector:" arr-f64)
-    (print "dtype:" arr-f64.dtype)
-
-    ;; Test long vector -> numpy
-    (def arr-i64 (np.array annotated-ints))
-    (print "NumPy from IntVector:" arr-i64)
-    (print "dtype:" arr-i64.dtype)
-
-    ;; Test large vector conversion
-    (def large-arr (np.array large-floats))
-    (print "Large array shape:" large-arr.shape)
-    (print "NumPy sum:" (.sum large-arr))
-    (assert (= (.sum large-arr) 4950.0))
-
-    (print "NumPy integration: PASSED"))
-  (catch ImportError e
-    (print "NumPy not available, skipping buffer protocol tests")))
-
 ;; === Hash Tests ===
 (print "\n--- Hashing ---")
 

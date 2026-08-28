@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -39,19 +39,15 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 
-# Runtime dependencies for spork dist command
 dependencies = [
     "build>=1",
     "setuptools>=77",
     "spork-pds>=0.1.0,<0.2.0",
-    "wheel",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "build",
     "twine",
-    "numpy",
     "pytest>=8",
 ]
 

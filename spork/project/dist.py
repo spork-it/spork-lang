@@ -62,7 +62,7 @@ dependencies = [
 ]"""
 
     content = f'''[build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]

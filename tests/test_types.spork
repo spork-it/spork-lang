@@ -149,6 +149,15 @@
 (print "apply-twice inc 5:" (apply-twice inc 5))
 (assert (= (apply-twice inc 5) 7))
 
+;; Python-style nested Callable syntax compiles to Callable[[int], int].
+(defn apply-twice-nested [^(Callable [[int] int]) f ^int x]
+  (f (f x)))
+
+;; Accessing __annotations__ forces annotation evaluation on Python 3.14+.
+(print "apply-twice-nested.__annotations__:"
+       (getattr apply-twice-nested "__annotations__" {}))
+(assert (= (apply-twice-nested inc 5) 7))
+
 ;; === Test with Decorators AND Type Annotations ===
 (print "\n--- Decorators with Type Annotations ---")
 

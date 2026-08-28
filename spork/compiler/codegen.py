@@ -97,6 +97,7 @@ def compile_type_annotation(type_expr):
     - Simple types: int, str, float, bool, etc.
     - Qualified types: typing.List, typing.Optional
     - Generic types: (List int) -> List[int], (Dict str int) -> Dict[str, int]
+    - Callable types: (Callable int int) and (Callable [[int] int])
     - Already-subscripted types: typing.List[int] (passed through)
 
     Args:
@@ -138,8 +139,46 @@ def compile_type_annotation(type_expr):
         # Compile the base type
         base_node = compile_type_annotation(base_type)
 
-        # Compile type arguments
-        if len(type_args) == 1:
+        # Callable requires its parameter types to be a list in the generated
+        # Python annotation: Callable[[arg, ...], result]. Spork accepts either
+        # a compact form or the equivalent nested-vector form.
+        base_name = (
+            base_type.name.rsplit(".", 1)[-1]
+            if isinstance(base_type, Symbol)
+            else None
+        )
+        if base_name == "Callable":
+            callable_parts = type_args
+            if len(callable_parts) == 1 and isinstance(
+                callable_parts[0], VectorLiteral
+            ):
+                callable_parts = callable_parts[0].items
+            if len(callable_parts) < 2:
+                raise SyntaxError(
+                    "Callable type annotation requires parameter types and a return type"
+                )
+
+            result_type = callable_parts[-1]
+            if len(callable_parts) == 2 and isinstance(
+                callable_parts[0], VectorLiteral
+            ):
+                parameter_types = callable_parts[0].items
+            else:
+                parameter_types = callable_parts[:-1]
+
+            slice_node = ast.Tuple(
+                elts=[
+                    ast.List(
+                        elts=[
+                            compile_type_annotation(arg) for arg in parameter_types
+                        ],
+                        ctx=ast.Load(),
+                    ),
+                    compile_type_annotation(result_type),
+                ],
+                ctx=ast.Load(),
+            )
+        elif len(type_args) == 1:
             # Single type arg: (List int) -> List[int]
             slice_node = compile_type_annotation(type_args[0])
         else:

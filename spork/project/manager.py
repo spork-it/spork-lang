@@ -375,22 +375,20 @@ class ProjectManager:
             return False
 
     def _get_spork_install_spec(self) -> Optional[str]:
-        """
-        Get the pip install specification for spork-lang.
+        """Get the pip requirement used to install the active toolchain.
 
-        Note: This method now returns None to signal that spork should be
-        installed via _install_spork_from_current_env() instead of pip.
-
-        Returns:
-            A pip install specification string for editable installs, or None.
+        Source checkouts remain editable. Installed releases are installed from
+        their exact published version so pip also installs transitive runtime
+        dependencies such as spork-pds. Copying only the ``spork`` directory
+        would leave a new project environment incomplete.
         """
-        # Check if we're running from source (editable install)
         spork_source_dir = self._find_spork_source_dir()
         if spork_source_dir:
             return f"-e {spork_source_dir}"
 
-        # Return None to signal that we need to use the copy method
-        return None
+        import spork
+
+        return f"spork-lang=={spork.__version__}"
 
     def get_installed_packages(self) -> list[str]:
         """

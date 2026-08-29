@@ -169,7 +169,7 @@ from spork.compiler import (
 
 install_import_hook()
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 __all__ = [
     # Data structures

@@ -9,6 +9,7 @@ This module provides the infrastructure for Spork's namespace system, including:
 """
 
 import os
+import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -166,8 +167,20 @@ def find_spork_file_for_ns(
     if extra_roots:
         search_paths.extend(extra_roots)
     search_paths.extend(SOURCE_ROOTS)
+    # Installed Spork libraries place their source beside compiled Python in
+    # site-packages. sys.path is also updated with a project's isolated venv by
+    # ProjectManager, so searching it makes pip dependencies require-able
+    # without a separate SPORK_PATH setting.
+    search_paths.extend(path for path in sys.path if isinstance(path, str))
 
+    seen: set[str] = set()
     for root in search_paths:
+        root = root or os.getcwd()
+        absolute_root = os.path.abspath(root)
+        if absolute_root in seen:
+            continue
+        seen.add(absolute_root)
+        root = absolute_root
         if not root:
             continue
         candidate = os.path.join(root, rel)
@@ -184,6 +197,7 @@ def find_project_root(start_path: str) -> Optional[str]:
     Looks for common project markers:
     - .git directory
     - pyproject.toml
+    - spork.it manifest
     - .spork_project file
     - setup.py
 
@@ -198,7 +212,7 @@ def find_project_root(start_path: str) -> Optional[str]:
     else:
         current = os.path.abspath(start_path)
 
-    markers = [".git", "pyproject.toml", ".spork_project", "setup.py"]
+    markers = ["spork.it", ".git", "pyproject.toml", ".spork_project", "setup.py"]
 
     while current != os.path.dirname(current):  # Stop at filesystem root
         for marker in markers:

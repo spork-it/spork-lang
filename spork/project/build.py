@@ -10,6 +10,7 @@ Output structure:
         <package>/
             __init__.py
             module.py
+            module.spork
             module.spork.map.json
 """
 
@@ -21,6 +22,10 @@ from pathlib import Path
 from typing import Optional
 
 # Directories to skip when discovering modules
+COPYABLE_SOURCE_SUFFIXES = {".py", ".pyi", ".spork"}
+COPYABLE_SOURCE_NAMES = {"py.typed"}
+
+
 SKIP_DIRS = {
     ".venv",
     "venv",
@@ -137,7 +142,40 @@ def discover_spork_files(source_root: Path) -> list[Path]:
             if file.endswith(".spork"):
                 spork_files.append(Path(root) / file)
 
-    return spork_files
+    return sorted(spork_files)
+
+
+def copy_source_files(source_roots: list[Path], out_dir: Path) -> list[Path]:
+    """Copy distributable source and Python support files into build output.
+
+    Keeping ``.spork`` files beside generated modules lets installed Spork
+    projects use ``:require``. Hand-written ``.py``/``.pyi`` files support thin
+    Python facades and typing without duplicating the implementation.
+    """
+    copied: list[Path] = []
+    for source_root in source_roots:
+        if not source_root.is_dir():
+            continue
+        for root, dirs, files in os.walk(source_root):
+            dirs[:] = sorted(d for d in dirs if not should_skip_dir(d))
+            for filename in sorted(files):
+                source = Path(root) / filename
+                if (
+                    source.suffix not in COPYABLE_SOURCE_SUFFIXES
+                    and filename not in COPYABLE_SOURCE_NAMES
+                ):
+                    continue
+                relative = source.relative_to(source_root)
+                destination = out_dir / relative
+                if source.suffix == ".py" and source.with_suffix(".spork").is_file():
+                    raise ValueError(
+                        f"Both Python and Spork sources would generate {relative}: "
+                        f"{source} and {source.with_suffix('.spork')}"
+                    )
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+                copied.append(destination)
+    return copied
 
 
 def path_to_module_name(spork_path: Path, source_root: Path) -> str:
@@ -195,8 +233,14 @@ def compile_module(
         # Compile
         python_source, source_map = compile_path_to_python(spork_path)
 
-        # Add python_file to source map
-        source_map["python_file"] = str(rel_path.with_suffix(".py"))
+        # Store portable package-relative source-map paths. The original
+        # source is copied beside the generated Python for distributions.
+        source_map["spork_file"] = str(rel_path.with_suffix(".spork")).replace(
+            os.sep, "/"
+        )
+        source_map["python_file"] = str(rel_path.with_suffix(".py")).replace(
+            os.sep, "/"
+        )
 
         # Ensure output directories exist
         python_path.parent.mkdir(parents=True, exist_ok=True)
@@ -329,9 +373,15 @@ def build_project(
         if project_root is None:
             project_root = Path.cwd()
 
-    # Determine output directory
+    project_root = project_root.resolve()
+
+    # Determine output directory. CLI paths are project-relative so commands
+    # behave consistently when run from a project subdirectory.
     if out_dir is None:
         out_dir = project_root / ".spork-out"
+    elif not out_dir.is_absolute():
+        out_dir = project_root / out_dir
+    out_dir = out_dir.resolve()
 
     # Clean if requested
     if clean and out_dir.exists():
@@ -342,8 +392,13 @@ def build_project(
     # Create output directory
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get source roots
-    source_roots = get_source_roots(project_root)
+    # Get source roots and initialize namespace resolution before compiling.
+    # This is required for multi-module projects whose files use :require.
+    source_roots = [root.resolve() for root in get_source_roots(project_root)]
+    from spork.runtime.ns import clear_registry, init_source_roots
+
+    clear_registry()
+    init_source_roots(extra_paths=[str(root) for root in source_roots])
 
     if verbose:
         print(f"Project root: {project_root}")
@@ -373,6 +428,9 @@ def build_project(
                     print("✓")
                 else:
                     print(f"✗ {result.error}")
+
+    # Include original Spork sources and optional Python facade/type files.
+    copy_source_files(source_roots, out_dir)
 
     # Generate pyproject.toml
     generate_pyproject_toml(out_dir, project_root)

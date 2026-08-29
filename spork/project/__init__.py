@@ -28,6 +28,7 @@ from spork.project.build import (
     ProjectBuildResult,
     build_project,
     compile_module,
+    copy_source_files,
     discover_spork_files,
     generate_pyproject_toml,
     get_source_roots,
@@ -35,6 +36,7 @@ from spork.project.build import (
     path_to_module_name,
 )
 from spork.project.config import (
+    DEFAULT_REQUIRES_PYTHON,
     DEFAULT_SOURCE_PATHS,
     DEFAULT_TEST_PATHS,
     PROJECT_FILENAME,
@@ -69,6 +71,7 @@ __all__ = [
     "BuildResult",
     "ProjectBuildResult",
     "compile_module",
+    "copy_source_files",
     "discover_spork_files",
     "get_source_roots",
     "path_to_module_name",
@@ -83,6 +86,7 @@ __all__ = [
     "find_project_root",
     "spork_to_python",
     "PROJECT_FILENAME",
+    "DEFAULT_REQUIRES_PYTHON",
     "DEFAULT_SOURCE_PATHS",
     "DEFAULT_TEST_PATHS",
     # Manager

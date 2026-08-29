@@ -8,6 +8,7 @@ This guide covers `spork.it`, project-aware commands, dependency environments, c
 spork new hello-spork
 cd hello-spork
 spork sync
+spork test
 spork run
 ```
 
@@ -19,6 +20,9 @@ hello-spork/
 ├── src/
 │   └── hello_spork/
 │       └── core.spork
+├── tests/
+│   └── hello_spork/
+│       └── core_test.spork
 ├── .gitignore
 └── README.md
 ```
@@ -35,7 +39,10 @@ A manifest is a Spork map containing project metadata and tooling settings:
 {:name "hello-spork"
  :version "0.1.0"
  :description "A small Spork application"
+ :requires-python ">=3.10"
+ :spork-version ">=0.3.3,<0.4"
  :dependencies ["httpx>=0.27" "rich"]
+ :dev-dependencies ["pytest>=8"]
  :source-paths ["src"]
  :test-paths ["tests"]
  :main "hello-spork.core:main"}
@@ -48,10 +55,19 @@ Paths are relative to the directory containing `spork.it`.
 | `:name` | yes | — | Project and distribution name. |
 | `:version` | yes | — | Project version string. |
 | `:description` | no | none | Distribution description. |
-| `:dependencies` | no | `[]` | Package requirements accepted by `pip`. |
+| `:requires-python` | no | `">=3.10"` | Python compatibility written to package metadata. |
+| `:spork-version` | no | build version | Compatible `spork-lang` version specifier for built distributions. |
+| `:dependencies` | no | `[]` | Runtime package requirements accepted by `pip`. |
+| `:dev-dependencies` | no | `[]` | Local tools installed by `spork sync --dev`. |
+| `:optional-dependencies` | no | `{}` | Named Python package extras, such as `{:test ["pytest>=8"]}`. |
 | `:source-paths` | no | `["src"]` | Directories searched for Spork namespaces and build inputs. |
-| `:test-paths` | no | `["tests"]` | Declares test source locations; no project test command consumes this setting yet. |
+| `:test-paths` | no | `["tests"]` | Directories searched by `spork test`. |
 | `:main` | no | none | Entry point used by `spork run`, in `namespace:function` form. |
+| `:readme` | no | `README.md` if present | README included in distribution metadata. |
+| `:license` / `:license-file` | no | none / detected `LICENSE*` | SPDX license expression and license file. |
+| `:authors` | no | `[]` | Author maps containing `:name` and/or `:email`. |
+| `:keywords` / `:classifiers` | no | `[]` | PyPI search terms and trove classifiers. |
+| `:urls` | no | `{}` | Labeled project links included in package metadata. |
 
 Unknown keys are preserved by the configuration loader but are not interpreted by the current project commands.
 
@@ -70,7 +86,13 @@ After changing dependencies, run:
 spork sync
 ```
 
-This creates an isolated `.venv/` when needed and installs the dependencies and the Spork runtime. An existing environment is not automatically resynchronized on every `spork run`.
+This creates an isolated `.venv/` when needed and installs the dependencies and the Spork runtime. Include development tools when working on the project with:
+
+```bash
+spork sync --dev
+```
+
+An existing environment is not automatically resynchronized on every `spork run`.
 
 ### Source paths and namespaces
 
@@ -132,6 +154,7 @@ spork run --main other.namespace:start one two
 | `spork repl` | Starts a REPL with project source paths and `.venv` packages available. Creates the environment if it is missing. |
 | `spork sync` | Creates `.venv` and installs the manifest dependencies and Spork runtime. |
 | `spork run [args...]` | Loads and calls the configured entry point. Creates the environment if it is missing. |
+| `spork test` | Runs `test_*.spork`/`*_test.spork`, builds the project, then runs Python `test_*.py` files with pytest. |
 | `spork build` | Compiles all `.spork` files under `:source-paths` into `.spork-out/`. |
 | `spork dist` | Builds compiled output, then creates a wheel and source distribution in `dist/`. |
 | `spork clean` | Removes `.venv/`. |
@@ -139,7 +162,7 @@ spork run --main other.namespace:start one two
 | `spork lsp` | Starts the Language Server Protocol server on standard input/output. |
 | `spork version` | Prints the Spork, Python, and platform versions. |
 
-Use `spork <command> --help` for command-specific options.
+Use `spork <command> --help` for command-specific options. Install development dependencies before testing with `spork sync --dev`; `spork test --spork-only` and `spork test --python-only` select one test kind.
 
 ## Build output
 
@@ -155,10 +178,11 @@ The default output is `.spork-out/`. Each source module produces Python source p
 └── hello_spork/
     ├── __init__.py
     ├── core.py
+    ├── core.spork
     └── core.spork.map.json
 ```
 
-The generated Python is useful for inspection and Python tooling. Runtime tracebacks still refer to the original `.spork` source locations.
+The generated Python initializes the Spork runtime and lowers project `:require` clauses to normal Python imports, so it can be imported without the Spork CLI. Original `.spork` files are copied beside it for source inspection and for Spork consumers of an installed package. Hand-written `.py`, `.pyi`, and `py.typed` files under source roots are also copied; use these for thin Python facades and typing support.
 
 Choose another output directory with `spork build --out-dir PATH`.
 
@@ -168,7 +192,7 @@ Choose another output directory with `spork build --out-dir PATH`.
 spork dist --clean
 ```
 
-By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The generated package metadata includes the current `spork-lang` version and the dependencies from `spork.it`.
+By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The generated package metadata includes the configured Spork compatibility range, runtime dependencies, optional extras, README, license, authors, classifiers, and project URLs from `spork.it`. `--clean` removes stale build and distribution output before rebuilding.
 
 Useful variants:
 
@@ -177,6 +201,28 @@ spork dist --wheel-only
 spork dist --sdist-only
 spork dist --no-build       # reuse existing compiled output
 spork dist --dist-dir artifacts
+```
+
+### Consuming a published Spork library
+
+Add the normal PyPI requirement to another project's manifest:
+
+```clojure
+:dependencies ["my-spork-library>=1,<2"]
+```
+
+After `spork sync`, packaged Spork source is discovered directly from the project's site-packages and can be required normally:
+
+<!-- verify-docs: skip=external-package -->
+```clojure
+(ns my.app
+  (:require [my-spork-library.core :as library]))
+```
+
+The same wheel exposes its compiled modules to Python using normalized package names:
+
+```pycon
+>>> from my_spork_library.core import public_function
 ```
 
 ## Standalone commands

@@ -180,7 +180,7 @@ class ProjectManager:
 
         Args:
             include_runtime: Whether to install spork-runtime (default: True)
-            dev: Whether to install dev dependencies (for future use)
+            dev: Whether to install :dev-dependencies from spork.it
             quiet: Suppress pip output
 
         Returns:
@@ -190,6 +190,8 @@ class ProjectManager:
         self.ensure_venv()
 
         dependencies = list(self.config.dependencies)
+        if dev:
+            dependencies.extend(self.config.dev_dependencies)
 
         # Add spork to dependencies so the project can run independently
         spork_installed = False
@@ -478,7 +480,9 @@ class ProjectManager:
         return True
 
 
-def sync_project(config: Optional[ProjectConfig] = None) -> bool:
+def sync_project(
+    config: Optional[ProjectConfig] = None, *, dev: bool = False
+) -> bool:
     """
     Convenience function to sync a project's dependencies.
 
@@ -486,6 +490,7 @@ def sync_project(config: Optional[ProjectConfig] = None) -> bool:
 
     Args:
         config: Optional ProjectConfig. If None, loads from current directory.
+        dev: Also install development dependencies.
 
     Returns:
         True if sync was successful.
@@ -496,4 +501,4 @@ def sync_project(config: Optional[ProjectConfig] = None) -> bool:
         config = load_config()
 
     manager = ProjectManager(config)
-    return manager.install_dependencies()
+    return manager.install_dependencies(dev=dev)

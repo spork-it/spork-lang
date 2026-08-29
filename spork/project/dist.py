@@ -10,6 +10,7 @@ Output structure:
         <project>-<version>.tar.gz
 """
 
+import json
 import os
 import shutil
 import sys
@@ -34,55 +35,125 @@ class DistResult:
     error: Optional[str] = None
 
 
+def _toml_string(value: str) -> str:
+    """Return a JSON-escaped string, which is also a TOML basic string."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_array(values: list[str], indent: str = "    ") -> list[str]:
+    if not values:
+        return ["[]"]
+    return ["[", *(f"{indent}{_toml_string(value)}," for value in values), "]"]
+
+
+def stage_project_metadata(
+    out_dir: Path, project_root: Path, config: ProjectConfig
+) -> Optional[str]:
+    """Copy README and license files into the isolated build tree."""
+    readme_name: Optional[str] = None
+    readme = config.readme
+    if readme is None and (project_root / "README.md").is_file():
+        readme = "README.md"
+    if readme:
+        source = project_root / readme
+        if not source.is_file():
+            raise FileNotFoundError(f"Configured :readme does not exist: {source}")
+        readme_name = source.name
+        shutil.copy2(source, out_dir / readme_name)
+
+    license_paths: list[Path] = []
+    if config.license_file:
+        license_paths.append(project_root / config.license_file)
+    else:
+        license_paths.extend(
+            path
+            for path in sorted(project_root.glob("LICENSE*"))
+            if path.is_file()
+        )
+    for source in license_paths:
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"Configured :license-file does not exist: {source}"
+            )
+        shutil.copy2(source, out_dir / source.name)
+
+    return readme_name
+
+
 def generate_dist_pyproject(
     out_dir: Path,
     config: ProjectConfig,
+    packages: list[str],
+    readme_name: Optional[str] = None,
 ) -> Path:
-    """
-    Generate a pyproject.toml suitable for building a wheel.
-
-    This creates a more complete pyproject.toml than the one used
-    for linting, with proper metadata for distribution.
-    """
-    # Normalize project name for PyPI (hyphens to underscores for package name)
-    package_name = config.name.replace("-", "_")
-
-    # Get description
+    """Generate escaped, PyPI-ready metadata for the staged project."""
     description = config.description or f"Spork project: {config.name}"
+    spork_requirement = config.spork_version or f"=={spork.__version__}"
+    if not spork_requirement.startswith(("<", ">", "=", "!", "~")):
+        raise ValueError(
+            ":spork-version must be a version specifier such as "
+            '\">=0.3.3,<0.4\"'
+        )
+    all_dependencies = [f"spork-lang{spork_requirement}", *config.dependencies]
 
-    # Build dependencies list - always include spork-lang runtime pinned to current version
-    spork_version = spork.__version__
-    all_deps = [f"spork-lang=={spork_version}"]
-    if config.dependencies:
-        all_deps.extend(config.dependencies)
-    deps_list = ",\n    ".join(f'"{dep}"' for dep in all_deps)
-    deps_str = f"""
-dependencies = [
-    {deps_list}
-]"""
+    lines = [
+        "[build-system]",
+        'requires = ["setuptools>=77"]',
+        'build-backend = "setuptools.build_meta"',
+        "",
+        "[project]",
+        f"name = {_toml_string(config.name)}",
+        f"version = {_toml_string(config.version)}",
+        f"description = {_toml_string(description)}",
+        f"requires-python = {_toml_string(config.requires_python)}",
+    ]
+    if readme_name:
+        lines.append(f"readme = {_toml_string(readme_name)}")
+    if config.license:
+        lines.append(f"license = {_toml_string(config.license)}")
+    if config.authors:
+        author_values = []
+        for author in config.authors:
+            fields = ", ".join(
+                f"{key} = {_toml_string(author[key])}"
+                for key in ("name", "email")
+                if key in author
+            )
+            author_values.append(f"{{ {fields} }}")
+        lines.append(f"authors = [{', '.join(author_values)}]")
+    if config.keywords:
+        lines.append("keywords = " + "\n".join(_toml_array(config.keywords)))
+    if config.classifiers:
+        lines.append("classifiers = " + "\n".join(_toml_array(config.classifiers)))
+    lines.append("dependencies = " + "\n".join(_toml_array(all_dependencies)))
 
-    content = f'''[build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+    if config.optional_dependencies:
+        lines.extend(["", "[project.optional-dependencies]"])
+        for extra, requirements in config.optional_dependencies.items():
+            lines.append(
+                f"{_toml_string(extra)} = "
+                + "\n".join(_toml_array(requirements))
+            )
+    if config.urls:
+        lines.extend(["", "[project.urls]"])
+        for label, url in config.urls.items():
+            lines.append(f"{_toml_string(label)} = {_toml_string(url)}")
 
-[project]
-name = "{config.name}"
-version = "{config.version}"
-description = "{description}"
-requires-python = ">=3.10"
-{deps_str}
-
-[tool.setuptools]
-packages = ["{package_name}"]
-
-[tool.setuptools.package-data]
-"*" = ["*.spork.map.json"]
-'''
+    lines.extend(
+        [
+            "",
+            "[tool.setuptools]",
+            "packages = " + "\n".join(_toml_array(packages)),
+            "include-package-data = false",
+            "",
+            "[tool.setuptools.package-data]",
+            '"*" = ["*.spork", "*.spork.map.json", "*.pyi", "py.typed"]',
+            "",
+        ]
+    )
 
     pyproject_path = out_dir / "pyproject.toml"
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
+    pyproject_path.write_text("\n".join(lines), encoding="utf-8")
     return pyproject_path
 
 
@@ -100,16 +171,16 @@ def discover_packages(out_dir: Path) -> list[str]:
 
     for root, dirs, files in os.walk(out_dir):
         # Skip hidden directories, __pycache__, and build artifacts
-        dirs[:] = [
+        dirs[:] = sorted(
             d for d in dirs if not d.startswith(".") and d not in SKIP_PACKAGE_DIRS
-        ]
+        )
 
         if "__init__.py" in files:
             rel_path = Path(root).relative_to(out_dir)
             package_name = str(rel_path).replace(os.sep, ".")
             packages.append(package_name)
 
-    return packages
+    return sorted(packages)
 
 
 def generate_setup_py(out_dir: Path, packages: list[str]) -> Path:
@@ -200,6 +271,17 @@ def build_sdist(
         return None
 
 
+def _clean_staging_artifacts(out_dir: Path) -> None:
+    for directory in (out_dir / "build", out_dir / "dist"):
+        if directory.is_dir():
+            shutil.rmtree(directory)
+    for egg_info in out_dir.glob("*.egg-info"):
+        if egg_info.is_dir():
+            shutil.rmtree(egg_info)
+        else:
+            egg_info.unlink()
+
+
 def create_dist(
     out_dir: Optional[Path] = None,
     dist_dir: Optional[Path] = None,
@@ -238,6 +320,8 @@ def create_dist(
                 error="No spork.it found. Are you in a Spork project?",
             )
 
+    project_root = Path(project_root).resolve()
+
     # Load project config
     try:
         config = ProjectConfig.load(str(project_root))
@@ -250,12 +334,18 @@ def create_dist(
             error=f"Failed to load project config: {e}",
         )
 
-    # Determine directories
+    # Determine project-relative directories consistently from any cwd.
     if out_dir is None:
         out_dir = project_root / ".spork-out"
+    elif not out_dir.is_absolute():
+        out_dir = project_root / out_dir
+    out_dir = out_dir.resolve()
 
     if dist_dir is None:
         dist_dir = project_root / "dist"
+    elif not dist_dir.is_absolute():
+        dist_dir = project_root / dist_dir
+    dist_dir = dist_dir.resolve()
 
     # Build first if requested
     if build_first:
@@ -264,7 +354,7 @@ def create_dist(
         build_result = build_project(
             out_dir=out_dir,
             project_root=project_root,
-            clean=False,
+            clean=clean,
             verbose=verbose,
         )
         if not build_result.success:
@@ -295,18 +385,35 @@ def create_dist(
     # Create dist directory
     dist_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate proper pyproject.toml for distribution
-    if verbose:
-        print("Generating distribution metadata...")
-    generate_dist_pyproject(out_dir, config)
+    # Remove artifacts created inside the staging tree by previous setuptools
+    # runs even when source compilation is intentionally reused.
+    _clean_staging_artifacts(out_dir)
 
-    # Discover packages and update pyproject.toml if needed
     packages = discover_packages(out_dir)
+    if not packages:
+        return DistResult(
+            wheel_path=None,
+            sdist_path=None,
+            dist_dir=dist_dir,
+            success=False,
+            error="No Python packages were found in compiled output",
+        )
     if verbose:
         print(f"Found packages: {packages}")
+        print("Generating distribution metadata...")
 
-    # Generate setup.py for compatibility
-    generate_setup_py(out_dir, packages)
+    try:
+        readme_name = stage_project_metadata(out_dir, project_root, config)
+        generate_dist_pyproject(out_dir, config, packages, readme_name)
+        generate_setup_py(out_dir, packages)
+    except Exception as exc:
+        return DistResult(
+            wheel_path=None,
+            sdist_path=None,
+            dist_dir=dist_dir,
+            success=False,
+            error=f"Failed to generate distribution metadata: {exc}",
+        )
 
     wheel_path = None
     sdist_path = None

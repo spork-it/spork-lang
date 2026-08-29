@@ -7,6 +7,7 @@ This module provides the main CLI entry point for Spork with subcommand support:
 - spork new <name>    Create a new Spork project
 - spork sync          Sync project dependencies
 - spork run           Run the project's main entry point
+- spork test          Run project Spork and Python tests
 - spork build         Build project to .spork-out/ with Python + source maps
 - spork <file>        Execute a Spork file directly
 
@@ -128,7 +129,9 @@ def cmd_sync(args: argparse.Namespace) -> int:
     manager = ProjectManager(config)
 
     try:
-        success = manager.install_dependencies(quiet=args.quiet)
+        success = manager.install_dependencies(
+            dev=getattr(args, "dev", False), quiet=args.quiet
+        )
         return 0 if success else 1
     except Exception as e:
         print(f"Error syncing dependencies: {e}", file=sys.stderr)
@@ -260,6 +263,110 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         return 1
+
+
+def cmd_test(args: argparse.Namespace) -> int:
+    """Run declared Spork tests and pytest-based Python tests."""
+    import subprocess
+    from pathlib import Path
+
+    from spork.project import ProjectConfig, ProjectManager, build_project
+
+    try:
+        config = ProjectConfig.load()
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    manager = ProjectManager(config)
+    if not manager.has_venv():
+        print("Project venv not found, syncing development dependencies...")
+        if not manager.install_dependencies(dev=True):
+            return 1
+    manager.inject_venv_paths()
+
+    test_roots = [
+        Path(path)
+        for path in config.get_absolute_test_paths()
+        if Path(path).is_dir()
+    ]
+    spork_tests = sorted(
+        path
+        for root in test_roots
+        for path in root.rglob("*.spork")
+        if path.name.startswith("test_") or path.stem.endswith("_test")
+    )
+    python_tests = sorted(
+        path
+        for root in test_roots
+        for path in root.rglob("test_*.py")
+    )
+
+    run_spork = not getattr(args, "python_only", False)
+    run_python = not getattr(args, "spork_only", False)
+    if not (spork_tests if run_spork else []) and not (
+        python_tests if run_python else []
+    ):
+        print("No matching project tests found.", file=sys.stderr)
+        return 1
+
+    env = os.environ.copy()
+    source_paths = [
+        *config.get_absolute_source_paths(),
+        *config.get_absolute_test_paths(),
+    ]
+    existing_spork_path = env.get("SPORK_PATH")
+    if existing_spork_path:
+        source_paths.append(existing_spork_path)
+    env["SPORK_PATH"] = os.pathsep.join(source_paths)
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+
+    failed = 0
+    if run_spork:
+        for test_path in spork_tests:
+            relative = test_path.relative_to(config.project_root)
+            print(f"=== {relative} ===", flush=True)
+            completed = subprocess.run(
+                [config.venv_python, "-m", "spork", str(test_path)],
+                cwd=config.project_root,
+                env=env,
+                check=False,
+            )
+            if completed.returncode:
+                failed += 1
+
+    if run_python and python_tests:
+        build_result = build_project(
+            project_root=Path(config.project_root), clean=True, verbose=False
+        )
+        if not build_result.success:
+            print("Project build failed before Python tests.", file=sys.stderr)
+            return 1
+        python_env = env.copy()
+        existing_python_path = python_env.get("PYTHONPATH")
+        python_paths = [str(build_result.out_dir)]
+        if existing_python_path:
+            python_paths.append(existing_python_path)
+        python_env["PYTHONPATH"] = os.pathsep.join(python_paths)
+        completed = subprocess.run(
+            [
+                config.venv_python,
+                "-m",
+                "pytest",
+                *(str(path) for path in test_roots),
+            ],
+            cwd=config.project_root,
+            env=python_env,
+            check=False,
+        )
+        if completed.returncode:
+            failed += 1
+
+    if failed:
+        print(f"\nTest run failed: {failed} test command(s) failed")
+        return 1
+    print("\nAll project tests passed")
+    return 0
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -513,7 +620,18 @@ def cmd_nrepl_client(host: str, port: int) -> int:
 
 
 # Known subcommands - used to differentiate from file arguments
-SUBCOMMANDS = {"repl", "new", "sync", "run", "build", "dist", "clean", "lsp", "version"}
+SUBCOMMANDS = {
+    "repl",
+    "new",
+    "sync",
+    "run",
+    "test",
+    "build",
+    "dist",
+    "clean",
+    "lsp",
+    "version",
+}
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -605,6 +723,11 @@ examples:
     sync_parser.add_argument(
         "--quiet", "-q", action="store_true", help="Suppress pip output"
     )
+    sync_parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Also install :dev-dependencies from spork.it",
+    )
 
     # run subcommand
     run_parser = subparsers.add_parser("run", help="Run the project's main function")
@@ -617,6 +740,18 @@ examples:
         "args",
         nargs="*",
         help="Arguments to pass to the main function",
+    )
+
+    # test subcommand
+    test_parser = subparsers.add_parser(
+        "test", help="Run project Spork tests and Python tests with pytest"
+    )
+    test_group = test_parser.add_mutually_exclusive_group()
+    test_group.add_argument(
+        "--spork-only", action="store_true", help="Only run .spork tests"
+    )
+    test_group.add_argument(
+        "--python-only", action="store_true", help="Only run Python tests"
     )
 
     # build subcommand
@@ -731,6 +866,8 @@ def _main(argv: Optional[list[str]] = None) -> int:
         return cmd_sync(args)
     elif args.subcommand == "run":
         return cmd_run(args)
+    elif args.subcommand == "test":
+        return cmd_test(args)
     elif args.subcommand == "build":
         return cmd_build(args)
     elif args.subcommand == "dist":

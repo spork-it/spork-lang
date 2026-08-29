@@ -10,6 +10,9 @@ The scaffolding creates:
     ├── src/
     │   └── name/
     │       └── core.spork # Hello world entry point
+    ├── tests/
+    │   └── name/
+    │       └── core_test.spork
     ├── .gitignore
     └── README.md
 """
@@ -77,6 +80,14 @@ def name_to_dir_segment(name: str) -> str:
     return normalize_project_name(name).replace("-", "_")
 
 
+def _spork_compatibility_requirement() -> str:
+    """Return a compatible-minor requirement for the running toolchain."""
+    import spork
+
+    major, minor, *_ = (int(part) for part in spork.__version__.split(".")[:2])
+    return f">={spork.__version__},<{major}.{minor + 1}"
+
+
 def generate_spork_it(name: str, version: str = "0.1.0", description: str = "") -> str:
     """
     Generate the content for a spork.it project manifest file.
@@ -90,6 +101,7 @@ def generate_spork_it(name: str, version: str = "0.1.0", description: str = "") 
         The spork.it file content as a string
     """
     ns_name = name_to_ns_segment(name)
+    spork_requirement = _spork_compatibility_requirement()
 
     desc_line = ""
     if description:
@@ -100,12 +112,16 @@ def generate_spork_it(name: str, version: str = "0.1.0", description: str = "") 
 
 {{:name "{name}"
  :version "{version}"{desc_line}
+ :requires-python ">=3.10"
+ :spork-version "{spork_requirement}"
 
  ;; Dependencies (pip-style specifications)
  :dependencies []
+ :dev-dependencies []
 
  ;; Source code locations
  :source-paths ["src"]
+ :test-paths ["tests"]
 
  ;; Entry point for 'spork run'
  :main "{ns_name}.core:main"}}
@@ -127,9 +143,13 @@ def generate_core_spork(name: str) -> str:
     return f""";; {name} - Core module
 (ns {ns_name}.core)
 
+(defn greet [name]
+  "Return a friendly greeting."
+  (+ "Hello, " name "!"))
+
 (defn ^int main [& args]
   "Main entry point for the application."
-  (print (+ "Welcome to " "{name}" "!"))
+  (print (greet "{name}"))
   0)
 """
 
@@ -152,13 +172,15 @@ def generate_test_spork(name: str) -> str:
 
 (defn test-greet []
   "Test the greet function."
-  (assert (= (core/greet "Spork") "Hello, Spork!")))
+  (assert (= (core.greet "Spork") "Hello, Spork!")))
 
 (defn run-tests []
   "Run all tests."
   (print "Running tests...")
   (test-greet)
   (print "All tests passed!"))
+
+(run-tests)
 """
 
 
@@ -234,8 +256,8 @@ def generate_readme(name: str, description: str = "") -> str:
 ### Installation
 
 ```bash
-# Install dependencies
-spork sync
+# Install runtime and development dependencies
+spork sync --dev
 ```
 
 ### Usage
@@ -246,6 +268,9 @@ spork repl
 
 # Run the main function
 spork run
+
+# Run project tests
+spork test
 
 # Execute a specific file
 spork src/{name_to_dir_segment(name)}/core.spork
@@ -259,6 +284,9 @@ spork src/{name_to_dir_segment(name)}/core.spork
 ├── src/
 │   └── {name_to_dir_segment(name)}/
 │       └── core.spork
+├── tests/
+│   └── {name_to_dir_segment(name)}/
+│       └── core_test.spork
 ├── .gitignore
 └── README.md
 ```
@@ -317,9 +345,8 @@ def create_project(
     src_dir = os.path.join(project_path, "src", source_dir_name)
     os.makedirs(src_dir)
 
-    # TODO: Re-add once we have testing infrastructure
-    # tests_dir = os.path.join(project_path, "tests", dir_name)
-    # os.makedirs(tests_dir)
+    tests_dir = os.path.join(project_path, "tests", source_dir_name)
+    os.makedirs(tests_dir)
 
     # Write spork.it
     spork_it_path = os.path.join(project_path, "spork.it")
@@ -331,11 +358,10 @@ def create_project(
     with open(core_path, "w", encoding="utf-8") as f:
         f.write(generate_core_spork(normalized_name))
 
-    # TODO: Re-add once we have testing infrastructure
-    # Write core_test.spork
-    # test_path = os.path.join(tests_dir, "core_test.spork")
-    # with open(test_path, "w", encoding="utf-8") as f:
-    #     f.write(generate_test_spork(normalized_name))
+    # Write a runnable project test.
+    test_path = os.path.join(tests_dir, "core_test.spork")
+    with open(test_path, "w", encoding="utf-8") as f:
+        f.write(generate_test_spork(normalized_name))
 
     # Write .gitignore
     gitignore_path = os.path.join(project_path, ".gitignore")

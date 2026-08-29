@@ -170,11 +170,16 @@ class SporkFinder(importlib.abc.MetaPathFinder):
 
 
 def install_import_hook():
-    """Install the .spork file import hook."""
+    """Install the .spork file import hook after standard Python finders.
+
+    Distributions intentionally ship ``module.py`` and ``module.spork`` side by
+    side. Python imports must prefer compiled modules; the Spork finder is a
+    fallback for source-only modules.
+    """
     for finder in sys.meta_path:
         if isinstance(finder, SporkFinder):
             return
-    sys.meta_path.insert(0, SporkFinder())
+    sys.meta_path.append(SporkFinder())
 
 
 # =============================================================================
@@ -182,22 +187,20 @@ def install_import_hook():
 # =============================================================================
 
 
-def compile_file_to_python(src: str, src_path: str) -> tuple[str, dict[str, Any]]:
-    """
-    Compile Spork source to Python source code and generate source map.
+def compile_file_to_python(
+    src: str, src_path: str, *, aot: bool = True
+) -> tuple[str, dict[str, Any]]:
+    """Compile Spork source to importable Python and a source map.
 
-    Args:
-        src: The Spork source code
-        src_path: Path to the source file (for error messages and source map)
-
-    Returns:
-        (python_source, source_map) tuple where source_map is a dict
-        containing mapping information
+    AOT output initializes its runtime globals and lowers project ``:require``
+    clauses to ordinary Python imports. This keeps compiled packages usable by
+    normal Python import machinery and avoids loading a second copy of a type
+    through the Spork namespace registry.
     """
     from spork.compiler.codegen import (
+        compilation_context,
         compile_defn,
         compile_module,
-        get_compile_context,
         normalize_name,
     )
     from spork.compiler.macros import (
@@ -210,35 +213,73 @@ def compile_file_to_python(src: str, src_path: str) -> tuple[str, dict[str, Any]
     )
     from spork.compiler.reader import read_str
 
-    # Set up compilation context with filename
-    ctx = get_compile_context()
-    ctx.current_file = src_path if src_path != "<string>" else None
+    with compilation_context(aot_imports=aot) as ctx:
+        ctx.current_file = src_path if src_path != "<string>" else None
+        forms = read_str(src)
+        local_macro_env = dict(MACRO_ENV)
+        forms = _process_defmacros_base(
+            forms, local_macro_env, compile_defn, normalize_name
+        )
+        forms = process_ns_macros(forms, local_macro_env, ctx.current_file)
+        forms = macroexpand_all(forms, local_macro_env)
+        mod = compile_module(forms, filename=src_path)
 
-    # Phase 1: Read
-    forms = read_str(src)
+    if aot:
+        public_names = _collect_public_names(mod)
+        bootstrap = ast.parse(
+            "from spork.runtime import setup_runtime_env as __spork_setup_runtime_env\n"
+            "__spork_setup_runtime_env(globals())\n"
+            "del __spork_setup_runtime_env\n"
+        )
+        mod.body = bootstrap.body + mod.body
+        mod.body.append(
+            ast.Assign(
+                targets=[ast.Name(id="__all__", ctx=ast.Store())],
+                value=ast.List(
+                    elts=[ast.Constant(value=name) for name in public_names],
+                    ctx=ast.Load(),
+                ),
+            )
+        )
+        ast.fix_missing_locations(mod)
 
-    # Process defmacros
-    local_macro_env = dict(MACRO_ENV)
-    forms = _process_defmacros_base(
-        forms, local_macro_env, compile_defn, normalize_name
-    )
-
-    # Process ns :require clauses to load macros at compile-time
-    forms = process_ns_macros(forms, local_macro_env, ctx.current_file)
-
-    # Phase 2: Macroexpand
-    forms = macroexpand_all(forms, local_macro_env)
-
-    # Phase 3 & 4: Analyze & Lower to AST
-    mod = compile_module(forms, filename=src_path)
-
-    # Generate Python source
     python_source = ast.unparse(mod)
-
-    # Generate source map from AST node locations
     source_map = generate_source_map(mod, src_path)
-
     return python_source, source_map
+
+
+def _collect_public_names(mod: ast.Module) -> list[str]:
+    """Collect names intentionally defined or imported by a compiled module."""
+    names: list[str] = []
+
+    def add(name: Optional[str]) -> None:
+        if name and not name.startswith("_") and name not in names:
+            names.append(name)
+
+    def add_target(target: ast.expr) -> None:
+        if isinstance(target, ast.Name):
+            add(target.id)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for element in target.elts:
+                add_target(element)
+
+    for node in mod.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            add(node.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                add_target(target)
+        elif isinstance(node, ast.AnnAssign):
+            add_target(node.target)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name != "*":
+                    add(alias.asname or alias.name)
+
+    return names
 
 
 def generate_source_map(mod: ast.Module, spork_file: str) -> dict[str, Any]:
@@ -287,7 +328,9 @@ def generate_source_map(mod: ast.Module, spork_file: str) -> dict[str, Any]:
     }
 
 
-def compile_path_to_python(path: Path) -> tuple[str, dict[str, Any]]:
+def compile_path_to_python(
+    path: Path, *, aot: bool = True
+) -> tuple[str, dict[str, Any]]:
     """
     Compile a .spork file to Python source and source map.
 
@@ -299,4 +342,4 @@ def compile_path_to_python(path: Path) -> tuple[str, dict[str, Any]]:
     """
     with open(path, encoding="utf-8") as f:
         src = f.read()
-    return compile_file_to_python(src, str(path))
+    return compile_file_to_python(src, str(path), aot=aot)

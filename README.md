@@ -126,6 +126,7 @@ A `spork.it` manifest defines metadata, dependencies, source paths, and the entr
 | `spork repl` | Start a project-aware REPL |
 | `spork sync` | Create the project environment and install dependencies |
 | `spork run` | Run the configured entry point |
+| `spork test` | Run declared Spork and Python tests |
 | `spork build` | Compile sources to Python in `.spork-out/` |
 | `spork dist` | Build a wheel and source distribution |
 | `spork lsp` | Start the language server |

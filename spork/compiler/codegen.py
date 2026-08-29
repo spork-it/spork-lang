@@ -7,6 +7,7 @@ into Python AST nodes that can be compiled and executed.
 
 import ast
 import os
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Optional, cast
@@ -327,6 +328,10 @@ class CompilationContext:
         self.require_stmts: list[ast.stmt] = []  # Import statements from :require
         self.scope_stack: list[set] = []
         self.nonlocal_stack: list[set] = []
+        # AOT builds lower Spork :require clauses to ordinary Python imports.
+        # Runtime compilation keeps using the namespace registry so macros and
+        # source execution retain their existing semantics.
+        self.aot_imports: bool = False
 
     def add_function(self, func_def):
         """Add a nested function definition to be injected later."""
@@ -435,6 +440,23 @@ def get_compile_context() -> CompilationContext:
         ctx = CompilationContext()
         _compile_context_var.set(ctx)
     return ctx
+
+
+@contextmanager
+def compilation_context(*, aot_imports: bool = False):
+    """Use an isolated compilation context for one compilation operation.
+
+    Namespace loading can recursively compile other files. Isolating contexts
+    prevents a dependency's namespace, aliases, and target mode from leaking
+    into the module that requested it.
+    """
+    ctx = CompilationContext()
+    ctx.aot_imports = aot_imports
+    token = _compile_context_var.set(ctx)
+    try:
+        yield ctx
+    finally:
+        _compile_context_var.reset(token)
 
 
 def is_keyword(x, name=None):
@@ -752,8 +774,17 @@ def compile_module(forms, filename="<string>"):
     Phase 3 & 4: Analyze and Lower
     Compile forms into a Python AST module.
     """
-    # Reset the compilation context for this compilation
-    _compile_context_var.set(CompilationContext())
+    # Reset per-module state without replacing the active context. Build and
+    # namespace loaders use isolated contexts to carry the filename and target
+    # mode safely across recursive macro loading.
+    ctx = get_compile_context()
+    ctx.nested_functions.clear()
+    ctx.current_ns = None
+    ctx.ns_aliases.clear()
+    ctx.ns_refers.clear()
+    ctx.require_stmts.clear()
+    ctx.scope_stack.clear()
+    ctx.nonlocal_stack.clear()
 
     body: list[ast.stmt] = []
     for form in forms:
@@ -831,6 +862,66 @@ def compile_ns(args, form_loc=None):
                     raise SyntaxError(str(e)) from e
 
                 if resolve_type == "spork":
+                    # AOT output is imported by Python without the Spork
+                    # namespace registry. Lower project/package dependencies to
+                    # normal Python imports so a class has one identity no
+                    # matter which compiled module references it. std.* stays
+                    # source-loaded because the standard library is distributed
+                    # as Spork source by spork-lang.
+                    if ctx.aot_imports and not req_ns.startswith("std."):
+                        python_module = ".".join(
+                            normalize_name(segment) for segment in req_ns.split(".")
+                        )
+                        ns_info = get_namespace(req_ns)
+                        ns_macros = ns_info.macros if ns_info else {}
+
+                        if alias:
+                            import_stmt = ast.Import(
+                                names=[
+                                    ast.alias(
+                                        name=python_module,
+                                        asname=normalize_name(alias),
+                                    )
+                                ]
+                            )
+                            set_location(import_stmt, form_loc)
+                            stmts.append(import_stmt)
+                            ctx.ns_aliases[alias] = req_ns
+
+                        if refer == ":all":
+                            import_stmt = ast.ImportFrom(
+                                module=python_module,
+                                names=[ast.alias(name="*", asname=None)],
+                                level=0,
+                            )
+                            set_location(import_stmt, form_loc)
+                            stmts.append(import_stmt)
+                        elif refer:
+                            names = []
+                            for sym in refer:
+                                if sym in ns_macros:
+                                    continue
+                                ctx.ns_refers[sym] = req_ns
+                                names.append(
+                                    ast.alias(name=normalize_name(sym), asname=None)
+                                )
+                            if names:
+                                import_stmt = ast.ImportFrom(
+                                    module=python_module,
+                                    names=names,
+                                    level=0,
+                                )
+                                set_location(import_stmt, form_loc)
+                                stmts.append(import_stmt)
+
+                        if not alias and not refer:
+                            import_stmt = ast.Import(
+                                names=[ast.alias(name=python_module, asname=None)]
+                            )
+                            set_location(import_stmt, form_loc)
+                            stmts.append(import_stmt)
+                        continue
+
                     # Spork namespace - need to load it
                     # Check if already loaded
                     ns_info = get_namespace(req_ns)
@@ -8636,8 +8727,9 @@ def eval_str(src: str, env: Optional[dict[str, Any]] = None):
     if env is None:
         env = {}
     setup_runtime_env(env)
-    code, _ = compile_forms_to_code(src, "<string>")
-    exec(code, env, env)
+    with compilation_context():
+        code, _ = compile_forms_to_code(src, "<string>")
+        exec(code, env, env)
     return env
 
 
@@ -8660,24 +8752,22 @@ def exec_file(path: str, env: Optional[dict[str, Any]] = None):
         }
     setup_runtime_env(env)
 
-    # Set up compilation context with current file
-    ctx = get_compile_context()
-    ctx.current_file = path
+    with compilation_context() as ctx:
+        ctx.current_file = path
+        code, macro_env = compile_forms_to_code(src, path)
+        env["__spork_macros__"] = macro_env
+        exec(code, env, env)
 
-    code, macro_env = compile_forms_to_code(src, path)
-    env["__spork_macros__"] = macro_env
-    exec(code, env, env)
-
-    # Register namespace if this file declared one via (ns ...)
-    if ctx.current_ns:
-        register_namespace(
-            name=ctx.current_ns,
-            file=os.path.abspath(path),
-            env=env,
-            macros=macro_env,
-            refers=ctx.ns_refers,
-            aliases=ctx.ns_aliases,
-        )
+        # Register namespace if this file declared one via (ns ...)
+        if ctx.current_ns:
+            register_namespace(
+                name=ctx.current_ns,
+                file=os.path.abspath(path),
+                env=env,
+                macros=macro_env,
+                refers=ctx.ns_refers,
+                aliases=ctx.ns_aliases,
+            )
 
     return env
 
@@ -8686,13 +8776,13 @@ def export_file(path: str):
     """Convert a Spork source file to Python and output to stdout."""
     with open(path, encoding="utf-8") as f:
         src = f.read()
-    # Use compile_forms_to_code but then unparse the module instead of compiling
-    forms = read_str(src)
-    local_macro_env = dict(MACRO_ENV)
-    forms = process_defmacros(forms, local_macro_env)
-    forms = process_ns_macros(forms, local_macro_env, path)
-    forms = macroexpand_all(forms, local_macro_env)
-    mod = compile_module(forms, filename=path)
-    # Convert AST to Python source code
+    with compilation_context() as ctx:
+        ctx.current_file = path
+        forms = read_str(src)
+        local_macro_env = dict(MACRO_ENV)
+        forms = process_defmacros(forms, local_macro_env)
+        forms = process_ns_macros(forms, local_macro_env, path)
+        forms = macroexpand_all(forms, local_macro_env)
+        mod = compile_module(forms, filename=path)
     python_code = ast.unparse(mod)
     print(python_code)

@@ -275,10 +275,12 @@ def __spork_require__(ns_name: str, current_file: Optional[str] = None) -> None:
 
     # Load the Spork namespace file.
 
-    # Import here to avoid circular imports
-    from spork.compiler.codegen import compile_forms_to_code, get_compile_context
+    # Import here to avoid circular imports. Namespace compilation gets an
+    # isolated context because it can happen recursively while compiling the
+    # requiring module.
+    from spork.compiler.codegen import compilation_context, compile_forms_to_code
 
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         src = f.read()
 
     env: dict[str, Any] = {
@@ -287,23 +289,22 @@ def __spork_require__(ns_name: str, current_file: Optional[str] = None) -> None:
     }
     setup_runtime_env(env)
 
-    # Set up compilation context
-    ctx = get_compile_context()
-    ctx.current_file = path
+    with compilation_context() as ctx:
+        ctx.current_file = path
+        code, macro_env = compile_forms_to_code(src, path)
+        env["__spork_macros__"] = macro_env
+        exec(code, env, env)
 
-    code, macro_env = compile_forms_to_code(src, path)
-    env["__spork_macros__"] = macro_env
-    exec(code, env, env)
-
-    # Register the namespace
-    register_namespace(
-        name=ns_name,
-        file=os.path.abspath(path),
-        env=env,
-        macros=macro_env,
-        refers=ctx.ns_refers,
-        aliases=ctx.ns_aliases,
-    )
+        # Register the namespace while its context is still active so aliases
+        # and referred symbols describe this module rather than its caller.
+        register_namespace(
+            name=ns_name,
+            file=os.path.abspath(path),
+            env=env,
+            macros=macro_env,
+            refers=ctx.ns_refers,
+            aliases=ctx.ns_aliases,
+        )
 
 
 def __spork_ns_env__(ns_name: str):

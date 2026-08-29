@@ -46,6 +46,7 @@ Spork uses the separately released [`spork-pds`](https://github.com/spork-it/spo
 - [Emacs mode](../editors/emacs/)
 - [Neovim support](../editors/nvim/)
 - [Project README](../README.md)
+- [Changelog](../CHANGELOG.md)
 - [Issue tracker](https://github.com/spork-it/spork-lang/issues)
 
 ## Verify the examples

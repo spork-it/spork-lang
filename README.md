@@ -137,6 +137,7 @@ Run `spork --help` for the complete CLI reference.
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md)
 - [Documentation index](docs/README.md)
 - [Language reference](docs/LANG.md)
 - [Standard library reference](docs/STDLIB.md)

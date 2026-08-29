@@ -57,7 +57,7 @@ Homepage = "https://github.com/spork-it/spork-lang"
 Documentation = "https://github.com/spork-it/spork-lang#readme"
 Repository = "https://github.com/spork-it/spork-lang"
 Issues = "https://github.com/spork-it/spork-lang/issues"
-Changelog = "https://github.com/spork-it/spork-lang/releases"
+Changelog = "https://github.com/spork-it/spork-lang/blob/main/CHANGELOG.md"
 
 [project.scripts]
 spork = "spork.cli:main"

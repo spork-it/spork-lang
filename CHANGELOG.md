@@ -6,6 +6,8 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-29
+
 ### Added
 
 - `spork add` and `spork remove` commands for editing runtime dependencies in the nearest parent `spork.it`.
@@ -213,7 +215,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/spork-it/spork-lang/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/spork-it/spork-lang/compare/v0.3.8...v0.4.0
 [0.3.8]: https://github.com/spork-it/spork-lang/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/spork-it/spork-lang/compare/v0.3.6...v0.3.7

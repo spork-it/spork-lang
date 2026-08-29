@@ -425,9 +425,9 @@ def build_project(
 
             if verbose:
                 if result.success:
-                    print("✓")
+                    print("[ok]")
                 else:
-                    print(f"✗ {result.error}")
+                    print(f"[error] {result.error}")
 
     # Include original Spork sources and optional Python facade/type files.
     copy_source_files(source_roots, out_dir)

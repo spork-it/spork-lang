@@ -96,7 +96,7 @@ def cmd_new(args: argparse.Namespace) -> int:
 
     try:
         project_path = create_project(name, path)
-        print(f"✓ Created new Spork project: {project_path}")
+        print(f"[ok] Created new Spork project: {project_path}")
         print()
         print("Next steps:")
         print(f"  cd {os.path.basename(project_path)}")

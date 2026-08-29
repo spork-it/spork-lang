@@ -425,10 +425,10 @@ def create_dist(
         wheel_path = build_wheel(out_dir, dist_dir, verbose)
         if wheel_path:
             if verbose:
-                print(f"  ✓ Created {wheel_path.name}")
+                print(f"  [ok] Created {wheel_path.name}")
         else:
             if verbose:
-                print("  ✗ Failed to create wheel")
+                print("  [error] Failed to create wheel")
 
     # Build sdist
     if sdist:
@@ -437,10 +437,10 @@ def create_dist(
         sdist_path = build_sdist(out_dir, dist_dir, config, verbose)
         if sdist_path:
             if verbose:
-                print(f"  ✓ Created {sdist_path.name}")
+                print(f"  [ok] Created {sdist_path.name}")
         else:
             if verbose:
-                print("  ✗ Failed to create sdist")
+                print("  [error] Failed to create sdist")
 
     success = (not wheel or wheel_path is not None) and (
         not sdist or sdist_path is not None

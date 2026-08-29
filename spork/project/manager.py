@@ -91,16 +91,16 @@ class ProjectManager:
                 f"Virtual environment was not created properly at {self.venv_path}"
             )
 
-        print("  ✓ Created virtual environment")
+        print("  [ok] Created virtual environment")
 
         # Upgrade pip if requested
         if with_pip and upgrade_pip:
             try:
                 self._run_pip(["install", "--upgrade", "pip"], quiet=True)
-                print("  ✓ Upgraded pip")
+                print("  [ok] Upgraded pip")
             except Exception as e:
                 # Non-fatal, just warn
-                print(f"  ⚠ Could not upgrade pip: {e}")
+                print(f"  [warning] Could not upgrade pip: {e}")
 
         return True
 
@@ -224,9 +224,9 @@ class ProjectManager:
                 editable_path = dep[3:]
                 try:
                     self._run_pip(["install", "-e", editable_path], quiet=quiet)
-                    print(f"  ✓ Installed {editable_path} (editable)")
+                    print(f"  [ok] Installed {editable_path} (editable)")
                 except RuntimeError as e:
-                    print(f"  ✗ Failed to install {editable_path}: {e}")
+                    print(f"  [error] Failed to install {editable_path}: {e}")
                     return False
             else:
                 install_args.append(dep)
@@ -237,9 +237,9 @@ class ProjectManager:
             try:
                 self._run_pip(["install"] + regular_deps, quiet=quiet)
                 for dep in regular_deps:
-                    print(f"  ✓ Installed {dep}")
+                    print(f"  [ok] Installed {dep}")
             except RuntimeError as e:
-                print(f"  ✗ Failed to install dependencies: {e}")
+                print(f"  [error] Failed to install dependencies: {e}")
                 return False
 
         # Install spork by copying from current environment if not already done
@@ -247,7 +247,7 @@ class ProjectManager:
             if not self._install_spork_from_current_env(quiet=quiet):
                 return False
 
-        print("✓ All dependencies installed")
+        print("[ok] All dependencies installed")
         return True
 
     def _find_spork_source_dir(self) -> Optional[str]:
@@ -323,10 +323,10 @@ class ProjectManager:
             # Install in editable mode from local source
             try:
                 self._run_pip(["install", "-e", spork_source_dir], quiet=quiet)
-                print(f"  ✓ Installed spork-lang (editable from {spork_source_dir})")
+                print(f"  [ok] Installed spork-lang (editable from {spork_source_dir})")
                 return True
             except RuntimeError as e:
-                print(f"  ✗ Failed to install spork-lang: {e}")
+                print(f"  [error] Failed to install spork-lang: {e}")
                 return False
 
         # Otherwise, copy the installed spork package to the project venv
@@ -335,7 +335,7 @@ class ProjectManager:
 
             spork_init = getattr(spork, "__file__", None)
             if not spork_init:
-                print("  ✗ Could not locate spork package")
+                print("  [error] Could not locate spork package")
                 return False
 
             # Source: the spork package directory
@@ -344,7 +344,7 @@ class ProjectManager:
             # Destination: project venv site-packages
             dest_site_packages = self.config.venv_site_packages
             if not dest_site_packages or not os.path.isdir(dest_site_packages):
-                print("  ✗ Could not find project venv site-packages")
+                print("  [error] Could not find project venv site-packages")
                 return False
 
             dest_spork_dir = os.path.join(dest_site_packages, "spork")
@@ -367,11 +367,11 @@ class ProjectManager:
                     shutil.copytree(src_dist_info, dest_dist_info)
                     break
 
-            print("  ✓ Installed spork-lang (copied from current environment)")
+            print("  [ok] Installed spork-lang (copied from current environment)")
             return True
 
         except Exception as e:
-            print(f"  ✗ Failed to install spork-lang: {e}")
+            print(f"  [error] Failed to install spork-lang: {e}")
             return False
 
     def _get_spork_install_spec(self) -> Optional[str]:
@@ -459,9 +459,9 @@ class ProjectManager:
             print(f"Removing virtual environment at {self.venv_path}...")
             try:
                 shutil.rmtree(self.venv_path)
-                print("  ✓ Removed .venv")
+                print("  [ok] Removed .venv")
             except Exception as e:
-                print(f"  ✗ Failed to remove .venv: {e}")
+                print(f"  [error] Failed to remove .venv: {e}")
                 return False
 
         if not venv_only:
@@ -471,9 +471,9 @@ class ProjectManager:
                 if os.path.isdir(artifact_path):
                     try:
                         shutil.rmtree(artifact_path)
-                        print(f"  ✓ Removed {artifact_dir}")
+                        print(f"  [ok] Removed {artifact_dir}")
                     except Exception as e:
-                        print(f"  ✗ Failed to remove {artifact_dir}: {e}")
+                        print(f"  [error] Failed to remove {artifact_dir}: {e}")
 
         return True
 

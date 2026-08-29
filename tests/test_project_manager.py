@@ -1,5 +1,7 @@
 """Tests for isolated project environment installation."""
 
+from contextlib import redirect_stdout
+from io import BytesIO, TextIOWrapper
 from pathlib import Path
 
 from spork.project.config import ProjectConfig
@@ -27,11 +29,17 @@ def test_installed_toolchain_is_pip_installed_with_transitive_dependencies(
         lambda args, **kwargs: commands.append(args),
     )
 
-    assert manager.install_dependencies(dev=True, quiet=True)
+    output_bytes = BytesIO()
+    output = TextIOWrapper(output_bytes, encoding="cp1252")
+    with redirect_stdout(output):
+        assert manager.install_dependencies(dev=True, quiet=True)
+    output.flush()
+
+    assert "[ok] All dependencies installed" in output_bytes.getvalue().decode("cp1252")
     assert commands == [
         [
             "install",
-            "spork-lang==0.3.5",
+            "spork-lang==0.3.6",
             "example-runtime>=1",
             "example-dev>=2",
         ]

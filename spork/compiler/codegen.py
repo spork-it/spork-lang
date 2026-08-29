@@ -5,6 +5,7 @@ This module handles Phase 3-4 of compilation: transforming Spork forms
 into Python AST nodes that can be compiled and executed.
 """
 
+import __future__
 import ast
 import os
 from contextlib import contextmanager
@@ -8738,7 +8739,12 @@ def compile_forms_to_code(src: str, filename: str = "<string>"):
     forms = macroexpand_all(forms, local_macro_env)
     # Phase 3 & 4: Analyze & Lower
     mod = compile_module(forms, filename=filename)
-    code = compile(mod, filename, "exec")
+    code = compile(
+        mod,
+        filename,
+        "exec",
+        flags=__future__.annotations.compiler_flag,
+    )
     return code, local_macro_env
 
 

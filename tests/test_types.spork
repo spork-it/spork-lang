@@ -159,7 +159,11 @@
 
 (defclass TypedBox [(Generic GenericT)]
   (defn __init__ [self ^GenericT value]
-    (set! self.value value)))
+    (set! self.value value))
+
+  ;; Class-local forward references must work on every supported Python.
+  (defn ^(TypedBox GenericT) typed-self [self]
+    self))
 
 (defn ^(TypedBox GenericT) typed-box [^GenericT value]
   (TypedBox value))

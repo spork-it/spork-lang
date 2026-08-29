@@ -652,14 +652,18 @@ Spork's persistent data structure types support generic subscripting for type an
 
 ### Runtime Introspection
 
-Type annotations are available at runtime via `__annotations__`:
+Annotations use Python's postponed evaluation so generic forward references are safe on every supported Python version. Use `typing.get_type_hints` when resolved runtime objects are needed; raw `__annotations__` values may be strings:
 
 ```clojure
-(defn ^int add [^int x ^int y] (+ x y))
+(ns annotation-example
+  (:import [typing :refer [get_type_hints]]))
 
-(= (get add.__annotations__ "x") int)      ; => true
-(= (get add.__annotations__ "y") int)      ; => true
-(= (get add.__annotations__ "return") int) ; => true
+(defn ^int add [^int x ^int y] (+ x y))
+(def hints (get_type_hints add))
+
+(= (get hints "x") int)      ; => true
+(= (get hints "y") int)      ; => true
+(= (get hints "return") int) ; => true
 ```
 
 ---

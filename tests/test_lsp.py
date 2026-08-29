@@ -13,8 +13,10 @@ This module tests the LSP server functionality including:
 
 import io
 import json
+import tokenize
 import unittest
 from typing import Any
+from unittest.mock import patch
 
 
 class TestProtocol(unittest.TestCase):
@@ -512,20 +514,37 @@ class TestSporkLanguageServer(unittest.TestCase):
                     "version": 1,
                     "text": (
                         "(ns test.lsp (:require [std.json :as j] "
-                        "[tests.test-macro :as tm]))\n(j.dumps-p)\n(tm.my-w)"
+                        "[tests.test-macro :as tm]))\n(j.dumps-pretty {})\n(tm.my-w)"
                     ),
                 }
             }
         )
 
-        completion = server._handle_completion(
-            {
-                "textDocument": {"uri": uri},
-                "position": {"line": 1, "character": 10},
-            }
-        )
+        # Python 3.12's inspect module tokenizes the original Spork file and
+        # may reject it as Python source. Completion and navigation should use
+        # the compiled function's code location as a fallback.
+        with patch(
+            "inspect.getsourcelines",
+            side_effect=tokenize.TokenError("invalid Python source", (1, 0)),
+        ):
+            completion = server._handle_completion(
+                {
+                    "textDocument": {"uri": uri},
+                    "position": {"line": 1, "character": 10},
+                }
+            )
+            definition = server._handle_definition(
+                {
+                    "textDocument": {"uri": uri},
+                    "position": {"line": 1, "character": 5},
+                }
+            )
+
         labels = [item["label"] for item in completion["items"]]
         self.assertIn("j.dumps-pretty", labels)
+        self.assertIsNotNone(definition)
+        assert definition is not None
+        self.assertTrue(definition["uri"].endswith("/spork/std/json.spork"))
 
         macro_completion = server._handle_completion(
             {

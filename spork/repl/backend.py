@@ -6,8 +6,10 @@ frontends (terminal, nREPL, editor integration, etc.).
 """
 
 import ast
+import inspect
 import io
 import sys
+import tokenize
 import traceback
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -49,6 +51,28 @@ from spork.runtime.ns import (
     init_source_roots,
     register_namespace,
 )
+
+
+def _get_object_source_location(obj: Any) -> Optional[dict[str, Any]]:
+    """Return source metadata, falling back to code locations for Spork files."""
+    try:
+        source_file = inspect.getfile(obj)
+    except (TypeError, OSError):
+        return None
+
+    try:
+        _, start_line = inspect.getsourcelines(obj)
+    except (TypeError, OSError, SyntaxError, tokenize.TokenError):
+        # Python 3.12's tokenizer can reject Spork source while inspect tries to
+        # locate a function block. Compiled Spork functions still carry the
+        # correct filename and first line in their code object.
+        code = getattr(obj, "__code__", None)
+        if code is None:
+            return None
+        source_file = code.co_filename
+        start_line = code.co_firstlineno
+
+    return {"file": source_file, "line": start_line, "col": 0}
 
 
 class ResultType(Enum):
@@ -566,7 +590,6 @@ class ReplBackend:
         extra_env: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """Build hover metadata for an already resolved dotted symbol."""
-        import inspect
         from types import ModuleType
 
         from spork.runtime.ns import NamespaceProxy
@@ -593,16 +616,9 @@ class ReplBackend:
                 info["arglists"] = [list(inspect.signature(obj).parameters)]
             except (ValueError, TypeError):
                 pass
-            try:
-                source_file = inspect.getfile(obj)
-                _, start_line = inspect.getsourcelines(obj)
-                info["source"] = {
-                    "file": source_file,
-                    "line": start_line,
-                    "col": 0,
-                }
-            except (TypeError, OSError):
-                pass
+            source = _get_object_source_location(obj)
+            if source:
+                info["source"] = source
         else:
             info["type"] = "var"
             info["value-type"] = type(obj).__name__
@@ -694,8 +710,6 @@ class ReplBackend:
             )
             info["doc"] = getattr(macro, "__doc__", None)
             # Try to get arglists from signature
-            import inspect
-
             try:
                 sig = inspect.signature(macro)
                 params = list(sig.parameters.keys())
@@ -741,8 +755,6 @@ class ReplBackend:
         # Check the document-local bindings and then the REPL environment.
         found, obj = self._lookup_root_value(symbol, extra_env)
         if found:
-            import inspect
-
             # Find which namespace this symbol is from
             ns = find_symbol_namespace(symbol, obj)
             if ns:
@@ -761,16 +773,9 @@ class ReplBackend:
                 except (ValueError, TypeError):
                     pass
                 # Try to get source location
-                try:
-                    source_file = inspect.getfile(obj)
-                    source_lines, start_line = inspect.getsourcelines(obj)
-                    info["source"] = {
-                        "file": source_file,
-                        "line": start_line,
-                        "col": 0,
-                    }
-                except (TypeError, OSError):
-                    pass
+                source = _get_object_source_location(obj)
+                if source:
+                    info["source"] = source
             else:
                 info["type"] = "var"
                 info["value-type"] = type(obj).__name__
@@ -795,13 +800,11 @@ class ReplBackend:
         Returns:
             The source code string, or None if not available.
         """
-        import inspect
-
         obj = self.state.get_env_value(symbol)
         if obj is not None:
             try:
                 return inspect.getsource(obj)
-            except (TypeError, OSError):
+            except (TypeError, OSError, SyntaxError, tokenize.TokenError):
                 pass
 
         return None
@@ -818,38 +821,20 @@ class ReplBackend:
         Returns:
             A dict with file, line, col keys, or None if not found.
         """
-        import inspect
-
         # Check REPL macros and macros imported by the current document.
         document_macros = (
             extra_env.get("__spork_lsp_macros__", {}) if extra_env else {}
         )
         macro = self.macro_env.get(symbol, document_macros.get(symbol))
         if macro is not None:
-            try:
-                source_file = inspect.getfile(macro)
-                source_lines, start_line = inspect.getsourcelines(macro)
-                return {
-                    "file": source_file,
-                    "line": start_line,
-                    "col": 0,
-                }
-            except (TypeError, OSError):
-                pass
+            location = _get_object_source_location(macro)
+            if location:
+                return location
 
         # Check document-local aliases and resolve dotted attributes.
         found, obj = self._resolve_symbol_value(symbol, extra_env)
         if found and callable(obj):
-            try:
-                source_file = inspect.getfile(obj)
-                source_lines, start_line = inspect.getsourcelines(obj)
-                return {
-                    "file": source_file,
-                    "line": start_line,
-                    "col": 0,
-                }
-            except (TypeError, OSError):
-                pass
+            return _get_object_source_location(obj)
 
         return None
 

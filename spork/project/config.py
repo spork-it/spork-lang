@@ -10,7 +10,7 @@ The spork.it file uses Spork map syntax:
      :version "0.1.0"
      :description "A sample project"
      :requires-python ">=3.10"
-     :spork-version ">=0.3.3,<0.4"
+     :spork-version ">=0.4.0,<0.5"
      :dependencies ["requests" "numpy>=1.20"]
      :dev-dependencies ["pytest>=8"]
      :source-paths ["src"]
@@ -33,15 +33,31 @@ PROJECT_FILENAME = "spork.it"
 
 
 @dataclass(frozen=True)
+class SporkAPIConfig:
+    """Generated public Spork namespace configuration."""
+
+    namespace: str
+    exports: list[str]
+
+
+@dataclass(frozen=True)
 class PythonAPIConfig:
     """Generated Python package facade and typing configuration."""
 
     package: str
-    source_module: str
     exports: list[str]
     aliases: dict[str, str] = field(default_factory=dict)
     include_version: bool = True
     typed: bool = True
+
+
+@dataclass(frozen=True)
+class APIConfig:
+    """Public API generated from one canonical Spork namespace."""
+
+    source_module: str
+    spork: Optional[SporkAPIConfig] = None
+    python: Optional[PythonAPIConfig] = None
 
 
 def spork_to_python(value: Any) -> Any:
@@ -118,7 +134,7 @@ class ProjectConfig:
         readme/license/authors/keywords/classifiers/urls: Distribution metadata
         optional_dependencies: Named Python package extras
         spork_version: spork-lang runtime compatibility requirement
-        python_api: Generated Python package exports and typing configuration
+        api: Generated Spork and Python public API configuration
 
     Computed fields:
         project_root: Absolute path to the directory containing spork.it
@@ -143,7 +159,7 @@ class ProjectConfig:
     urls: dict[str, str] = field(default_factory=dict)
     optional_dependencies: dict[str, list[str]] = field(default_factory=dict)
     spork_version: Optional[str] = None
-    python_api: Optional[PythonAPIConfig] = None
+    api: Optional[APIConfig] = None
 
     # Store the raw config for any additional fields
     _raw: dict[str, Any] = field(default_factory=dict, repr=False)
@@ -304,7 +320,9 @@ class ProjectConfig:
         urls = config_dict.get("urls", {})
         optional_dependencies = config_dict.get("optional-dependencies", {})
         spork_version = config_dict.get("spork-version")
-        python_api_value = config_dict.get("python-api")
+        api_value = config_dict.get("api")
+        if "python-api" in config_dict:
+            raise ValueError(":python-api was replaced by :api in spork-lang 0.4")
 
         # Validate types
         if not isinstance(name, str):
@@ -365,59 +383,111 @@ class ProjectConfig:
                 raise ValueError(":optional-dependencies keys must be strings or keywords")
             validate_string_list(f"optional-dependencies {extra}", requirements)
 
-        python_api = None
-        if python_api_value is not None:
-            if not isinstance(python_api_value, dict):
-                raise ValueError(":python-api must be a map")
-            allowed_python_api_keys = {
-                "package",
-                "from",
-                "exports",
-                "aliases",
-                "version",
-                "typed",
-            }
-            unknown_keys = set(python_api_value).difference(allowed_python_api_keys)
+        api = None
+        if api_value is not None:
+            if not isinstance(api_value, dict):
+                raise ValueError(":api must be a map")
+            allowed_api_keys = {"from", "spork", "python"}
+            unknown_keys = set(api_value).difference(allowed_api_keys)
             if unknown_keys:
                 unknown = ", ".join(f":{key}" for key in sorted(unknown_keys))
-                raise ValueError(f":python-api contains unknown fields: {unknown}")
+                raise ValueError(f":api contains unknown fields: {unknown}")
 
-            package = python_api_value.get("package")
-            source_module = python_api_value.get("from")
-            exports = python_api_value.get("exports")
-            aliases = python_api_value.get("aliases", {})
-            include_version = python_api_value.get("version", True)
-            typed = python_api_value.get("typed", True)
-
-            if not isinstance(package, str) or not package:
-                raise ValueError(":python-api :package must be a non-empty string")
+            source_module = api_value.get("from")
             if not isinstance(source_module, str) or not source_module:
-                raise ValueError(":python-api :from must be a non-empty string")
-            validate_string_list("python-api exports", exports)
-            if not exports:
-                raise ValueError(":python-api :exports must not be empty")
-            if not isinstance(aliases, dict) or not all(
-                isinstance(source, str)
-                and isinstance(public, str)
-                and source
-                and public
-                for source, public in aliases.items()
-            ):
-                raise ValueError(
-                    ":python-api :aliases must be a map of non-empty string names"
-                )
-            if not isinstance(include_version, bool):
-                raise ValueError(":python-api :version must be true or false")
-            if not isinstance(typed, bool):
-                raise ValueError(":python-api :typed must be true or false")
+                raise ValueError(":api :from must be a non-empty string")
 
-            python_api = PythonAPIConfig(
-                package=package,
+            spork_api = None
+            spork_api_value = api_value.get("spork")
+            if spork_api_value is not None:
+                if not isinstance(spork_api_value, dict):
+                    raise ValueError(":api :spork must be a map")
+                unknown_keys = set(spork_api_value).difference(
+                    {"namespace", "exports"}
+                )
+                if unknown_keys:
+                    unknown = ", ".join(f":{key}" for key in sorted(unknown_keys))
+                    raise ValueError(
+                        f":api :spork contains unknown fields: {unknown}"
+                    )
+                namespace = spork_api_value.get("namespace")
+                spork_exports = spork_api_value.get("exports")
+                if not isinstance(namespace, str) or not namespace:
+                    raise ValueError(
+                        ":api :spork :namespace must be a non-empty string"
+                    )
+                validate_string_list("api :spork :exports", spork_exports)
+                if not spork_exports:
+                    raise ValueError(":api :spork :exports must not be empty")
+                spork_api = SporkAPIConfig(
+                    namespace=namespace,
+                    exports=spork_exports,
+                )
+
+            python_api = None
+            python_api_value = api_value.get("python")
+            if python_api_value is not None:
+                if not isinstance(python_api_value, dict):
+                    raise ValueError(":api :python must be a map")
+                allowed_python_api_keys = {
+                    "package",
+                    "exports",
+                    "aliases",
+                    "version",
+                    "typed",
+                }
+                unknown_keys = set(python_api_value).difference(
+                    allowed_python_api_keys
+                )
+                if unknown_keys:
+                    unknown = ", ".join(f":{key}" for key in sorted(unknown_keys))
+                    raise ValueError(
+                        f":api :python contains unknown fields: {unknown}"
+                    )
+
+                package = python_api_value.get("package")
+                python_exports = python_api_value.get("exports")
+                aliases = python_api_value.get("aliases", {})
+                include_version = python_api_value.get("version", True)
+                typed = python_api_value.get("typed", True)
+
+                if not isinstance(package, str) or not package:
+                    raise ValueError(
+                        ":api :python :package must be a non-empty string"
+                    )
+                validate_string_list("api :python :exports", python_exports)
+                if not python_exports:
+                    raise ValueError(":api :python :exports must not be empty")
+                if not isinstance(aliases, dict) or not all(
+                    isinstance(source, str)
+                    and isinstance(public, str)
+                    and source
+                    and public
+                    for source, public in aliases.items()
+                ):
+                    raise ValueError(
+                        ":api :python :aliases must be a map of non-empty "
+                        "string names"
+                    )
+                if not isinstance(include_version, bool):
+                    raise ValueError(":api :python :version must be true or false")
+                if not isinstance(typed, bool):
+                    raise ValueError(":api :python :typed must be true or false")
+
+                python_api = PythonAPIConfig(
+                    package=package,
+                    exports=python_exports,
+                    aliases=aliases,
+                    include_version=include_version,
+                    typed=typed,
+                )
+
+            if spork_api is None and python_api is None:
+                raise ValueError(":api must contain :spork, :python, or both")
+            api = APIConfig(
                 source_module=source_module,
-                exports=exports,
-                aliases=aliases,
-                include_version=include_version,
-                typed=typed,
+                spork=spork_api,
+                python=python_api,
             )
 
         return cls(
@@ -440,7 +510,7 @@ class ProjectConfig:
             urls=urls,
             optional_dependencies=optional_dependencies,
             spork_version=spork_version,
-            python_api=python_api,
+            api=api,
             _raw=config_dict,
         )
 

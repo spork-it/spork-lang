@@ -333,10 +333,6 @@ def __spork_ns_get__(ns_name: str, symbol: str) -> Any:
     """
     from spork.runtime.ns import get_namespace
 
-    # Normalize name (hyphen to underscore)
-    def normalize_name(name: str) -> str:
-        return name.replace("-", "_")
-
     ns_info = get_namespace(ns_name)
     if ns_info is None:
         __spork_require__(ns_name)

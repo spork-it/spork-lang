@@ -436,14 +436,14 @@ def build_project(
     success_count = sum(1 for r in results if r.success)
     failure_count = sum(1 for r in results if not r.success)
 
-    # Generate a Python package facade and stubs from typed Spork declarations.
-    # Hand-written files remain supported when :python-api is not configured.
+    # Generate public Spork and Python APIs from the canonical namespace.
+    # Hand-written files remain supported when :api is not configured.
     if failure_count == 0 and (project_root / "spork.it").is_file():
         from spork.project.config import ProjectConfig
-        from spork.project.stubs import generate_package_api
+        from spork.project.stubs import generate_public_api
 
         config = ProjectConfig.load(str(project_root))
-        generate_package_api(
+        generate_public_api(
             out_dir,
             config,
             [result.python_path for result in results if result.success],

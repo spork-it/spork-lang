@@ -92,7 +92,7 @@ def generate_dist_pyproject(
     if not spork_requirement.startswith(("<", ">", "=", "!", "~")):
         raise ValueError(
             ":spork-version must be a version specifier such as "
-            '\">=0.3.3,<0.4\"'
+            '\">=0.4.0,<0.5\"'
         )
     all_dependencies = [f"spork-lang{spork_requirement}", *config.dependencies]
 

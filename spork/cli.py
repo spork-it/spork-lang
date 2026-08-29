@@ -310,11 +310,29 @@ def cmd_test(args: argparse.Namespace) -> int:
         print("No matching project tests found.", file=sys.stderr)
         return 1
 
+    build_result = None
+    needs_python_build = run_python and bool(python_tests)
+    needs_spork_api = (
+        run_spork
+        and bool(spork_tests)
+        and config.api is not None
+        and config.api.spork is not None
+    )
+    if needs_python_build or needs_spork_api:
+        build_result = build_project(
+            project_root=Path(config.project_root), clean=True, verbose=False
+        )
+        if not build_result.success:
+            print("Project build failed before tests.", file=sys.stderr)
+            return 1
+
     env = os.environ.copy()
     source_paths = [
         *config.get_absolute_source_paths(),
         *config.get_absolute_test_paths(),
     ]
+    if build_result is not None:
+        source_paths.append(str(build_result.out_dir))
     existing_spork_path = env.get("SPORK_PATH")
     if existing_spork_path:
         source_paths.append(existing_spork_path)
@@ -336,12 +354,7 @@ def cmd_test(args: argparse.Namespace) -> int:
                 failed += 1
 
     if run_python and python_tests:
-        build_result = build_project(
-            project_root=Path(config.project_root), clean=True, verbose=False
-        )
-        if not build_result.success:
-            print("Project build failed before Python tests.", file=sys.stderr)
-            return 1
+        assert build_result is not None
         python_env = env.copy()
         existing_python_path = python_env.get("PYTHONPATH")
         python_paths = [str(build_result.out_dir)]

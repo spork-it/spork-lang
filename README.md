@@ -119,7 +119,7 @@ spork sync
 spork run
 ```
 
-A `spork.it` manifest defines metadata, dependencies, source paths, and the entry point. Libraries can also declare `:python-api` exports; Spork then generates the package initializer, version metadata, generic `.pyi` stubs, and `py.typed` directly from annotated Spork source.
+A `spork.it` manifest defines metadata, dependencies, source paths, and the entry point. Libraries can also declare a unified `:api`; Spork then generates idiomatic package-level Spork and Python APIs, version metadata, generic `.pyi` stubs, and `py.typed` from one annotated implementation namespace.
 
 Common commands include:
 

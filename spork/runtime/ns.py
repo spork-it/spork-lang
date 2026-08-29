@@ -141,7 +141,8 @@ def find_spork_file_for_ns(
     Find the .spork file for a given namespace name.
 
     Searches through SOURCE_ROOTS (and any extra_roots) in order,
-    looking for the corresponding .spork file.
+    looking for either the corresponding ``.spork`` file or a package-level
+    ``__init__.spork`` public namespace.
 
     For std.* namespaces, also searches the spork package's std/ directory.
 
@@ -161,6 +162,7 @@ def find_spork_file_for_ns(
             return os.path.abspath(std_path)
 
     rel = ns_to_relpath(ns)
+    package_rel = os.path.join(rel[:-len(".spork")], "__init__.spork")
 
     # Build search path: extra_roots first, then SOURCE_ROOTS
     search_paths = []
@@ -183,9 +185,10 @@ def find_spork_file_for_ns(
         root = absolute_root
         if not root:
             continue
-        candidate = os.path.join(root, rel)
-        if os.path.isfile(candidate):
-            return os.path.abspath(candidate)
+        for relative_path in (rel, package_rel):
+            candidate = os.path.join(root, relative_path)
+            if os.path.isfile(candidate):
+                return os.path.abspath(candidate)
 
     return None
 

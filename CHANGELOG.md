@@ -6,6 +6,8 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-29
+
 ### Added
 
 - Added top-level `deftest` declarations, inline source-test discovery, async test execution, and individual native Spork test reporting.
@@ -228,7 +230,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/spork-it/spork-lang/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/spork-it/spork-lang/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/spork-it/spork-lang/compare/v0.3.8...v0.4.0
 [0.3.8]: https://github.com/spork-it/spork-lang/compare/v0.3.7...v0.3.8

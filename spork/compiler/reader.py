@@ -866,7 +866,7 @@ class Reader:
         self, end_delim, start_line: int = 0, start_col: int = 0
     ) -> tuple[list, Optional[Token]]:
         """Read a list and return both the items and the closing delimiter token."""
-        items = []
+        items: list[Any] = []
         while True:
             if self.eof():
                 raise SyntaxError(

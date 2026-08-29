@@ -464,8 +464,9 @@ def parse_inst(value: str) -> tuple:
         dt = datetime.fromisoformat(normalized)
         has_tz = dt.tzinfo is not None
         tz_offset = 0
-        if has_tz and dt.utcoffset():
-            tz_offset = int(dt.utcoffset().total_seconds() // 60)
+        utc_offset = dt.utcoffset()
+        if utc_offset is not None:
+            tz_offset = int(utc_offset.total_seconds() // 60)
         return (
             dt.year,
             dt.month,

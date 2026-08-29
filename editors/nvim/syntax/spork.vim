@@ -33,7 +33,7 @@ syntax match sporkKeyword /:[a-zA-Z_][a-zA-Z0-9_\-\.\*\+\!\?]*/
 syntax keyword sporkBoolean true false
 syntax keyword sporkNil nil
 
-" Special forms - from spork/compiler/codegen.py
+" Special forms - from the compiler lowering modules
 syntax keyword sporkSpecial def defn defmacro defclass fn let set!
 syntax keyword sporkSpecial if do loop recur for while async-for
 syntax keyword sporkSpecial try catch finally throw return

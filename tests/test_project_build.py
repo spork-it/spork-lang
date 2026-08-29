@@ -244,7 +244,7 @@ def test_dist_contains_metadata_sources_and_works_for_both_consumers(
     # A Spork consumer resolves packaged source directly from site-packages.
     clear_registry()
     init_source_roots(include_cwd=False)
-    from spork.compiler.codegen import eval_str
+    from spork.compiler.pipeline import eval_str
 
     env = eval_str(
         """(ns consumer (:require [fixture-lib :as fixture]))

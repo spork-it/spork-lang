@@ -22,8 +22,8 @@ from pathlib import Path
 from types import CodeType
 from typing import Any, Optional
 
-# Version string for cache invalidation - bump when codegen changes
-COMPILER_CACHE_VERSION = "spork-compiler-v3"
+# Version string for cache invalidation - bump when compiler lowering changes
+COMPILER_CACHE_VERSION = "spork-compiler-v4"
 
 # Process-local compile cache
 # Key: (absolute_path, mtime, COMPILER_CACHE_VERSION)
@@ -85,7 +85,7 @@ def compile_with_cache(src: str, path: str) -> tuple[CodeType, dict[str, Any]]:
         (compiled_code, macro_env) tuple
     """
     # Import here to avoid circular imports
-    from spork.compiler.codegen import compile_forms_to_code
+    from spork.compiler.pipeline import compile_forms_to_code
 
     # Check cache first
     cached = get_cached_code(path)
@@ -197,12 +197,10 @@ def compile_file_to_python(
     normal Python import machinery and avoids loading a second copy of a type
     through the Spork namespace registry.
     """
-    from spork.compiler.codegen import (
-        compilation_context,
-        compile_defn,
-        compile_module,
-        normalize_name,
-    )
+    from spork.compiler.codegen import compile_module
+    from spork.compiler.context import compilation_context
+    from spork.compiler.functions import compile_defn
+    from spork.runtime.types import normalize_name
     from spork.compiler.macros import (
         MACRO_ENV,
         macroexpand_all,

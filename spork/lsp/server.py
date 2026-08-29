@@ -400,7 +400,7 @@ class SporkLanguageServer:
                 self._log(f"Completion error: {e}")
 
         # Add special forms and keywords if no prefix or matching
-        # These are the actual special forms from spork/compiler/codegen.py
+        # These are the actual forms handled by the compiler lowering modules.
         special_forms = [
             # Definition forms (from compile_toplevel and compile_stmt)
             "def",
@@ -693,7 +693,7 @@ class SporkLanguageServer:
         head_name = head.name
 
         # Map form type to symbol kind
-        # Based on actual forms in spork/compiler/codegen.py
+        # Based on the forms handled by the compiler lowering modules.
         kind_map = {
             "def": SymbolKind.VARIABLE,
             "defn": SymbolKind.FUNCTION,

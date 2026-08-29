@@ -5,7 +5,7 @@ import unittest
 
 class TestNamespaceImports(unittest.TestCase):
     def test_require_rejects_python_module(self):
-        from spork.compiler.codegen import compile_forms_to_code
+        from spork.compiler.pipeline import compile_forms_to_code
 
         source = "(ns tests.require-python (:require [json :as j]))"
         with self.assertRaisesRegex(

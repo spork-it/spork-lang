@@ -26,11 +26,8 @@ from spork.compiler import (
     normalize_name,
     read_str,
 )
-from spork.compiler.codegen import (
-    compile_expr,
-    compile_module,
-    process_defmacros,
-)
+from spork.compiler.codegen import compile_expr, compile_module
+from spork.compiler.pipeline import process_defmacros
 
 # Import from runtime
 from spork.runtime import (

@@ -6,25 +6,20 @@ This package compiles Spork source code to Python.
 Phases:
 1. Read (reader.py): Text -> Spork Forms
 2. Macroexpand (macros.py): Expand macros
-3. Analyze & Lower (codegen.py): Forms -> Python AST
+3. Analyze & Lower (codegen.py + feature modules): Forms -> Python AST
 4. Compile: Python AST -> bytecode (via Python's compile())
 """
 
-# Re-export reader
-# Re-export codegen
-from spork.compiler.codegen import (
-    # Contexts (for advanced use)
-    CompilationContext,
-    compile_defn,
-    # Main API
+# Public compilation APIs
+from spork.compiler.context import CompilationContext, get_compile_context
+from spork.compiler.functions import compile_defn
+from spork.compiler.pipeline import (
     compile_forms_to_code,
     eval_str,
     exec_file,
     export_file,
-    get_compile_context,
-    # Helpers
-    normalize_name,
 )
+from spork.runtime.types import normalize_name
 
 # Re-export loader (import hooks and cache)
 from spork.compiler.loader import (
@@ -89,9 +84,9 @@ from spork.runtime.types import (
 
 # Initialize macros and install import hook on package load
 def _initialize():
-    from spork.compiler.codegen import compile_defn, normalize_name
-    from spork.compiler.loader import install_import_hook
+    from spork.compiler.functions import compile_defn
     from spork.compiler.macros import init_stdlib_macros
+    from spork.runtime.types import normalize_name
 
     init_stdlib_macros(compile_defn, normalize_name)
 

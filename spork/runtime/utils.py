@@ -279,7 +279,8 @@ def __spork_require__(ns_name: str, current_file: Optional[str] = None) -> None:
     # Import here to avoid circular imports. Namespace compilation gets an
     # isolated context because it can happen recursively while compiling the
     # requiring module.
-    from spork.compiler.codegen import compilation_context, compile_forms_to_code
+    from spork.compiler.context import compilation_context
+    from spork.compiler.pipeline import compile_forms_to_code
 
     with open(path, encoding="utf-8") as f:
         src = f.read()

@@ -39,7 +39,7 @@ def test_installed_toolchain_is_pip_installed_with_transitive_dependencies(
     assert commands == [
         [
             "install",
-            "spork-lang==0.4.2",
+            "spork-lang==0.4.3",
             "example-runtime>=1",
             "example-dev>=2",
         ]

@@ -41,6 +41,26 @@ def test_deftest_registers_without_running_and_preserves_metadata():
     assert len(env["calls"]) == 1
 
 
+def test_deftest_can_pass_multiple_inline_anonymous_functions():
+    source = """(defn invoke [function value] (function value))
+(deftest anonymous-callbacks
+  (assert (= (invoke (fn [value] (+ value 1)) 1) 2))
+  (def second (invoke (fn [value] (+ value 2)) 1))
+  (assert (= second 3)))
+"""
+
+    runtime_env = eval_str(source)
+    runtime_env["__spork_tests__"][0].function()
+
+    python_source, _ = compile_file_to_python(source, "anonymous_callbacks.spork")
+    aot_env = {
+        "__name__": "anonymous_callbacks",
+        "__file__": "anonymous_callbacks.py",
+    }
+    exec(compile(python_source, "anonymous_callbacks.py", "exec"), aot_env, aot_env)
+    aot_env["__spork_tests__"][0].function()
+
+
 def test_deftest_is_private_in_aot_output():
     python_source, _ = compile_file_to_python(
         """(ns sample.aot)

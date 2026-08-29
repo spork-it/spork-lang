@@ -6,6 +6,12 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-08-29
+
+### Fixed
+
+- Emit anonymous function definitions before their first expression-statement use, including callbacks declared inside `deftest` bodies.
+
 ## [0.4.2] - 2026-08-29
 
 ### Added
@@ -230,7 +236,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/spork-it/spork-lang/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/spork-it/spork-lang/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/spork-it/spork-lang/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/spork-it/spork-lang/compare/v0.3.8...v0.4.0

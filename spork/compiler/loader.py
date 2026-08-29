@@ -23,7 +23,7 @@ from types import CodeType
 from typing import Any, Optional
 
 # Version string for cache invalidation - bump when codegen changes
-COMPILER_CACHE_VERSION = "spork-compiler-v2"
+COMPILER_CACHE_VERSION = "spork-compiler-v3"
 
 # Process-local compile cache
 # Key: (absolute_path, mtime, COMPILER_CACHE_VERSION)

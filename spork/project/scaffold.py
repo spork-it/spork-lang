@@ -170,17 +170,9 @@ def generate_test_spork(name: str) -> str:
 (ns {ns_name}.core-test
   (:require [{ns_name}.core :as core]))
 
-(defn test-greet []
+(deftest greet-works
   "Test the greet function."
   (assert (= (core.greet "Spork") "Hello, Spork!")))
-
-(defn run-tests []
-  "Run all tests."
-  (print "Running tests...")
-  (test-greet)
-  (print "All tests passed!"))
-
-(run-tests)
 """
 
 
@@ -210,11 +202,6 @@ __pycache__/
 *.swp
 *.swo
 *~
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
 
 # OS
 .DS_Store

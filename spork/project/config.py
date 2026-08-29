@@ -12,7 +12,7 @@ The spork.it file uses Spork map syntax:
      :requires-python ">=3.10"
      :spork-version ">=0.4.0,<0.5"
      :dependencies ["requests" "numpy>=1.20"]
-     :dev-dependencies ["pytest>=8"]
+     :dev-dependencies ["mypy>=1.11"]
      :source-paths ["src"]
      :test-paths ["tests"]
      :main "my-project.core:main"}

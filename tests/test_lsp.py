@@ -430,7 +430,23 @@ class TestSporkLanguageServer(unittest.TestCase):
         self.assertIn("items", result)
         labels = [item["label"] for item in result["items"]]
         self.assertIn("defn", labels)
+        self.assertIn("deftest", labels)
         self.assertIn("defmacro", labels)
+
+    def test_deftest_is_a_document_symbol(self):
+        """Expose decorated test declarations to editor symbol lists."""
+        from spork.compiler.reader import read_str
+        from spork.lsp.protocol import SymbolKind
+
+        server, _, _ = self.create_server()
+        form = read_str("(deftest ^async fetch-works (assert true))")[0]
+
+        symbol = server._extract_definition_symbol(form)
+
+        self.assertIsNotNone(symbol)
+        assert symbol is not None
+        self.assertEqual(symbol["name"], "fetch-works")
+        self.assertEqual(symbol["kind"], SymbolKind.FUNCTION)
 
     def test_dotted_python_module_completion_and_hover(self):
         """Complete and inspect members of an alias declared in the document."""

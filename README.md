@@ -129,7 +129,7 @@ Common commands include:
 | `spork add` / `spork remove` | Edit dependencies in the nearest `spork.it` |
 | `spork sync` | Create the project environment and install dependencies |
 | `spork run` | Run the configured entry point |
-| `spork test` | Run declared Spork and Python tests |
+| `spork test` | Discover and run Spork tests |
 | `spork build` | Compile sources to Python in `.spork-out/` |
 | `spork dist` | Build a wheel and source distribution |
 | `spork lsp` | Start the language server |

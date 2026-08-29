@@ -18,7 +18,7 @@ The project README provides installation and a short tour. The documents here co
 
 ### [Language Reference](LANG.md)
 
-Literals, bindings, control flow, functions, type annotations, pattern matching, classes, protocols, namespaces, macros, async support, exceptions, Python interoperability, and error reporting.
+Literals, bindings, control flow, functions, test declarations, type annotations, pattern matching, classes, protocols, namespaces, macros, async support, exceptions, Python interoperability, and error reporting.
 
 ### [Standard Library Reference](STDLIB.md)
 

@@ -9,7 +9,7 @@ This module provides the main CLI entry point for Spork with subcommand support:
 - spork remove <pkg>  Remove project dependencies
 - spork sync          Sync project dependencies
 - spork run           Run the project's main entry point
-- spork test          Run project Spork and Python tests
+- spork test          Run project Spork tests
 - spork build         Build project to .spork-out/ with Python + source maps
 - spork <file>        Execute a Spork file directly
 
@@ -319,11 +319,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_test(args: argparse.Namespace) -> int:
-    """Run declared Spork tests and pytest-based Python tests."""
+    """Discover and run project Spork tests with the native test runner."""
+    import json
     import subprocess
+    import tempfile
     from pathlib import Path
 
     from spork.project import ProjectConfig, ProjectManager, build_project
+    from spork.testing.discovery import TestDiscoveryError, discover_test_files
 
     try:
         config = ProjectConfig.load()
@@ -338,40 +341,21 @@ def cmd_test(args: argparse.Namespace) -> int:
             return 1
     manager.inject_venv_paths()
 
-    test_roots = [
-        Path(path)
-        for path in config.get_absolute_test_paths()
-        if Path(path).is_dir()
-    ]
-    spork_tests = sorted(
-        path
-        for root in test_roots
-        for path in root.rglob("*.spork")
-        if path.name.startswith("test_") or path.stem.endswith("_test")
-    )
-    python_tests = sorted(
-        path
-        for root in test_roots
-        for path in root.rglob("test_*.py")
-    )
+    source_roots = [Path(path) for path in config.get_absolute_source_paths()]
+    test_roots = [Path(path) for path in config.get_absolute_test_paths()]
+    try:
+        test_files = discover_test_files(source_roots, test_roots)
+    except TestDiscoveryError as exc:
+        print(f"Test discovery failed: {exc}", file=sys.stderr)
+        return 1
 
-    run_spork = not getattr(args, "python_only", False)
-    run_python = not getattr(args, "spork_only", False)
-    if not (spork_tests if run_spork else []) and not (
-        python_tests if run_python else []
-    ):
-        print("No matching project tests found.", file=sys.stderr)
+    if not test_files:
+        print("No matching Spork tests found.", file=sys.stderr)
         return 1
 
     build_result = None
-    needs_python_build = run_python and bool(python_tests)
-    needs_spork_api = (
-        run_spork
-        and bool(spork_tests)
-        and config.api is not None
-        and config.api.spork is not None
-    )
-    if needs_python_build or needs_spork_api:
+    needs_spork_api = config.api is not None and config.api.spork is not None
+    if needs_spork_api:
         build_result = build_project(
             project_root=Path(config.project_root), clean=True, verbose=False
         )
@@ -380,58 +364,75 @@ def cmd_test(args: argparse.Namespace) -> int:
             return 1
 
     env = os.environ.copy()
-    source_paths = [
+    spork_paths = [
         *config.get_absolute_source_paths(),
         *config.get_absolute_test_paths(),
     ]
     if build_result is not None:
-        source_paths.append(str(build_result.out_dir))
+        spork_paths.append(str(build_result.out_dir))
     existing_spork_path = env.get("SPORK_PATH")
     if existing_spork_path:
-        source_paths.append(existing_spork_path)
-    env["SPORK_PATH"] = os.pathsep.join(source_paths)
+        spork_paths.append(existing_spork_path)
+    env["SPORK_PATH"] = os.pathsep.join(spork_paths)
     env.setdefault("PYTHONIOENCODING", "utf-8")
 
+    passed = 0
     failed = 0
-    if run_spork:
-        for test_path in spork_tests:
-            relative = test_path.relative_to(config.project_root)
-            print(f"=== {relative} ===", flush=True)
+    with tempfile.TemporaryDirectory(prefix="spork-tests-") as result_dir:
+        for index, discovered in enumerate(test_files):
+            try:
+                relative = discovered.path.relative_to(config.project_root)
+            except ValueError:
+                relative = discovered.path
+            print(f"\n=== {relative} ===", flush=True)
+
+            result_path = Path(result_dir) / f"{index}.json"
+            command = [
+                config.venv_python,
+                "-m",
+                "spork.testing.runner",
+                str(discovered.path),
+                "--result",
+                str(result_path),
+            ]
+            if discovered.legacy:
+                command.append("--legacy")
+
             completed = subprocess.run(
-                [config.venv_python, "-m", "spork", str(test_path)],
+                command,
                 cwd=config.project_root,
                 env=env,
                 check=False,
             )
-            if completed.returncode:
+
+            result = None
+            if result_path.is_file():
+                try:
+                    result = json.loads(result_path.read_text(encoding="utf-8"))
+                    passed += int(result["passed"])
+                    failed += int(result["failed"])
+                except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    failed += 1
+            else:
                 failed += 1
 
-    if run_python and python_tests:
-        assert build_result is not None
-        python_env = env.copy()
-        existing_python_path = python_env.get("PYTHONPATH")
-        python_paths = [str(build_result.out_dir)]
-        if existing_python_path:
-            python_paths.append(existing_python_path)
-        python_env["PYTHONPATH"] = os.pathsep.join(python_paths)
-        completed = subprocess.run(
-            [
-                config.venv_python,
-                "-m",
-                "pytest",
-                *(str(path) for path in test_roots),
-            ],
-            cwd=config.project_root,
-            env=python_env,
-            check=False,
-        )
-        if completed.returncode:
-            failed += 1
+            if completed.returncode and result is not None:
+                # A normal test failure is already represented by the result.
+                # Reserve this branch for a runner/result disagreement.
+                try:
+                    represented_failure = int(result.get("failed", 0)) > 0
+                except (AttributeError, TypeError, ValueError):
+                    represented_failure = False
+                if not represented_failure:
+                    failed += 1
 
+    print("\n=== Spork Test Summary ===")
+    print(f"Passed: {passed}")
+    print(f"Failed: {failed}")
+    print(f"Files:  {len(test_files)}")
     if failed:
-        print(f"\nTest run failed: {failed} test command(s) failed")
         return 1
-    print("\nAll project tests passed")
+    print("All Spork tests passed")
     return 0
 
 
@@ -828,16 +829,7 @@ examples:
     )
 
     # test subcommand
-    test_parser = subparsers.add_parser(
-        "test", help="Run project Spork tests and Python tests with pytest"
-    )
-    test_group = test_parser.add_mutually_exclusive_group()
-    test_group.add_argument(
-        "--spork-only", action="store_true", help="Only run .spork tests"
-    )
-    test_group.add_argument(
-        "--python-only", action="store_true", help="Only run Python tests"
-    )
+    subparsers.add_parser("test", help="Discover and run project Spork tests")
 
     # build subcommand
     build_parser = subparsers.add_parser(

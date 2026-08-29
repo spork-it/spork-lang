@@ -344,6 +344,8 @@ class CompilationContext:
         self.require_stmts: list[ast.stmt] = []  # Import statements from :require
         self.scope_stack: list[set] = []
         self.nonlocal_stack: list[set] = []
+        self.test_names: set[str] = set()
+        self.test_counter: int = 0
         # AOT builds lower Spork :require clauses to ordinary Python imports.
         # Runtime compilation keeps using the namespace registry so macros and
         # source execution retain their existing semantics.
@@ -801,6 +803,8 @@ def compile_module(forms, filename="<string>"):
     ctx.require_stmts.clear()
     ctx.scope_stack.clear()
     ctx.nonlocal_stack.clear()
+    ctx.test_names.clear()
+    ctx.test_counter = 0
 
     body: list[ast.stmt] = []
     for form in forms:
@@ -1198,6 +1202,81 @@ def compile_ns(args, form_loc=None):
     return stmts
 
 
+def compile_deftest(args, form_loc=None):
+    """Compile a top-level ``deftest`` declaration.
+
+    Test functions and descriptors are emitted during every compilation mode,
+    but nothing invokes the function during normal module execution. The
+    module-local registry is consumed only by the Spork test runner.
+    """
+    if not args:
+        raise SyntaxError("deftest requires a name and body")
+
+    decorated = []
+    index = 0
+    while index < len(args) and isinstance(args[index], Decorated):
+        decorated.append(args[index])
+        index += 1
+
+    if decorated and (
+        len(decorated) != 1
+        or not isinstance(decorated[0].expr, Symbol)
+        or decorated[0].expr.name != "async"
+    ):
+        raise SyntaxError("deftest only supports ^async metadata")
+
+    if index >= len(args) or not isinstance(args[index], Symbol):
+        raise SyntaxError("deftest name must be symbol")
+    if index + 1 >= len(args):
+        raise SyntaxError("deftest requires a body")
+
+    name_sym = args[index]
+    body_forms = args[index + 1 :]
+    if len(body_forms) == 1 and isinstance(body_forms[0], str):
+        raise SyntaxError("deftest requires a body after its docstring")
+    normalized_name = normalize_name(name_sym.name)
+    if not normalized_name.isidentifier():
+        raise SyntaxError(f"invalid deftest name: {name_sym.name}")
+    ctx = get_compile_context()
+
+    if normalized_name in ctx.test_names:
+        raise SyntaxError(f"duplicate deftest name: {name_sym.name}")
+    ctx.test_names.add(normalized_name)
+    ctx.test_counter += 1
+
+    internal_name = f"__spork_test_{normalized_name}_{ctx.test_counter}"
+    internal_sym = Symbol(
+        internal_name,
+        name_sym.line,
+        name_sym.col,
+        name_sym.end_line,
+        name_sym.end_col,
+    )
+    params = VectorLiteral([], name_sym.line, name_sym.col)
+    function = compile_defn(
+        [*decorated, internal_sym, params, *body_forms], form_loc
+    )
+
+    filename = ctx.current_file or "<string>"
+    line = form_loc.line if form_loc is not None else name_sym.line
+    register = ast.Expr(
+        value=ast.Call(
+            func=ast.Name(id="__spork_register_test__", ctx=ast.Load()),
+            args=[
+                ast.Name(id="__spork_tests__", ctx=ast.Load()),
+                ast.Constant(value=name_sym.name),
+                ast.Name(id=internal_name, ctx=ast.Load()),
+                ast.Constant(value=filename),
+                ast.Constant(value=line),
+                ast.Constant(value=ctx.current_ns),
+            ],
+            keywords=[],
+        )
+    )
+    set_location(register, form_loc)
+    return [function, register]
+
+
 def compile_toplevel(form):
     """Compile a top-level form."""
     form_loc = get_source_location(form)
@@ -1214,6 +1293,8 @@ def compile_toplevel(form):
             return compile_def(form[1:], form_loc)
         if is_symbol(head, "defn"):
             return compile_defn(form[1:], form_loc)
+        if is_symbol(head, "deftest"):
+            return compile_deftest(form[1:], form_loc)
         if is_symbol(head, "defclass"):
             return compile_defclass(form[1:], form_loc)
         if is_symbol(head, "defmacro"):
@@ -4479,6 +4560,8 @@ def compile_stmt(form):
             return compile_def(form[1:], form_loc)
         if is_symbol(head, "defn"):
             return compile_defn(form[1:], form_loc)
+        if is_symbol(head, "deftest"):
+            raise SyntaxError("deftest is only allowed at module top level")
         if is_symbol(head, "defclass"):
             return compile_defclass(form[1:], form_loc)
         if is_symbol(head, "let"):
@@ -8252,6 +8335,9 @@ def compile_expr(form):
         if not form:
             return ast.Constant(value=None)
         head = form[0]
+
+        if is_symbol(head, "deftest"):
+            raise SyntaxError("deftest is only allowed at module top level")
 
         # (. base a b c)
         if is_symbol(head, "."):

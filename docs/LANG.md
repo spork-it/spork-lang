@@ -191,6 +191,22 @@ Persistent collections participate in Spork's sequence operations. See [Sequence
 (set! obj.attr value)
 ```
 
+### Test Declarations
+
+`deftest` declares a named, parameterless test at module top level. Its body is compiled and registered but only invoked by `spork test`, so inline tests may live beside regular definitions without running during normal program execution.
+
+```clojure
+(deftest addition-works
+  "An optional docstring may precede the body."
+  (assert (= (+ 2 3) 5)))
+
+(deftest ^async async-operation-works
+  (def result (await (fetch-result)))
+  (assert (= result 42)))
+```
+
+A test passes when its body returns normally and fails when it raises an uncaught exception. Return values are ignored. `^async` is the only supported test metadata. Names must be valid unqualified symbols, duplicate normalized names in one file are invalid, and `deftest` cannot be nested in a function or expression. Discovery and legacy test-file conventions are documented under [Testing](PROJECTS.md#testing).
+
 ### Let Bindings
 
 ```clojure

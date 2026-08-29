@@ -405,6 +405,7 @@ class SporkLanguageServer:
             # Definition forms (from compile_toplevel and compile_stmt)
             "def",
             "defn",
+            "deftest",
             "defmacro",
             "defclass",
             "fn",
@@ -680,7 +681,7 @@ class SporkLanguageServer:
     def _extract_definition_symbol(self, form: Any) -> Optional[dict[str, Any]]:
         """Extract a symbol definition from a form if it's a def/defn/etc."""
         from spork.lsp.protocol import SymbolKind
-        from spork.runtime.types import Symbol
+        from spork.runtime.types import Decorated, Symbol
 
         if not isinstance(form, list) or len(form) < 2:
             return None
@@ -696,6 +697,7 @@ class SporkLanguageServer:
         kind_map = {
             "def": SymbolKind.VARIABLE,
             "defn": SymbolKind.FUNCTION,
+            "deftest": SymbolKind.FUNCTION,
             "defmacro": SymbolKind.FUNCTION,
             "defclass": SymbolKind.CLASS,
             "defprotocol": SymbolKind.INTERFACE,
@@ -704,7 +706,12 @@ class SporkLanguageServer:
         if head_name not in kind_map:
             return None
 
-        name = form[1]
+        name_index = 1
+        while name_index < len(form) and isinstance(form[name_index], Decorated):
+            name_index += 1
+        if name_index >= len(form):
+            return None
+        name = form[name_index]
         if not isinstance(name, Symbol):
             return None
 

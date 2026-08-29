@@ -136,6 +136,7 @@ from spork.pds import (
     vec_f64,
     vec_i64,
 )
+from spork.runtime.testing import register_spork_test
 from spork.runtime.types import (
     _MISSING,
     Decorated,
@@ -589,6 +590,11 @@ def setup_runtime_env(env: dict[str, Any]) -> None:
     env.setdefault("spork_kwargs_dict", spork_kwargs_dict)
     env.setdefault("spork_kwargs_map", spork_kwargs_map)
 
+    # Module-local declared test registry. Normal execution defines test
+    # callables and descriptors but never invokes their bodies.
+    env.setdefault("__spork_tests__", [])
+    env.setdefault("__spork_register_test__", register_spork_test)
+
     # Pattern matching
     env.setdefault("MatchError", MatchError)
     env.setdefault("_MISSING", _MISSING)
@@ -609,6 +615,7 @@ __all__ = [
     "spork_try",
     "spork_raise",
     "spork_setattr",
+    "register_spork_test",
     # Environment setup
     "setup_runtime_env",
     # Namespace helpers

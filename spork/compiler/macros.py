@@ -309,8 +309,23 @@ def macroexpand_1(form, macro_env):
         # Should not reach here if is_macro_call returned True
         raise RuntimeError(f"Macro not found: {macro_name}")
 
-    # Call the macro with the arguments (not including the macro name)
-    return macro_fn(*form[1:])
+    # Call the macro with the arguments (not including the macro name). Keep
+    # the invocation location on a generated list so failures in built-in and
+    # user macros point at the source call rather than an enclosing definition.
+    expanded = macro_fn(*form[1:])
+    from spork.compiler.reader import SourceList
+
+    if isinstance(form, SourceList) and isinstance(expanded, list) and not isinstance(
+        expanded, SourceList
+    ):
+        return SourceList(
+            expanded,
+            form.line,
+            form.col,
+            form.end_line,
+            form.end_col,
+        )
+    return expanded
 
 
 def macroexpand(form, macro_env=None, max_depth=100):

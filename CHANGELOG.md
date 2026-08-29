@@ -6,6 +6,19 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+### Added
+
+- Added top-level `deftest` declarations, inline source-test discovery, async test execution, and individual native Spork test reporting.
+
+### Changed
+
+- `spork test` now runs only Spork tests with the native runner; Python test framework integration and the `--spork-only`/`--python-only` switches were removed.
+- New projects use `deftest` in their generated test module.
+
+### Fixed
+
+- Preserve macro invocation locations so assertion failures point at the assertion call in Spork tracebacks.
+
 ## [0.4.1] - 2026-08-29
 
 ### Added

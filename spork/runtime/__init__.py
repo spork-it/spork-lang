@@ -9,6 +9,7 @@ Submodules:
 - persistent data structures: provided by the spork-pds dependency
 - core: Standard library functions (first, rest, map, filter, etc.)
 - utils: Runtime utilities (spork_try, setup_runtime_env, etc.)
+- testing: Module-local descriptors for declared tests
 - ns: Namespace management (loading, registering, finding namespaces)
 
 The runtime is what gets installed into user project environments.
@@ -168,6 +169,7 @@ from spork.pds import (
 )
 
 # Re-export types
+from spork.runtime.testing import SporkTest, register_spork_test
 from spork.runtime.types import (
     _MISSING,
     Decorated,
@@ -234,6 +236,8 @@ __all__ = [
     "KwargsLiteral",
     "Decorated",
     "MatchError",
+    "SporkTest",
+    "register_spork_test",
     "_MISSING",
     # Persistent data structures
     "Vector",

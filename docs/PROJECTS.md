@@ -42,7 +42,7 @@ A manifest is a Spork map containing project metadata and tooling settings:
  :requires-python ">=3.10"
  :spork-version ">=0.4.0,<0.5"
  :dependencies ["httpx>=0.27" "rich"]
- :dev-dependencies ["pytest>=8"]
+ :dev-dependencies []
  :source-paths ["src"]
  :test-paths ["tests"]
  :main "hello-spork.core:main"}
@@ -60,7 +60,7 @@ Paths are relative to the directory containing `spork.it`.
 | `:api` | no | none | Generate public Spork and Python package APIs from one canonical namespace. |
 | `:dependencies` | no | `[]` | Runtime package requirements accepted by `pip`. |
 | `:dev-dependencies` | no | `[]` | Local tools installed by `spork sync --dev`. |
-| `:optional-dependencies` | no | `{}` | Named Python package extras, such as `{:test ["pytest>=8"]}`. |
+| `:optional-dependencies` | no | `{}` | Named Python package extras, such as `{:docs ["sphinx>=8"]}`. |
 | `:source-paths` | no | `["src"]` | Directories searched for Spork namespaces and build inputs. |
 | `:test-paths` | no | `["tests"]` | Directories searched by `spork test`. |
 | `:main` | no | none | Entry point used by `spork run`, in `namespace:function` form. |
@@ -168,7 +168,7 @@ spork run --main other.namespace:start one two
 | `spork remove <package...>` | Removes runtime requirements from the nearest `spork.it`. |
 | `spork sync` | Creates `.venv` and installs the manifest dependencies and Spork runtime. |
 | `spork run [args...]` | Loads and calls the configured entry point. Creates the environment if it is missing. |
-| `spork test` | Runs `test_*.spork`/`*_test.spork`, builds the project, then runs Python `test_*.py` files with pytest. |
+| `spork test` | Discovers and runs declared and legacy Spork tests. |
 | `spork build` | Compiles all `.spork` files under `:source-paths` into `.spork-out/`. |
 | `spork dist` | Builds compiled output, then creates a wheel and source distribution in `dist/`. |
 | `spork clean` | Removes `.venv/`. |
@@ -176,7 +176,30 @@ spork run --main other.namespace:start one two
 | `spork lsp` | Starts the Language Server Protocol server on standard input/output. |
 | `spork version` | Prints the Spork, Python, and platform versions. |
 
-Use `spork <command> --help` for command-specific options. Install development dependencies before testing with `spork sync --dev`; `spork test --spork-only` and `spork test --python-only` select one test kind.
+Use `spork <command> --help` for command-specific options. Install any project-specific development dependencies before testing with `spork sync --dev`.
+
+## Testing
+
+Declare a test with the top-level `deftest` form. Test bodies are registered when a namespace loads but are not executed by `spork run`, direct file execution, normal namespace loading, or project builds.
+
+```clojure
+(ns hello-spork.core)
+
+(defn greet [name]
+  (+ "Hello, " name "!"))
+
+(deftest greet-works
+  (assert (= (greet "Spork") "Hello, Spork!")))
+```
+
+`spork test` discovers:
+
+- `test_*.spork` and `*_test.spork` recursively below `:test-paths`, preserving support for existing script-style test files; and
+- any `.spork` file containing a direct top-level `deftest` below either `:source-paths` or `:test-paths`.
+
+Each declared test runs independently, and an uncaught exception marks only that declaration as failed. Async declarations written as `(deftest ^async name ...)` are awaited by the runner. Files are isolated in separate processes. A convention-named legacy file with no declarations remains one test: its top-level forms run as before, and any uncaught exception fails the file.
+
+A `deftest` name must be a valid unqualified symbol, declarations take no parameters, `^async` is the only supported test metadata, and duplicate normalized names in one file are rejected. Test files should not mix declarations with top-level assertions because top-level code runs while the file is being loaded, before declared tests begin.
 
 ## Build output
 

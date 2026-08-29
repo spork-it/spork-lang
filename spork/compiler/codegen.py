@@ -87,7 +87,14 @@ def gensym(prefix="__spork_"):
 # === Type Annotation Compilation ===
 
 # Special decorator names that are flags, not type annotations
-TYPE_ANNOTATION_FLAGS = {"async", "generator", "static", "classmethod", "staticmethod"}
+TYPE_ANNOTATION_FLAGS = {
+    "async",
+    "generator",
+    "static",
+    "classmethod",
+    "staticmethod",
+    "property",
+}
 
 
 def compile_type_annotation(type_expr):
@@ -249,7 +256,7 @@ def extract_decorators_and_type(decorated_list):
             elif name == "generator":
                 is_generator = True
                 continue
-            elif name in ("staticmethod", "classmethod"):
+            elif name in ("staticmethod", "classmethod", "property"):
                 # These are Python decorators, not type annotations
                 decorators.append(dec_expr)
                 continue

@@ -74,6 +74,8 @@
     (+ (* self._celsius 1.8) 32)))
 
 (def temp (Temperature 100))
+(assert (= temp.celsius 100) "^property should create a readable property")
+(assert (not (callable temp.celsius)) "property access should not return a bound method")
 (print "  Celsius:" temp.celsius)
 (print "  Fahrenheit:" (.get-fahrenheit temp))
 

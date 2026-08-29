@@ -48,6 +48,11 @@ from spork.project.config import (
     load_config,
     spork_to_python,
 )
+from spork.project.dependencies import (
+    DependencyChange,
+    add_dependencies,
+    remove_dependencies,
+)
 from spork.project.dist import (
     DistResult,
     create_dist,
@@ -83,6 +88,10 @@ __all__ = [
     # Dist
     "create_dist",
     "DistResult",
+    # Dependencies
+    "DependencyChange",
+    "add_dependencies",
+    "remove_dependencies",
     # Config
     "ProjectConfig",
     "APIConfig",

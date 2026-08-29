@@ -29,7 +29,7 @@ hello-spork/
 
 Project names are normalized to lower-case Lisp-style names. Underscores become hyphens and unsupported characters are removed.
 
-Project-aware commands locate a project by searching the current directory and its parents for `spork.it`, so they may be run from a subdirectory of the project.
+Project-aware commands locate a project by searching the current directory and its parents for `spork.it`. They use the first (nearest) manifest found, so they may be run from any subdirectory of the project.
 
 ## The `spork.it` manifest
 
@@ -80,6 +80,15 @@ Each dependency is a normal `pip` requirement string:
 :dependencies ["requests>=2.32"
                "numpy>=2,<3"]
 ```
+
+Add or remove runtime dependencies from any directory below the project root:
+
+```bash
+spork add httpx "rich>=13"
+spork remove httpx rich
+```
+
+Each command reports the absolute path of the nearest `spork.it` it changes. Requirements added with `spork add` use normal `pip` syntax. `spork remove` accepts a distribution name and removes its configured requirement even when that requirement contains extras or a version constraint.
 
 After changing dependencies, run:
 
@@ -155,6 +164,8 @@ spork run --main other.namespace:start one two
 | Command | Behavior |
 | --- | --- |
 | `spork repl` | Starts a REPL with project source paths and `.venv` packages available. Creates the environment if it is missing. |
+| `spork add <package...>` | Adds or updates runtime requirements in the nearest `spork.it`. |
+| `spork remove <package...>` | Removes runtime requirements from the nearest `spork.it`. |
 | `spork sync` | Creates `.venv` and installs the manifest dependencies and Spork runtime. |
 | `spork run [args...]` | Loads and calls the configured entry point. Creates the environment if it is missing. |
 | `spork test` | Runs `test_*.spork`/`*_test.spork`, builds the project, then runs Python `test_*.py` files with pytest. |

@@ -5,6 +5,8 @@ This module provides the main CLI entry point for Spork with subcommand support:
 
 - spork repl          Start the interactive REPL
 - spork new <name>    Create a new Spork project
+- spork add <package> Add project dependencies
+- spork remove <pkg>  Remove project dependencies
 - spork sync          Sync project dependencies
 - spork run           Run the project's main entry point
 - spork test          Run project Spork and Python tests
@@ -106,6 +108,57 @@ def cmd_new(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"Error creating project: {e}", file=sys.stderr)
         return 1
+
+
+def _edit_dependencies(args: argparse.Namespace, *, remove: bool) -> int:
+    """Add or remove dependencies in the nearest project manifest."""
+    from pathlib import Path
+
+    from spork.project import ProjectConfig, add_dependencies, remove_dependencies
+
+    try:
+        config = ProjectConfig.load()
+        manifest_path = Path(config.project_root, "spork.it").resolve()
+        if remove:
+            changes = remove_dependencies(manifest_path, args.packages)
+        else:
+            changes = add_dependencies(manifest_path, args.packages)
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        print("Are you in a Spork project directory?", file=sys.stderr)
+        return 1
+    except ValueError as e:
+        print(f"Error in spork.it: {e}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"Error updating spork.it: {e}", file=sys.stderr)
+        return 1
+
+    for change in changes:
+        if change.action == "added":
+            print(f"Adding {change.dependency} to {manifest_path}")
+        elif change.action == "updated":
+            print(
+                f"Updating {change.previous} to {change.dependency} "
+                f"in {manifest_path}"
+            )
+        elif change.action == "removed":
+            print(f"Removing {change.dependency} from {manifest_path}")
+        elif change.action == "unchanged":
+            print(f"{change.dependency} is already in {manifest_path}")
+        else:
+            print(f"{change.dependency} is not in {manifest_path}")
+    return 0
+
+
+def cmd_add(args: argparse.Namespace) -> int:
+    """Add dependencies to the nearest project manifest."""
+    return _edit_dependencies(args, remove=False)
+
+
+def cmd_remove(args: argparse.Namespace) -> int:
+    """Remove dependencies from the nearest project manifest."""
+    return _edit_dependencies(args, remove=True)
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
@@ -636,6 +689,8 @@ def cmd_nrepl_client(host: str, port: int) -> int:
 SUBCOMMANDS = {
     "repl",
     "new",
+    "add",
+    "remove",
     "sync",
     "run",
     "test",
@@ -658,6 +713,8 @@ examples:
   spork                         Start interactive REPL
   spork repl                    Start interactive REPL (explicit)
   spork new my-project          Create a new project
+  spork add httpx rich          Add project dependencies
+  spork remove httpx            Remove a project dependency
   spork sync                    Install project dependencies
   spork run                     Run project's main function
   spork script.spork            Execute a Spork file
@@ -727,6 +784,21 @@ examples:
         "--path",
         "-p",
         help="Parent directory for the project (default: current directory)",
+    )
+
+    # dependency manifest subcommands
+    add_parser = subparsers.add_parser(
+        "add", help="Add packages to :dependencies in spork.it"
+    )
+    add_parser.add_argument(
+        "packages", nargs="+", metavar="PACKAGE", help="Package requirement(s) to add"
+    )
+
+    remove_parser = subparsers.add_parser(
+        "remove", help="Remove packages from :dependencies in spork.it"
+    )
+    remove_parser.add_argument(
+        "packages", nargs="+", metavar="PACKAGE", help="Package name(s) to remove"
     )
 
     # sync subcommand
@@ -875,6 +947,10 @@ def _main(argv: Optional[list[str]] = None) -> int:
         return cmd_repl(args)
     elif args.subcommand == "new":
         return cmd_new(args)
+    elif args.subcommand == "add":
+        return cmd_add(args)
+    elif args.subcommand == "remove":
+        return cmd_remove(args)
     elif args.subcommand == "sync":
         return cmd_sync(args)
     elif args.subcommand == "run":

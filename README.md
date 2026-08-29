@@ -126,6 +126,7 @@ Common commands include:
 | Command | Purpose |
 | --- | --- |
 | `spork repl` | Start a project-aware REPL |
+| `spork add` / `spork remove` | Edit dependencies in the nearest `spork.it` |
 | `spork sync` | Create the project environment and install dependencies |
 | `spork run` | Run the configured entry point |
 | `spork test` | Run declared Spork and Python tests |

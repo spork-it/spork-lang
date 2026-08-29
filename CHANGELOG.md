@@ -6,6 +6,10 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+### Added
+
+- `spork add` and `spork remove` commands for editing runtime dependencies in the nearest parent `spork.it`.
+
 ## [0.4.0] - 2026-08-29
 
 ### Added

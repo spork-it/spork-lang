@@ -1,7 +1,8 @@
 ;; Test file for Spork Type System v1.0
 ;; Tests type annotations on variables, function parameters, and return types
 
-(ns test-types)
+(ns test-types
+  (:import [typing :refer [Generic TypeVar]]))
 
 (print "\n=== Spork Type System v1.0 Tests ===\n")
 
@@ -152,6 +153,24 @@
 ;; Python-style nested Callable syntax compiles to Callable[[int], int].
 (defn apply-twice-nested [^(Callable [[int] int]) f ^int x]
   (f (f x)))
+
+;; User-defined generics and arbitrary-argument callables.
+(def GenericT (TypeVar "GenericT"))
+
+(defclass TypedBox [(Generic GenericT)]
+  (defn __init__ [self ^GenericT value]
+    (set! self.value value)))
+
+(defn ^(TypedBox GenericT) typed-box [^GenericT value]
+  (TypedBox value))
+
+(defn ^GenericT invoke-updater
+  [^(Callable [[...] GenericT]) function ^GenericT value ^Any & args]
+  (apply function (concat [value] args)))
+
+(def boxed-number (typed-box 7))
+(assert (= boxed-number.value 7))
+(assert (= (invoke-updater (fn [value amount] (+ value amount)) 2 3) 5))
 
 ;; Accessing __annotations__ forces annotation evaluation on Python 3.14+.
 (print "apply-twice-nested.__annotations__:"

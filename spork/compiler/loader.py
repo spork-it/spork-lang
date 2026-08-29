@@ -226,12 +226,13 @@ def compile_file_to_python(
 
     if aot:
         public_names = _collect_public_names(mod)
-        bootstrap = ast.parse(
+        prelude = ast.parse(
+            "from __future__ import annotations\n"
             "from spork.runtime import setup_runtime_env as __spork_setup_runtime_env\n"
             "__spork_setup_runtime_env(globals())\n"
             "del __spork_setup_runtime_env\n"
         )
-        mod.body = bootstrap.body + mod.body
+        mod.body = prelude.body + mod.body
         mod.body.append(
             ast.Assign(
                 targets=[ast.Name(id="__all__", ctx=ast.Store())],

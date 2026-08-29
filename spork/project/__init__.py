@@ -41,6 +41,7 @@ from spork.project.config import (
     DEFAULT_TEST_PATHS,
     PROJECT_FILENAME,
     ProjectConfig,
+    PythonAPIConfig,
     find_project_root,
     load_config,
     spork_to_python,
@@ -82,6 +83,7 @@ __all__ = [
     "DistResult",
     # Config
     "ProjectConfig",
+    "PythonAPIConfig",
     "load_config",
     "find_project_root",
     "spork_to_python",

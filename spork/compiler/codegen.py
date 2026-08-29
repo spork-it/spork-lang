@@ -174,16 +174,20 @@ def compile_type_annotation(type_expr):
             else:
                 parameter_types = callable_parts[:-1]
 
+            if (
+                len(parameter_types) == 1
+                and isinstance(parameter_types[0], Symbol)
+                and parameter_types[0].name == "..."
+            ):
+                parameters_node = ast.Constant(value=Ellipsis)
+            else:
+                parameters_node = ast.List(
+                    elts=[compile_type_annotation(arg) for arg in parameter_types],
+                    ctx=ast.Load(),
+                )
+
             slice_node = ast.Tuple(
-                elts=[
-                    ast.List(
-                        elts=[
-                            compile_type_annotation(arg) for arg in parameter_types
-                        ],
-                        ctx=ast.Load(),
-                    ),
-                    compile_type_annotation(result_type),
-                ],
+                elts=[parameters_node, compile_type_annotation(result_type)],
                 ctx=ast.Load(),
             )
         elif len(type_args) == 1:
@@ -307,7 +311,11 @@ def extract_decorators_and_type(decorated_list):
                 base_name = (
                     first_name.split(".")[-1] if "." in first_name else first_name
                 )
-                if first_name in type_constructors or base_name in type_constructors:
+                if (
+                    first_name in type_constructors
+                    or base_name in type_constructors
+                    or base_name[:1].isupper()
+                ):
                     if return_type is None:
                         return_type = dec_expr
                     else:
@@ -1609,8 +1617,13 @@ def compile_defclass(args, form_loc=None):
     body_start = 1
     if len(args) > 1 and isinstance(args[1], VectorLiteral):
         for base in args[1].items:
-            if isinstance(base, Symbol):
-                bases.append(compile_expr(base))
+            if (
+                isinstance(base, list)
+                and base
+                and isinstance(base[0], Symbol)
+                and base[0].name.rsplit(".", 1)[-1] == "Generic"
+            ):
+                bases.append(compile_type_annotation(base))
             else:
                 bases.append(compile_expr(base))
         body_start = 2

@@ -57,6 +57,7 @@ Paths are relative to the directory containing `spork.it`.
 | `:description` | no | none | Distribution description. |
 | `:requires-python` | no | `">=3.10"` | Python compatibility written to package metadata. |
 | `:spork-version` | no | build version | Compatible `spork-lang` version specifier for built distributions. |
+| `:python-api` | no | none | Generate package exports, version metadata, `py.typed`, and `.pyi` stubs from typed Spork declarations. |
 | `:dependencies` | no | `[]` | Runtime package requirements accepted by `pip`. |
 | `:dev-dependencies` | no | `[]` | Local tools installed by `spork sync --dev`. |
 | `:optional-dependencies` | no | `{}` | Named Python package extras, such as `{:test ["pytest>=8"]}`. |
@@ -182,9 +183,53 @@ The default output is `.spork-out/`. Each source module produces Python source p
     └── core.spork.map.json
 ```
 
-The generated Python initializes the Spork runtime and lowers project `:require` clauses to normal Python imports, so it can be imported without the Spork CLI. Original `.spork` files are copied beside it for source inspection and for Spork consumers of an installed package. Hand-written `.py`, `.pyi`, and `py.typed` files under source roots are also copied; use these for thin Python facades and typing support.
+The generated Python initializes the Spork runtime and lowers project `:require` clauses to normal Python imports, so it can be imported without the Spork CLI. Original `.spork` files are copied beside it for source inspection and for Spork consumers of an installed package. Hand-written `.py`, `.pyi`, and `py.typed` files under source roots are also copied for projects that do not configure a generated Python API.
 
 Choose another output directory with `spork build --out-dir PATH`.
+
+### Generated Python APIs and typing
+
+Libraries can expose a pleasant top-level Python API without maintaining package initializers or stubs by adding `:python-api` to `spork.it`:
+
+```clojure
+:python-api
+{:package "my-spork-library"
+ :from "my-spork-library.core"
+ :exports ["Widget" "make-widget" "widget?"]
+ :aliases {"widget?" "is-widget"}
+ :version true
+ :typed true}
+```
+
+Names use normal Spork spelling and are normalized for Python. The example generates explicit imports from `my_spork_library.core`, including both `widget_q` and its `is_widget` alias. `:package` identifies the package initializer to generate, while `:from` identifies the compiled module containing the exported names.
+
+With `:version true`, the initializer receives `__version__` directly from the manifest. With `:typed true`, every compiled Spork module receives a generated `.pyi`, the package receives `__init__.pyi`, and `py.typed` is created automatically. Existing non-empty hand-written files at generated paths are rejected rather than overwritten.
+
+Spork annotations become Python signatures and generic stubs:
+
+```clojure
+(ns my-spork-library.core
+  (:import [typing :refer [Callable Generic TypeVar]]))
+
+(def T (TypeVar "T"))
+
+(defclass Box [(Generic T)]
+  (defn __init__ [self ^T value]
+    (set! self._value value))
+
+  (defn ^property ^T value [self]
+    self._value))
+
+(defn ^(Box T) box [^T value]
+  (Box value))
+
+(defn ^T update [^(Box T) boxed ^(Callable [[...] T]) function]
+  (function boxed.value))
+```
+
+A parenthesized `Generic` base compiles to Python subscription syntax (`Generic[T]`). Capitalized generic return types such as `^(Box T)` are recognized as annotations, and `Callable` accepts `...` for arbitrary arguments. AOT modules use postponed annotation evaluation, so forward and recursive generic references are safe.
+
+The generated package files are build artifacts: do not add source `__init__.py`, `__init__.pyi`, module `.pyi`, or `py.typed` files at paths owned by `:python-api`.
 
 ## Build distributions
 

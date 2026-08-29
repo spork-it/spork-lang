@@ -429,18 +429,31 @@ def build_project(
                 else:
                     print(f"[error] {result.error}")
 
-    # Include original Spork sources and optional Python facade/type files.
+    # Include original Spork sources and optional Python support files.
     copy_source_files(source_roots, out_dir)
+
+    # Calculate compilation statistics before generating package-level APIs.
+    success_count = sum(1 for r in results if r.success)
+    failure_count = sum(1 for r in results if not r.success)
+
+    # Generate a Python package facade and stubs from typed Spork declarations.
+    # Hand-written files remain supported when :python-api is not configured.
+    if failure_count == 0 and (project_root / "spork.it").is_file():
+        from spork.project.config import ProjectConfig
+        from spork.project.stubs import generate_package_api
+
+        config = ProjectConfig.load(str(project_root))
+        generate_package_api(
+            out_dir,
+            config,
+            [result.python_path for result in results if result.success],
+        )
 
     # Generate pyproject.toml
     generate_pyproject_toml(out_dir, project_root)
 
     # Ensure __init__.py files exist
     ensure_init_files(out_dir)
-
-    # Calculate statistics
-    success_count = sum(1 for r in results if r.success)
-    failure_count = sum(1 for r in results if not r.success)
 
     if verbose:
         print()

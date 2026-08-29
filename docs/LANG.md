@@ -568,6 +568,26 @@ Common Python and `typing` generic types are available without imports. Annotati
 ; Equivalent syntax with an explicit parameter vector
 (defn apply-fn2 [^(Callable [[int] int]) f ^int x]
   (f x))
+
+; Callable with arbitrary additional arguments
+(defn ^int apply-update [^(Callable [[...] int]) f ^int value]
+  (f value))
+```
+
+User-defined generic classes import `Generic` and `TypeVar` from Python's `typing` module. A parenthesized `Generic` base emits subscription syntax rather than a function call, and capitalized generic forms are valid return annotations:
+
+```clojure
+(ns example.box
+  (:import [typing :refer [Generic TypeVar]]))
+
+(def T (TypeVar "T"))
+
+(defclass Box [(Generic T)]
+  (defn __init__ [self ^T value]
+    (set! self.value value)))
+
+(defn ^(Box T) box [^T value]
+  (Box value))
 ```
 
 ### Available Type Constructors

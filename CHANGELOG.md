@@ -6,6 +6,12 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-08-29
+
+### Changed
+
+- Refactored compiler code generation into focused internal modules without changing user-visible behavior.
+
 ## [0.4.3] - 2026-08-29
 
 ### Fixed
@@ -236,7 +242,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/spork-it/spork-lang/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/spork-it/spork-lang/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/spork-it/spork-lang/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/spork-it/spork-lang/compare/v0.4.0...v0.4.1

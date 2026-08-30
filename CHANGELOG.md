@@ -13,6 +13,10 @@ This history was backfilled from release tags, commit history, and published rel
 - Added `ProjectRuntime` for loading values and invoking functions directly from unbuilt project source or installed Spork namespaces.
 - Added project-aware `CommandContext.load_entry`, `invoke_entry`, and `require_project` operations.
 - Added recursive read-only access to package-specific manifest configuration.
+- Added typed `:commands` declarations with reserved-name, target, description, and normalized identifier validation.
+- Added generated `spork.commands.v1` entry points and command payload verification for wheels and source distributions.
+- Added static `spork check` diagnostics for package command namespaces, functions, and target kinds.
+- Added a minimal source-only command-provider example.
 
 ### Changed
 

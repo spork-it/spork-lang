@@ -59,6 +59,7 @@ Paths are relative to the directory containing `spork.it`.
 | `:requires-python` | no | `">=3.10"` | Python compatibility written to package metadata. |
 | `:spork-version` | no | active version | Compatible `spork-lang` toolchain range used by synchronization, CLI delegation, and distribution builds. |
 | `:api` | no | none | Generate public Spork and Python package APIs from one canonical namespace. |
+| `:commands` | no | `{}` | Top-level command providers published in distribution metadata. |
 | `:dependencies` | no | `[]` | Runtime package requirements accepted by `pip`. |
 | `:dev-dependencies` | no | `[]` | Local tools installed by `spork sync --dev`. |
 | `:optional-dependencies` | no | `{}` | Named Python package extras, such as `{:docs ["sphinx>=8"]}`. |
@@ -183,6 +184,43 @@ def load_project_entries():
 
 Command providers receive the same operations through `CommandContext.load_entry(...)` and `CommandContext.invoke_entry(...)`. `CommandContext.require_project()` returns the selected `ProjectConfig` or raises an actionable error when the command is outside a project. Its `project_root`, provider provenance, and context fields are read-only.
 
+### Package command providers
+
+A package can publish a complete top-level CLI by declaring `:commands`:
+
+```clojure
+:commands
+{"greet" {:main "hello-spork.cli:command"
+          :description "Print a project greeting"}}
+```
+
+The target is an ordinary source function with the command-provider contract:
+
+```clojure
+(ns hello-spork.cli)
+
+(defn ^int command [context argv]
+  (print "Hello from Spork")
+  0)
+```
+
+A provider receives the selected `CommandContext` and a vector containing only the arguments after its top-level command name. It returns an integer status or `nil` for success and owns any nested parsing and help. Packages normally declare one top-level name and implement all nested verbs behind it. A declaration without a description may use the string shorthand:
+
+```clojure
+:commands {"greet" "hello-spork.cli:command"}
+```
+
+Command names use lower-case letters, digits, and single hyphens, beginning with a letter. Core names such as `run`, `build`, and `plugin` are reserved. Targets must use `namespace:function` form, normalize to valid Python module and function names, and identify a function defined in project source.
+
+`ProjectConfig.commands` exposes typed `CommandConfig` values. `spork check` validates each source target without importing or executing provider code. `spork dist` repeats command validation, verifies the generated module and function are included in the package, and writes normalized entry points under `spork.commands.v1`:
+
+```toml
+[project.entry-points."spork.commands.v1"]
+greet = "hello_spork.cli:command"
+```
+
+The resulting provider distribution depends on `spork-runtime`, not `spork-lang`, unless the package separately uses compiler APIs. See [`examples/command-provider`](../examples/command-provider/) for a complete minimal package.
+
 ## Project commands
 
 | Command | Behavior |
@@ -220,6 +258,7 @@ The command reads every `.spork` file below `:source-paths` and `:test-paths`, b
 - unresolved Spork namespaces and Python modules;
 - names requested through `:refer` that the target namespace does not export;
 - the configured `:main` namespace and function;
+- package `:commands` source namespaces, functions, and target kinds;
 - generated `:api` source exports, normalized names, and hand-written-file conflicts; and
 - both ordinary and generated package-level Spork namespaces.
 
@@ -262,6 +301,7 @@ The top-level object contains `version`, `project`, `projectRoot`, `filesChecked
 | `SPK011` | The generated `:api` configuration is invalid. |
 | `SPK012` | A configured source root does not exist. |
 | `SPK013` | No Spork source files were found. |
+| `SPK014` | A package `:commands` source target is invalid. |
 
 The command exits with status zero when no errors are present and status one otherwise. `--warnings-as-errors` also makes warnings fail the command while preserving their warning severity in output.
 
@@ -359,7 +399,7 @@ The generated package files are build artifacts: do not add source `__init__.spo
 spork dist --clean
 ```
 
-By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The configured `:spork-version` is checked against the delegated project compiler at build time. Generated package metadata directly requires `spork-runtime`—not `spork-lang`—alongside the project dependencies, optional extras, README, license, authors, classifiers, and project URLs from `spork.it`. `--clean` removes stale build and distribution output before rebuilding.
+By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The configured `:spork-version` is checked against the delegated project compiler at build time. Generated package metadata directly requires `spork-runtime`—not `spork-lang`—alongside the project dependencies, optional extras, README, license, authors, classifiers, and project URLs from `spork.it`. Declared package commands become versioned `spork.commands.v1` entry points after their source and compiled payloads are validated. `--clean` removes stale build and distribution output before rebuilding.
 
 Useful variants:
 

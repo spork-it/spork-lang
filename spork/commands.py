@@ -17,6 +17,25 @@ if TYPE_CHECKING:
     from spork.project.runtime import ProjectRuntime
 
 COMMAND_API_VERSION = 1
+COMMAND_ENTRY_POINT_GROUP = f"spork.commands.v{COMMAND_API_VERSION}"
+RESERVED_COMMAND_NAMES = frozenset(
+    {
+        "add",
+        "build",
+        "check",
+        "clean",
+        "dist",
+        "lsp",
+        "new",
+        "plugin",
+        "remove",
+        "repl",
+        "run",
+        "sync",
+        "test",
+        "version",
+    }
+)
 
 CommandScope: TypeAlias = Literal["core", "project", "active", "global"]
 

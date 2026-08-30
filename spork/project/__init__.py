@@ -52,6 +52,7 @@ from spork.project.config import (
     DEFAULT_TEST_PATHS,
     PROJECT_FILENAME,
     APIConfig,
+    CommandConfig,
     ProjectConfig,
     PythonAPIConfig,
     SporkAPIConfig,
@@ -124,6 +125,7 @@ __all__ = [
     "remove_dependencies",
     # Config
     "ProjectConfig",
+    "CommandConfig",
     "APIConfig",
     "SporkAPIConfig",
     "PythonAPIConfig",

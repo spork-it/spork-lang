@@ -133,8 +133,12 @@ class ProjectRuntime:
         spork_file = find_spork_file_for_ns(namespace)
         if spork_file is None:
             searched = self.config.get_absolute_source_paths()
+            search_details = "\n".join(f"  - {path}" for path in searched)
+            if not search_details:
+                search_details = "  (no source paths configured)"
             raise ProjectNamespaceNotFoundError(
-                f"Namespace {namespace!r} not found\nSearched in: {searched}"
+                f"Namespace {namespace!r} not found\n"
+                f"Searched in:\n{search_details}"
             )
 
         absolute_file = Path(spork_file).resolve()

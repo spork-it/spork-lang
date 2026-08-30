@@ -199,7 +199,10 @@ def test_runtime_has_actionable_entry_diagnostics(tmp_path: Path):
         runtime.load_entry("fixture.core:")
     with pytest.raises(ProjectNamespaceNotFoundError, match="missing.core") as missing:
         runtime.load_entry("missing.core:value")
-    assert str(tmp_path / "app-src") in str(missing.value)
+    assert str(missing.value) == (
+        "Namespace 'missing.core' not found\n"
+        f"Searched in:\n  - {tmp_path / 'app-src'}"
+    )
     with pytest.raises(ProjectEntryNotFoundError, match="missing-value"):
         runtime.load_entry("fixture.core:missing-value")
     with pytest.raises(ProjectEntryNotCallableError, match="not callable"):

@@ -6,6 +6,10 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+### Fixed
+
+- Render missing-namespace source search paths without representation escaping on Windows.
+
 ## [0.6.0] - 2026-08-30
 
 ### Added

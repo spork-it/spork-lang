@@ -64,13 +64,16 @@ def eval_str(src: str, env: Optional[dict[str, Any]] = None):
 
 def exec_file(path: str, env: Optional[dict[str, Any]] = None):
     """Execute a Spork source file."""
-    from spork.runtime.ns import (
-        init_source_roots,
-        register_namespace,
-    )
+    from spork.runtime import ns as runtime_ns
+    from spork.runtime.ns import register_namespace
 
-    # Initialize source roots based on the file being executed
-    init_source_roots(current_file=path)
+    # Project commands and embedding callers may have configured source roots
+    # that cannot be inferred from the file's immediate directory. In
+    # particular, resetting here would discard a project's ``src`` root before
+    # compiling its entrypoint. Standalone callers still get the inferred
+    # defaults when no resolver context has been initialized.
+    if not runtime_ns.SOURCE_ROOTS:
+        runtime_ns.init_source_roots(current_file=path)
 
     with open(path, encoding="utf-8") as f:
         src = f.read()

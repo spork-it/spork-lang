@@ -6,6 +6,10 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve preconfigured project source roots when executing an entrypoint, so `spork run` can resolve required sibling namespaces under configured `:source-paths`.
+
 ## [0.5.1] - 2026-08-29
 
 ### Added

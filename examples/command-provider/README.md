@@ -20,3 +20,12 @@ greet = "spork_greeter.cli:command"
 
 The generated distribution requires `spork-runtime` but does not require
 `spork-lang` unless compiler APIs are added as a normal project dependency.
+After adding `spork-greeter` to a consumer's `:dependencies` and running
+`spork sync`, invoke the project-local provider with:
+
+```bash
+spork greet
+```
+
+Top-level discovery reads only package metadata; the compiled provider module
+is imported lazily when `greet` is selected.

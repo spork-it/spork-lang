@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import importlib
 import io
 import re
 import subprocess
@@ -185,13 +186,14 @@ def examples() -> list[Example]:
                 ),
                 None,
             )
-            directive, directive_value = (
-                parsed_markers[adjacent.start()] if adjacent else (None, None)
-            )
-            if adjacent:
+            if adjacent is None:
+                directive, directive_value = None, None
+            else:
+                directive, directive_value = parsed_markers[adjacent.start()]
                 used_markers.add(adjacent.start())
             language = match.group(1).strip() or "text"
             if directive and language != "clojure":
+                assert adjacent is not None
                 line = text.count("\n", 0, adjacent.start()) + 1
                 raise ValueError(
                     f"{path.relative_to(ROOT)}:{line}: verify-docs markers require a clojure fence"
@@ -586,25 +588,51 @@ def verify_spork(example: Example) -> tuple[bool, str]:
     return True, f"executed:{assertion_count}"
 
 
+def documented_hello_source() -> str:
+    """Return the `hello.spork` source introduced by the README quick start."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    match = re.search(
+        r"Or create `hello\.spork`:\s*```clojure\n(.*?)^```",
+        readme,
+        re.MULTILINE | re.DOTALL,
+    )
+    if match is None:
+        raise ValueError("README.md does not define the documented hello.spork")
+    return match.group(1)
+
+
 def verify_python(example: Example) -> None:
-    namespace: dict[str, object] = {"__name__": "__docs_example__"}
-    exec(
-        """
-import sys, types
+    imports_hello = "from hello import greet" in example.source
+    with tempfile.TemporaryDirectory(prefix="spork-python-docs-") as temp_name:
+        temp = Path(temp_name)
+        if imports_hello:
+            (temp / "hello.spork").write_text(
+                documented_hello_source(), encoding="utf-8"
+            )
+
+        namespace: dict[str, object] = {"__name__": "__docs_example__"}
+        exec(
+            """
 import spork
 from spork.pds import *
-module = types.ModuleType("my_spork_module")
-module.greet = lambda name: f"Hello, {name}!"
-sys.modules["my_spork_module"] = module
 """,
-        namespace,
-    )
-    code = compile("\n" * example.line + example.source, example.location, "exec")
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        exec(code, namespace)
-    if "from my_spork_module import greet" in example.source:
-        assert output.getvalue() == "Hello, Python!\n"
+            namespace,
+        )
+        code = compile("\n" * example.line + example.source, example.location, "exec")
+        output = io.StringIO()
+        sys.path.insert(0, str(temp))
+        importlib.invalidate_caches()
+        try:
+            with contextlib.redirect_stdout(output):
+                exec(code, namespace)
+        finally:
+            sys.path.remove(str(temp))
+            if imports_hello:
+                sys.modules.pop("hello", None)
+            importlib.invalidate_caches()
+
+    if imports_hello:
+        assert output.getvalue() == "Hello, Spork!\nHello, Python!\n"
 
 
 def main() -> int:

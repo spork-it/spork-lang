@@ -2,12 +2,13 @@
 
 Core commands and future package-provided commands use the same immutable
 provider, context, descriptor, and invocation contract. Project runtime
-services are exposed through the context while provider discovery remains a
-separate concern for later command-system phases.
+services are exposed through the context, while metadata-only provider
+resolution and lazy loading live in :mod:`spork.command_discovery`.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal, Optional, TypeAlias
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
 COMMAND_API_VERSION = 1
 COMMAND_ENTRY_POINT_GROUP = f"spork.commands.v{COMMAND_API_VERSION}"
+COMMAND_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 RESERVED_COMMAND_NAMES = frozenset(
     {
         "add",
@@ -42,6 +44,10 @@ CommandScope: TypeAlias = Literal["core", "project", "active", "global"]
 
 class ProjectRequiredError(RuntimeError):
     """Raised when a command needs project services outside a project."""
+
+
+class CommandResultError(TypeError):
+    """Raised when a selected command violates the result contract."""
 
 
 @dataclass(frozen=True)
@@ -144,7 +150,7 @@ class CommandSpec:
         if result is None:
             return 0
         if type(result) is not int:
-            raise TypeError(
+            raise CommandResultError(
                 f"command {self.name!r} returned {type(result).__name__}; "
                 "expected int or None"
             )

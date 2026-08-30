@@ -20,7 +20,6 @@ The spork.it file uses Spork map syntax:
 
 import keyword
 import os
-import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
@@ -35,7 +34,6 @@ DEFAULT_SOURCE_PATHS = ["src"]
 DEFAULT_TEST_PATHS = ["tests"]
 DEFAULT_REQUIRES_PYTHON = ">=3.10"
 PROJECT_FILENAME = "spork.it"
-COMMAND_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
 
 @dataclass(frozen=True)
@@ -184,7 +182,7 @@ def _validate_raw_command_names(config_form: MapLiteral) -> None:
 
 def _parse_commands(value: Any) -> dict[str, CommandConfig]:
     """Parse typed package command declarations from a manifest value."""
-    from spork.commands import RESERVED_COMMAND_NAMES
+    from spork.commands import COMMAND_NAME_PATTERN, RESERVED_COMMAND_NAMES
 
     if not isinstance(value, dict):
         raise ValueError(":commands must be a map")

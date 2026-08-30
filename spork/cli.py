@@ -12,7 +12,8 @@ This module provides the main CLI entry point for Spork with subcommand support:
 - spork test          Run project Spork tests
 - spork check         Check all project sources without executing them
 - spork build         Build project to .spork-out/ with Python + source maps
-- spork <file>        Execute a Spork file directly
+- spork <provider>    Run a project-local or active extension command
+- spork <file>        Execute an explicit Spork file path
 
 Legacy flags are still supported for backwards compatibility:
 - spork -c <code>     Execute code directly
@@ -27,16 +28,29 @@ import subprocess
 import sys
 import traceback
 from dataclasses import dataclass
+from difflib import get_close_matches
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Mapping, Optional
+from typing import TYPE_CHECKING, Callable, Mapping, Optional
 
+from spork.command_discovery import (
+    CommandCatalog,
+    CommandProviderLoadError,
+    DiscoveredCommand,
+    discover_extension_commands,
+)
 from spork.commands import (
     CommandContext,
     CommandProvider,
+    CommandResultError,
     CommandSpec,
+    ProjectRequiredError,
+    create_command_context,
     invoke_command,
 )
+
+if TYPE_CHECKING:
+    from spork.project.config import ProjectConfig
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -673,13 +687,31 @@ def cmd_nrepl_client(host: str, port: int) -> int:
 # These commands must remain available when the project environment is absent,
 # stale, or being removed. Other commands require a compatible toolchain.
 _TOOLCHAIN_OPTIONAL_COMMANDS = {"add", "remove", "sync", "version"}
-_NEVER_DELEGATE_COMMANDS = {"new", "clean"}
+_NEVER_DELEGATE_COMMANDS = {"new", "clean", "plugin"}
+
+
+def _is_explicit_file_token(token: str) -> bool:
+    """Return whether a top-level token explicitly selects a file path."""
+    separators = {os.sep}
+    if os.altsep:
+        separators.add(os.altsep)
+    return (
+        token.endswith(".spork")
+        or Path(token).is_absolute()
+        or token in {".", ".."}
+        or any(separator in token for separator in separators)
+    )
 
 
 def _project_command(argv: list[str]) -> Optional[str]:
-    """Return the explicit project command, if one was supplied."""
-    if argv and argv[0] in CORE_COMMANDS:
-        return argv[0]
+    """Return a core or extension candidate relevant to project delegation."""
+    if not argv:
+        return None
+    candidate = argv[0]
+    if candidate in CORE_COMMANDS or candidate == "plugin":
+        return candidate
+    if not candidate.startswith("-") and not _is_explicit_file_token(candidate):
+        return candidate
     return None
 
 
@@ -740,8 +772,9 @@ def _delegate_to_project_toolchain(argv: list[str]) -> Optional[int]:
             return 1
         return result.returncode
 
-    if command in _TOOLCHAIN_OPTIONAL_COMMANDS or any(
-        argument in {"-h", "--help"} for argument in argv
+    help_requested = any(argument in {"-h", "--help"} for argument in argv)
+    if command in _TOOLCHAIN_OPTIONAL_COMMANDS or (
+        help_requested and (command is None or command in CORE_COMMANDS)
     ):
         return None
 
@@ -1049,8 +1082,98 @@ def _core_command_help() -> str:
     )
 
 
-def create_parser() -> argparse.ArgumentParser:
+def _extension_command_help(commands: Mapping[str, DiscoveredCommand]) -> str:
+    if not commands:
+        return ""
+    width = max(len(name) for name in commands)
+    entries = "\n".join(
+        f"  {name:<{width}}  {command.summary}"
+        for name, command in sorted(commands.items())
+    )
+    return f"\nextension commands:\n{entries}\n"
+
+
+@dataclass(frozen=True)
+class _ExtensionCommandState:
+    catalog: CommandCatalog
+    project: Optional["ProjectConfig"] = None
+    project_error: Optional[str] = None
+
+
+def _discover_extension_state() -> _ExtensionCommandState:
+    """Load optional project metadata and discover providers without imports."""
+    from spork.project.config import ProjectConfig
+
+    project = None
+    project_error = None
+    try:
+        project = ProjectConfig.load()
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError) as error:
+        project_error = str(error)
+    return _ExtensionCommandState(
+        catalog=discover_extension_commands(project),
+        project=project,
+        project_error=project_error,
+    )
+
+
+def _print_discovery_diagnostic(message: str, *, warning: bool = False) -> None:
+    prefix = "Warning" if warning else "Error"
+    print(f"{prefix}: {message}", file=sys.stderr)
+
+
+def _invoke_extension_command(
+    command: DiscoveredCommand,
+    argv: list[str],
+    project: Optional["ProjectConfig"],
+) -> int:
+    """Invoke one lazily loaded extension through the shared command contract."""
+    from spork.project.runtime import ProjectRuntimeError
+
+    spec = command.create_spec()
+    context = create_command_context(spec, project=project)
+    provider = command.provider
+    version = f"=={provider.version}" if provider.version else ""
+    provenance = (
+        f"command {command.name!r} from {provider.name}{version} "
+        f"({provider.scope})"
+    )
+    try:
+        return invoke_command(spec, argv, context=context)
+    except (
+        CommandProviderLoadError,
+        CommandResultError,
+        ProjectRequiredError,
+        ProjectRuntimeError,
+    ) as error:
+        _print_discovery_diagnostic(f"{provenance}: {error}")
+        return 1
+    except Exception as error:
+        _print_discovery_diagnostic(
+            f"{provenance} raised {type(error).__name__}: {error}"
+        )
+        raise
+
+
+def _unknown_command(command: str, catalog: CommandCatalog) -> int:
+    _print_discovery_diagnostic(f"unknown command {command!r}")
+    choices = [*CORE_COMMANDS, *catalog.commands]
+    matches = get_close_matches(command, choices, n=3, cutoff=0.6)
+    if matches:
+        print(
+            "Did you mean " + " or ".join(repr(match) for match in matches) + "?",
+            file=sys.stderr,
+        )
+    return 2
+
+
+def create_parser(
+    extension_commands: Optional[Mapping[str, DiscoveredCommand]] = None,
+) -> argparse.ArgumentParser:
     """Create the top-level parser for legacy flags and general help."""
+    extension_help = _extension_command_help(extension_commands or {})
     parser = argparse.ArgumentParser(
         prog="spork",
         description="Spork - A Lisp to Python transpiler",
@@ -1058,7 +1181,7 @@ def create_parser() -> argparse.ArgumentParser:
         epilog=f"""
 core commands:
 {_core_command_help()}
-
+{extension_help}
 examples:
   spork                         Start interactive REPL
   spork repl                    Start interactive REPL (explicit)
@@ -1131,20 +1254,66 @@ def _main(argv: Optional[list[str]] = None) -> int:
     if delegated_result is not None:
         return delegated_result
 
-    # A core command owns every argument after its top-level name. This is the
-    # same raw-argument boundary that package-provided commands will use.
+    # Core commands remain reliable bootstrap operations and never require
+    # dynamic metadata discovery.
     if arguments and arguments[0] in CORE_COMMANDS:
         command = CORE_COMMANDS[arguments[0]]
         return invoke_command(command, arguments[1:])
 
-    # Preserve direct file execution and legacy flags outside command parsing.
+    extension_state: Optional[_ExtensionCommandState] = None
+    command_candidate = None
+    if (
+        arguments
+        and not arguments[0].startswith("-")
+        and not _is_explicit_file_token(arguments[0])
+    ):
+        command_candidate = arguments[0]
+        extension_state = _discover_extension_state()
+        if extension_state.project_error is not None:
+            _print_discovery_diagnostic(
+                f"could not load project configuration: "
+                f"{extension_state.project_error}"
+            )
+            return 1
+
+        diagnostics = extension_state.catalog.diagnostics_for(command_candidate)
+        if diagnostics:
+            for diagnostic in diagnostics:
+                _print_discovery_diagnostic(diagnostic.message)
+            return 1
+
+        extension = extension_state.catalog.commands.get(command_candidate)
+        if extension is not None:
+            return _invoke_extension_command(
+                extension,
+                arguments[1:],
+                extension_state.project,
+            )
+        return _unknown_command(command_candidate, extension_state.catalog)
+
+    # Preserve explicit file execution and legacy flags outside command parsing.
     file_to_run = None
     legacy_arguments = arguments
-    if arguments and not arguments[0].startswith("-"):
+    if arguments and _is_explicit_file_token(arguments[0]):
         file_to_run = arguments[0]
         legacy_arguments = arguments[1:]
 
-    args = create_parser().parse_args(legacy_arguments)
+    show_help = any(argument in {"-h", "--help"} for argument in legacy_arguments)
+    if show_help and extension_state is None:
+        extension_state = _discover_extension_state()
+        if extension_state.project_error is not None:
+            _print_discovery_diagnostic(
+                f"could not load project configuration: "
+                f"{extension_state.project_error}",
+                warning=True,
+            )
+        for diagnostic in extension_state.catalog.diagnostics:
+            _print_discovery_diagnostic(diagnostic.message, warning=True)
+
+    extension_commands = (
+        extension_state.catalog.commands if extension_state is not None else None
+    )
+    args = create_parser(extension_commands).parse_args(legacy_arguments)
 
     if args.nrepl:
         return cmd_nrepl_server(args.host, args.port)

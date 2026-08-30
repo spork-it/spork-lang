@@ -221,6 +221,26 @@ greet = "hello_spork.cli:command"
 
 The resulting provider distribution depends on `spork-runtime`, not `spork-lang`, unless the package separately uses compiler APIs. See [`examples/command-provider`](../examples/command-provider/) for a complete minimal package.
 
+### Command discovery and dispatch
+
+After a consumer declares and synchronizes a provider as an ordinary dependency, its complete CLI is available through the provider's top-level name:
+
+```bash
+spork sync
+spork greet nested --format json
+spork greet --help
+```
+
+Spork first checks static core commands, then `spork.commands.v1` metadata in the project's `.venv`, and then providers installed in the active launcher environment. A project provider shadows an active provider with the same name. Multiple providers for one name in the same scope are an error; malformed project metadata also prevents silent fallback to an active provider. Explicitly managed global plugin environments are not part of project-local dispatch.
+
+Discovery reads distribution and entry-point metadata only. It does not import provider modules for top-level help or while considering other commands. Only the selected entry point is loaded. `spork --help` lists each valid extension with its distribution, version, and scope, while provider-owned forms such as `spork greet --help` pass through unchanged.
+
+The provider receives `CommandContext` and a fresh list containing the exact strings after the top-level command. Returning `nil`/`None` means success, and an integer becomes the process status. Invalid result types and broken selected entry points produce concise diagnostics; unexpected provider exceptions are not hidden. Project-backed contexts expose the selected manifest and source runtime.
+
+Compatible project toolchains receive extension candidates through the same delegation used for project-aware core commands. The top-level command and every remaining argument are preserved. Missing or stale project toolchains retain the existing `spork sync` guidance, while the reserved `plugin` bootstrap command is never delegated.
+
+Core and installed provider names are commands. Explicit paths and names ending in `.spork` remain files, so `spork ./greet` can execute a file even when `greet` is installed. An unknown bare name is reported as an unknown command and may suggest a close core or extension name.
+
 ## Project commands
 
 | Command | Behavior |

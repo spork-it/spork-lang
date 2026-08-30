@@ -93,7 +93,7 @@ To import `.spork` modules from Python, import `spork` once to install its impor
 
 ```python
 import spork
-from my_spork_module import greet
+from hello import greet
 
 print(greet("Python"))
 ```

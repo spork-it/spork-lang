@@ -17,11 +17,15 @@ This history was backfilled from release tags, commit history, and published rel
 - Added generated `spork.commands.v1` entry points and command payload verification for wheels and source distributions.
 - Added static `spork check` diagnostics for package command namespaces, functions, and target kinds.
 - Added a minimal source-only command-provider example.
+- Added metadata-only discovery and lazy invocation of project-local and active `spork.commands.v1` providers.
+- Added deterministic extension precedence, collision and malformed-metadata diagnostics, top-level help listings, and unknown-command suggestions.
+- Added end-to-end coverage for a source-only provider installed as a normal consumer dependency.
 
 ### Changed
 
 - Separated top-level legacy/file dispatch from core command parsing while preserving existing command syntax and project-toolchain delegation.
 - Refactored `spork run` to use the shared project runtime while retaining environment bootstrap, normalized entry names, process statuses, and source tracebacks.
+- Generalized project-toolchain delegation to preserve extension commands and raw arguments, while keeping explicit file forms and the `plugin` bootstrap name non-delegated.
 
 ## [0.5.3] - 2026-08-30
 

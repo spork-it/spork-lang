@@ -4,7 +4,7 @@ spork.project.manager - Project environment and dependency management
 This module provides the ProjectManager class which handles:
 - Virtual environment creation and management
 - Dependency installation via pip
-- Runtime injection (ensuring spork-runtime is always available)
+- Toolchain injection (bringing in spork-runtime transitively)
 
 The manager ensures that user projects run in isolated environments
 while the Spork toolchain itself runs globally.
@@ -26,7 +26,7 @@ class ProjectManager:
     This class handles:
     - Creating and validating virtual environments
     - Installing dependencies from spork.it
-    - Ensuring the spork-runtime is available in the project environment
+    - Ensuring spork-lang and its spork-runtime dependency are available
     """
 
     def __init__(self, config: ProjectConfig):
@@ -176,10 +176,10 @@ class ProjectManager:
         This method:
         1. Ensures the venv exists
         2. Installs all dependencies from spork.it
-        3. Installs spork-runtime (unless disabled)
+        3. Installs spork-lang and its runtime dependencies (unless disabled)
 
         Args:
-            include_runtime: Whether to install spork-runtime (default: True)
+            include_runtime: Whether to install the Spork toolchain and runtime
             dev: Whether to install :dev-dependencies from spork.it
             quiet: Suppress pip output
 
@@ -378,8 +378,8 @@ class ProjectManager:
         """Get the pip requirement used to install the active toolchain.
 
         Source checkouts remain editable. Installed releases are installed from
-        their exact published version so pip also installs transitive runtime
-        dependencies such as spork-pds. Copying only the ``spork`` directory
+        their exact published version so pip also installs spork-runtime and its
+        transitive spork-pds dependency. Copying only the ``spork`` directory
         would leave a new project environment incomplete.
         """
         spork_source_dir = self._find_spork_source_dir()

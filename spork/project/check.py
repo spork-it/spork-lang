@@ -275,7 +275,18 @@ class ProjectIndex:
         if namespace in self.virtual_namespaces:
             return self.virtual_namespaces[namespace]
 
-        from spork.runtime.ns import find_spork_file_for_ns
+        from spork.runtime.ns import (
+            find_spork_file_for_ns,
+            load_python_namespace,
+            resolve_python_namespace,
+        )
+
+        if resolve_python_namespace(namespace) is not None:
+            namespace_info = load_python_namespace(namespace)
+            return {
+                normalize_name(name)
+                for name in (*namespace_info.env, *namespace_info.macros)
+            }
 
         resolved = find_spork_file_for_ns(namespace)
         if not resolved:

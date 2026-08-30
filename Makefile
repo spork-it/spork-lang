@@ -142,7 +142,7 @@ clean-build:
 	rm -rf *.egg-info/
 	rm -rf spork_lang.egg-info/
 	# Remove artifacts left by pre-spork-pds versions of the repository.
-	rm -rf spork/*.so spork/runtime/*.so
+	rm -rf spork/*.so
 	find . -name '*.o' -delete 2>/dev/null || true
 
 clean-pyc:

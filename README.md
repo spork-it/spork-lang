@@ -9,6 +9,7 @@ Spork is a Lisp hosted on CPython. It compiles to Python AST, interoperates dire
 
 - Direct access to Python modules and objects—no FFI layer or separate VM.
 - Lisp macros and homoiconic syntax.
+- A compiler-independent runtime and Python standard library from [`spork-runtime`](https://github.com/spork-it/spork-runtime).
 - Persistent vectors, maps, sets, and related types from [`spork-pds`](https://github.com/spork-it/spork-pds).
 - Pattern matching, destructuring, async/await, protocols, decorators, and Python type annotations.
 - Source-mapped tracebacks that point back to `.spork` files.
@@ -106,7 +107,7 @@ original = vec(1, 2, 3)
 updated = original.conj(4)
 ```
 
-See the [`spork-pds` documentation](https://github.com/spork-it/spork-pds/tree/main/docs) for its Python API, design, and benchmarks.
+The compiler-independent runtime, generated-code helpers, prelude macros, and Python-backed `std.*` namespaces are distributed by [`spork-runtime`](https://github.com/spork-it/spork-runtime). See the [`spork-pds` documentation](https://github.com/spork-it/spork-pds/tree/main/docs) for the persistent collection Python API, design, and benchmarks.
 
 ## Projects
 
@@ -147,6 +148,7 @@ Run `spork --help` for the complete CLI reference.
 - [Projects and CLI](docs/PROJECTS.md)
 - [Examples](examples/)
 - [Emacs mode](editors/emacs/) and [Neovim support](editors/nvim/)
+- [`spork-runtime`](https://github.com/spork-it/spork-runtime)
 - [`spork-pds` API, design, and benchmarks](https://github.com/spork-it/spork-pds/tree/main/docs)
 
 ## Development

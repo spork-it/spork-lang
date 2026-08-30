@@ -1,6 +1,6 @@
 # Spork Standard Library Reference
 
-This reference covers the values and functions available in every Spork namespace, the automatically loaded prelude macros, reader syntax, and the bundled `std.*` modules.
+This reference covers the values and functions available in every Spork namespace, the automatically loaded prelude macros, reader syntax, and the Python-backed `std.*` modules provided by `spork-runtime`.
 
 For version information, related references, and shared conventions, see the [documentation index](README.md).
 

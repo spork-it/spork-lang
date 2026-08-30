@@ -449,64 +449,10 @@ class SporkLanguageServer:
             ".",
         ]
 
-        # Macros from spork/std/prelude.spork
-        prelude_macros = [
-            # Control flow macros
-            "when",
-            "unless",
-            "cond",
-            # Threading macros
-            "->",
-            "->>",
-            # Utility macros
-            "comment",
-            "fmt",
-            "assert",
-            # Sequence macros
-            "mapv",
-            "filterv",
-            "doseq",
-            "for-all",
-            # Function composition
-            "comp",
-            "partial",
-            "identity",
-            "constantly",
-            "complement",
-            # Predicates
-            "nil?",
-            "some?",
-            "string?",
-            "number?",
-            "int?",
-            "float?",
-            "bool?",
-            "fn?",
-            "symbol?",
-            "keyword?",
-            "vector?",
-            "map?",
-            "list?",
-            "seq?",
-            "coll?",
-            "dict?",
-            "empty?",
-            "not-empty",
-            "even?",
-            "odd?",
-            "pos?",
-            "neg?",
-            "zero?",
-            # Collection accessors
-            "second",
-            "ffirst",
-            "last",
-            "butlast",
-            # Protocol macros
-            "defprotocol",
-            "extend-type",
-            "extend-protocol",
-        ]
+        # Keep completion synchronized with the runtime-owned prelude.
+        from spork.std.prelude import MACROS as prelude_macro_env
+
+        prelude_macros = sorted(prelude_macro_env)
 
         for kw in special_forms:
             if kw.startswith(prefix):

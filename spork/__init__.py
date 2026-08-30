@@ -5,8 +5,8 @@ Spork - A Lisp to Python transpiler with persistent data structures.
 import sys
 from pkgutil import extend_path
 
-# Allow separately distributed projects, such as spork-pds, to contribute
-# modules to the spork namespace even when installed in another location.
+# Allow separately distributed projects, including spork-runtime and
+# spork-pds, to contribute modules when installed in another location.
 __path__ = extend_path(__path__, __name__)
 
 # Import persistent data structures from the runtime (backed by spork-pds).
@@ -145,8 +145,8 @@ except ImportError as e:
     print("Error: Spork runtime could not be loaded.", file=sys.stderr)
     print(f"  {e}", file=sys.stderr)
     print("", file=sys.stderr)
-    print("The required spork-pds package may not be installed. Try:", file=sys.stderr)
-    print("  python -m pip install 'spork-pds>=0.1.0,<0.2.0'", file=sys.stderr)
+    print("The required spork-runtime package may not be installed. Try:", file=sys.stderr)
+    print("  python -m pip install 'spork-runtime>=0.1.0,<0.2.0'", file=sys.stderr)
     print("", file=sys.stderr)
     sys.exit(1)
 
@@ -169,7 +169,7 @@ from spork.compiler import (
 
 install_import_hook()
 
-__version__ = "0.4.4"
+__version__ = "0.5.0"
 
 __all__ = [
     # Data structures

@@ -15,7 +15,7 @@ import pytest
 from spork.compiler.loader import compile_file_to_python
 from spork.project.build import build_project
 from spork.project.config import ProjectConfig
-from spork.project.dist import create_dist
+from spork.project.dist import create_dist, generate_dist_pyproject
 from spork.runtime import Keyword
 from spork.runtime.ns import clear_registry, init_source_roots
 
@@ -30,7 +30,7 @@ def create_library_project(root: Path) -> Path:
  :version "1.2.3"
  :description "A \\"quoted\\" fixture"
  :requires-python ">=3.10"
- :spork-version ">=0.4.0,<0.5"
+ :spork-version ">=0.5.0,<0.6"
  :readme "README.md"
  :license "MIT"
  :license-file "LICENSE"
@@ -194,6 +194,18 @@ def test_build_compiles_multi_module_library_for_normal_python_import(
     assert checked.returncode == 0, checked.stdout + checked.stderr
 
 
+def test_dist_rejects_incompatible_compiler_version(tmp_path: Path):
+    config = ProjectConfig(
+        name="incompatible-project",
+        version="1.0.0",
+        project_root=str(tmp_path),
+        spork_version=">=9",
+    )
+
+    with pytest.raises(ValueError, match="active compiler"):
+        generate_dist_pyproject(tmp_path, config, ["incompatible_project"])
+
+
 def test_dist_contains_metadata_sources_and_works_for_both_consumers(
     tmp_path: Path, monkeypatch
 ):
@@ -219,7 +231,8 @@ def test_dist_contains_metadata_sources_and_works_for_both_consumers(
         metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
         metadata = wheel.read(metadata_name).decode()
         assert 'Summary: A "quoted" fixture' in metadata
-        assert "Requires-Dist: spork-lang<0.5,>=0.4.0" in metadata
+        assert "Requires-Dist: spork-runtime<0.2.0,>=0.1.0" in metadata
+        assert "Requires-Dist: spork-lang" not in metadata
         assert "Provides-Extra: test" in metadata
         assert "Project-URL: Homepage, https://example.com/fixture" in metadata
 
@@ -350,7 +363,7 @@ def test_project_config_loads_distribution_and_development_metadata(tmp_path: Pa
     assert config.authors == [
         {"name": "Spork Tester", "email": "test@example.com"}
     ]
-    assert config.spork_version == ">=0.4.0,<0.5"
+    assert config.spork_version == ">=0.5.0,<0.6"
     assert config.api is not None
     assert config.api.source_module == "fixture-lib.core"
     assert config.api.spork is not None

@@ -2,8 +2,5 @@ include *.md
 include LICENSE
 include pyproject.toml
 
-# Spork library files (macros)
-recursive-include spork/std *.spork
-
 # Test files
 recursive-include tests *.spork

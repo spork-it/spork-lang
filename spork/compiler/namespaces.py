@@ -8,6 +8,58 @@ from spork.runtime import Keyword, Symbol, VectorLiteral
 from spork.runtime.types import normalize_name
 
 
+def _lower_python_require(
+    req_ns, python_module, alias, refer, namespace, form_loc, ctx
+):
+    """Lower a requireable Python-backed Spork namespace to imports."""
+    stmts: list[ast.stmt] = []
+    ns_macros = namespace.macros if namespace else {}
+
+    if alias:
+        import_stmt = ast.Import(
+            names=[
+                ast.alias(
+                    name=python_module,
+                    asname=normalize_name(alias),
+                )
+            ]
+        )
+        set_location(import_stmt, form_loc)
+        stmts.append(import_stmt)
+        ctx.ns_aliases[alias] = req_ns
+
+    if refer == ":all":
+        import_stmt = ast.ImportFrom(
+            module=python_module,
+            names=[ast.alias(name="*", asname=None)],
+            level=0,
+        )
+        set_location(import_stmt, form_loc)
+        stmts.append(import_stmt)
+    elif refer:
+        names = []
+        for sym in refer:
+            if sym in ns_macros:
+                continue
+            ctx.ns_refers[sym] = req_ns
+            names.append(ast.alias(name=normalize_name(sym), asname=None))
+        if names:
+            import_stmt = ast.ImportFrom(
+                module=python_module,
+                names=names,
+                level=0,
+            )
+            set_location(import_stmt, form_loc)
+            stmts.append(import_stmt)
+
+    if not alias and not refer:
+        import_stmt = ast.Import(names=[ast.alias(name=python_module, asname=None)])
+        set_location(import_stmt, form_loc)
+        stmts.append(import_stmt)
+
+    return stmts
+
+
 def compile_ns(args, form_loc=None):
     """
     Compile (ns name (:require ...) (:import ...)) form.
@@ -18,7 +70,7 @@ def compile_ns(args, form_loc=None):
         (ns my.app.core)
         (ns my.app.core
           (:require
-            [spork.pds :as pds]
+            [std.string :as strings]
             [my.lib.helpers :as helpers :refer [foo bar]])
           (:import
             [numpy :as np]
@@ -65,69 +117,48 @@ def compile_ns(args, form_loc=None):
                 refer = req_info["refer"]
 
                 try:
-                    resolve_type, _ = resolve_require(req_ns, ctx.current_file)
+                    resolve_type, resolved_target = resolve_require(
+                        req_ns, ctx.current_file
+                    )
                 except FileNotFoundError as e:
                     raise SyntaxError(str(e)) from e
+
+                if resolve_type == "python":
+                    # spork-runtime exposes std.* as Python modules carrying
+                    # Spork export and macro metadata.
+                    stmts.extend(
+                        _lower_python_require(
+                            req_ns,
+                            resolved_target,
+                            alias,
+                            refer,
+                            get_namespace(req_ns),
+                            form_loc,
+                            ctx,
+                        )
+                    )
+                    continue
 
                 if resolve_type == "spork":
                     # AOT output is imported by Python without the Spork
                     # namespace registry. Lower project/package dependencies to
                     # normal Python imports so a class has one identity no
-                    # matter which compiled module references it. std.* stays
-                    # source-loaded because the standard library is distributed
-                    # as Spork source by spork-lang.
-                    if ctx.aot_imports and not req_ns.startswith("std."):
+                    # matter which compiled module references it.
+                    if ctx.aot_imports:
                         python_module = ".".join(
                             normalize_name(segment) for segment in req_ns.split(".")
                         )
-                        ns_info = get_namespace(req_ns)
-                        ns_macros = ns_info.macros if ns_info else {}
-
-                        if alias:
-                            import_stmt = ast.Import(
-                                names=[
-                                    ast.alias(
-                                        name=python_module,
-                                        asname=normalize_name(alias),
-                                    )
-                                ]
+                        stmts.extend(
+                            _lower_python_require(
+                                req_ns,
+                                python_module,
+                                alias,
+                                refer,
+                                get_namespace(req_ns),
+                                form_loc,
+                                ctx,
                             )
-                            set_location(import_stmt, form_loc)
-                            stmts.append(import_stmt)
-                            ctx.ns_aliases[alias] = req_ns
-
-                        if refer == ":all":
-                            import_stmt = ast.ImportFrom(
-                                module=python_module,
-                                names=[ast.alias(name="*", asname=None)],
-                                level=0,
-                            )
-                            set_location(import_stmt, form_loc)
-                            stmts.append(import_stmt)
-                        elif refer:
-                            names = []
-                            for sym in refer:
-                                if sym in ns_macros:
-                                    continue
-                                ctx.ns_refers[sym] = req_ns
-                                names.append(
-                                    ast.alias(name=normalize_name(sym), asname=None)
-                                )
-                            if names:
-                                import_stmt = ast.ImportFrom(
-                                    module=python_module,
-                                    names=names,
-                                    level=0,
-                                )
-                                set_location(import_stmt, form_loc)
-                                stmts.append(import_stmt)
-
-                        if not alias and not refer:
-                            import_stmt = ast.Import(
-                                names=[ast.alias(name=python_module, asname=None)]
-                            )
-                            set_location(import_stmt, form_loc)
-                            stmts.append(import_stmt)
+                        )
                         continue
 
                     # Spork namespace - need to load it

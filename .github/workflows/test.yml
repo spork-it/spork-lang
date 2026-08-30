@@ -67,9 +67,9 @@ jobs:
       - name: Print host info
         run: python tools/host_info.py
 
-      - name: Verify released spork-pds integration
+      - name: Verify released runtime integration
         working-directory: ${{ runner.temp }}
-        run: python -c "import spork.pds as pds; from spork.runtime import Vector; assert Vector is pds.Vector"
+        run: python -c "import importlib.metadata as m; import spork.pds as pds; from spork.runtime import Vector; from spork.std.prelude import MACROS; assert m.version('spork-runtime'); assert Vector is pds.Vector; assert 'when' in MACROS"
 
       - name: Run Python tests
         run: python -m pytest

@@ -32,9 +32,11 @@ The `spork.it` manifest, dependency environments, namespace layout, entry points
 
 Exploratory proposals that are not implemented or supported. This document is intentionally separate from the references above.
 
-## Persistent data structures
+## Runtime and persistent data structures
 
-Spork uses the separately released [`spork-pds`](https://github.com/spork-it/spork-pds) package. Consult that project when using the collections directly from Python:
+Spork's compiler-independent runtime, generated-code helpers, prelude macros, and Python-backed standard-library namespaces are provided by the separately released [`spork-runtime`](https://github.com/spork-it/spork-runtime) package.
+
+Persistent collections come from [`spork-pds`](https://github.com/spork-it/spork-pds), which is installed transitively by `spork-runtime`. Consult that project when using the collections directly from Python:
 
 - [Practical guide](https://github.com/spork-it/spork-pds/blob/main/docs/GUIDE.md)
 - [Python API reference](https://github.com/spork-it/spork-pds/blob/main/docs/API.md)

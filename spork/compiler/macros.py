@@ -12,7 +12,6 @@ Macros are compile-time transformations that convert Spork forms
 into other Spork forms before code generation.
 """
 
-import importlib
 import os
 from typing import Any, Callable
 
@@ -89,7 +88,7 @@ from spork.runtime.core import (
     # Collection utilities
     zipmap,
 )
-from spork.pds import (
+from spork.runtime import (
     EMPTY_MAP,
     EMPTY_SET,
     EMPTY_VECTOR,
@@ -122,141 +121,6 @@ MACRO_ENV: dict[str, Callable] = {}
 
 # Macro execution environment - shared by all macros
 MACRO_EXEC_ENV: dict[str, Any] = {}
-
-
-# =============================================================================
-# Library File Paths
-# =============================================================================
-
-
-def _get_lib_path(filename: str) -> str:
-    """Get the path to a file in the spork/lib directory."""
-    lib_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "std")
-    return os.path.join(lib_dir, filename)
-
-
-def _load_lib_file(filename: str) -> str:
-    """Load the contents of a library file."""
-    path = _get_lib_path(filename)
-    with open(path, encoding="utf-8") as f:
-        return f.read()
-
-
-# =============================================================================
-# Protocol Macro Helpers (Python functions called by macros)
-# =============================================================================
-
-
-def extend_type_parse_groups(proto_impls):
-    """
-    Parse extend-type body into groups of (ProtoName method1 method2 ...).
-    """
-    groups = []
-    current_group = None
-
-    for item in proto_impls:
-        if isinstance(item, Symbol):
-            # This is a protocol name
-            if current_group is not None:
-                groups.append(current_group)
-            current_group = [item]
-        elif isinstance(item, list):
-            # This is a method definition
-            if current_group is None:
-                raise SyntaxError("extend-type: method before protocol name")
-            current_group.append(item)
-        else:
-            raise SyntaxError(f"extend-type: unexpected form {item!r}")
-
-    if current_group is not None:
-        groups.append(current_group)
-
-    return groups
-
-
-def extend_type_for_proto(type_expr, proto_name, methods):
-    """
-    Generate code to extend a type for a single protocol.
-    Returns a list of forms to be spliced into a do block (not a do block itself).
-    """
-    # Build method dict entries
-    method_entries = []
-    method_defs = []
-
-    for method in methods:
-        if not isinstance(method, list) or len(method) < 2:
-            raise SyntaxError(f"extend-type: invalid method form {method!r}")
-
-        mname = method[0]
-        if not isinstance(mname, Symbol):
-            raise SyntaxError(
-                f"extend-type: method name must be a symbol, got {mname!r}"
-            )
-
-        params = method[1]
-        body = method[2:] if len(method) > 2 else [Symbol("nil")]
-
-        # Create internal function name
-        # Use gensym-like naming to avoid conflicts
-        internal_name = Symbol(
-            f"__{proto_name.name}${type_expr.name if isinstance(type_expr, Symbol) else 'anon'}${mname.name}__"
-        )
-
-        # Create the function definition
-        fn_def = [Symbol("defn"), internal_name, params] + list(body)
-        method_defs.append(fn_def)
-
-        # Add to method entries
-        method_entries.append(Keyword(mname.name))
-        method_entries.append(internal_name)
-
-    # Build the list of forms to be spliced (NOT wrapped in do)
-    result = []
-    result.extend(method_defs)
-
-    # Register implementations
-    result.append(
-        [
-            Symbol("register_protocol_impl"),
-            proto_name.name,  # String literal for proto name
-            type_expr,
-            MapLiteral(list(zip(method_entries[::2], method_entries[1::2]))),
-        ]
-    )
-
-    # Register as virtual subclass for isinstance
-    result.append(
-        [Symbol("protocol_register_virtual_subclass"), proto_name.name, type_expr]
-    )
-
-    return result
-
-
-def extend_protocol_parse_groups(type_impls):
-    """
-    Parse extend-protocol body into groups of (Type method1 method2 ...).
-    """
-    groups = []
-    current_group = None
-
-    for item in type_impls:
-        if isinstance(item, Symbol):
-            # Could be a type name - check if next items are methods
-            if current_group is not None:
-                groups.append(current_group)
-            current_group = [item]
-        elif isinstance(item, list):
-            # This is a method definition
-            if current_group is None:
-                raise SyntaxError("extend-protocol: method before type name")
-            current_group.append(item)
-        else:
-            raise SyntaxError(f"extend-protocol: unexpected form {item!r}")
-
-    if current_group is not None:
-        groups.append(current_group)
-
-    return groups
 
 
 # =============================================================================
@@ -470,7 +334,9 @@ def _load_namespace_macros_only(req_ns, current_file=None):
     if existing is not None:
         return existing
 
-    _, path = resolve_require(req_ns, current_file)
+    resolve_type, path = resolve_require(req_ns, current_file)
+    if resolve_type != "spork":
+        raise ValueError(f"{req_ns!r} is not a Spork source namespace")
     with open(path, encoding="utf-8") as source_file:
         forms = read_str(source_file.read())
 
@@ -502,8 +368,8 @@ def process_ns_macros(forms, macro_env, current_file=None):
 
     This runs BEFORE macroexpansion to ensure macros are available.
     For each :require clause:
-      - Resolve and compile the Spork namespace
-      - Read its __spork_macros__ mapping
+      - Resolve and load the source or Python-backed Spork namespace
+      - Read its registered macro mapping
       - For :refer [sym1 sym2]: if symbol is a macro, add to macro_env
       - For :as alias: register macros under qualified names (alias.macro-name)
       - For :refer :all: import all macros from the module
@@ -540,7 +406,7 @@ def process_ns_macros(forms, macro_env, current_file=None):
                 refer = req_info["refer"]
 
                 try:
-                    resolve_require(req_ns, current_file)
+                    resolve_type, _ = resolve_require(req_ns, current_file)
                 except FileNotFoundError:
                     # Not found - compile_ns will report the syntax error.
                     continue
@@ -552,7 +418,9 @@ def process_ns_macros(forms, macro_env, current_file=None):
                     try:
                         from spork.compiler.context import get_compile_context
 
-                        if get_compile_context().check_only:
+                        if resolve_type == "python":
+                            __spork_require__(req_ns, current_file)
+                        elif get_compile_context().check_only:
                             _load_namespace_macros_only(req_ns, current_file)
                         else:
                             __spork_require__(req_ns, current_file)
@@ -742,29 +610,11 @@ def init_macro_exec_env():
     }
 
 
-def init_stdlib_macros(compile_defn_fn, normalize_name_fn):
-    """Initialize standard library macros from prelude.spork.
+def init_stdlib_macros():
+    """Install the Python-backed prelude macros supplied by spork-runtime."""
+    from spork.std.prelude import install_macros
 
-    This loads the prelude which contains all macros that should be
-    available in every Spork namespace without explicit imports.
-    """
-    from spork.compiler.reader import read_str
-
-    # Register helper functions in MACRO_EXEC_ENV so protocol macros can call them
-    MACRO_EXEC_ENV["extend_type_parse_groups"] = extend_type_parse_groups
-    MACRO_EXEC_ENV["extend_type_for_proto"] = extend_type_for_proto
-    MACRO_EXEC_ENV["extend_protocol_parse_groups"] = extend_protocol_parse_groups
-    MACRO_EXEC_ENV["mapcat"] = lambda f, coll: [item for x in coll for item in f(x)]
-
-    # Also register with hyphenated names for Spork code
-    MACRO_ENV["extend-type-parse-groups"] = extend_type_parse_groups
-    MACRO_ENV["extend-type-for-proto"] = extend_type_for_proto
-    MACRO_ENV["extend-protocol-parse-groups"] = extend_protocol_parse_groups
-
-    # Load all macros from prelude.spork
-    prelude_source = _load_lib_file("prelude.spork")
-    forms = read_str(prelude_source)
-    process_defmacros(forms, MACRO_ENV, compile_defn_fn, normalize_name_fn)
+    install_macros(MACRO_ENV)
 
 
 # Initialize the base execution environment on module load
@@ -779,13 +629,6 @@ __all__ = [
     # Environments
     "MACRO_ENV",
     "MACRO_EXEC_ENV",
-    # Library loading
-    "_get_lib_path",
-    "_load_lib_file",
-    # Helper functions
-    "extend_type_parse_groups",
-    "extend_type_for_proto",
-    "extend_protocol_parse_groups",
     # Expansion functions
     "is_symbol",
     "is_macro_call",

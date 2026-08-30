@@ -1,11 +1,14 @@
 """Focused tests for the compiler's feature-module boundaries."""
 
 import ast
+import importlib.metadata
 import subprocess
 import sys
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from packaging.version import Version
 
 import spork.compiler
 import spork.runtime
@@ -44,6 +47,40 @@ def test_namespace_lowering_tracks_normalized_python_aliases():
         assert ast.unparse(ast.Module(body=statements, type_ignores=[])) == (
             "import math as math_lib"
         )
+
+
+def test_python_backed_std_namespace_lowers_to_runtime_module_imports():
+    form = read_str(
+        "(ns sample (:require [std.string :as string-utils "
+        ":refer [starts-with?]]))"
+    )[0]
+
+    with compilation_context() as ctx:
+        statements = compile_ns(form[1:])
+
+        assert ctx.ns_aliases == {"string-utils": "std.string"}
+        assert ctx.ns_refers == {"starts-with?": "std.string"}
+        assert ast.unparse(ast.Module(body=statements, type_ignores=[])) == (
+            "import spork.std.string as string_utils\n"
+            "from spork.std.string import starts_with_q"
+        )
+
+
+def test_runtime_and_stdlib_come_from_spork_runtime_distribution():
+    from spork.std import prelude
+
+    repository = Path(__file__).resolve().parents[1]
+    runtime_path = Path(spork.runtime.__file__).resolve()
+
+    runtime_version = Version(importlib.metadata.version("spork-runtime"))
+    assert Version("0.1.0") <= runtime_version < Version("0.2.0")
+    assert not runtime_path.is_relative_to(repository / "spork")
+    assert not (repository / "spork" / "runtime").exists()
+    assert not (repository / "spork" / "std").exists()
+    assert all(
+        spork.compiler.MACRO_ENV[name] is macro
+        for name, macro in prelude.MACROS.items()
+    )
 
 
 def test_destructuring_is_an_independent_ast_lowerer():

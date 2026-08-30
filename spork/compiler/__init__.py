@@ -85,13 +85,11 @@ from spork.runtime.types import (
 
 # Initialize macros and install import hook on package load
 def _initialize():
-    from spork.compiler.functions import compile_defn
     from spork.compiler.macros import init_stdlib_macros
-    from spork.runtime.types import normalize_name
     from spork.runtime.utils import install_namespace_loader
 
     install_namespace_loader(load_source_namespace)
-    init_stdlib_macros(compile_defn, normalize_name)
+    init_stdlib_macros()
 
 
 _initialize()

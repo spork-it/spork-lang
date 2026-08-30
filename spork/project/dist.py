@@ -19,9 +19,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import Version
+
 import spork
 from spork.project.build import build_project, find_project_root
 from spork.project.config import ProjectConfig
+
+SPORK_RUNTIME_REQUIREMENT = "spork-runtime>=0.1.0,<0.2.0"
 
 
 @dataclass
@@ -89,12 +94,19 @@ def generate_dist_pyproject(
     """Generate escaped, PyPI-ready metadata for the staged project."""
     description = config.description or f"Spork project: {config.name}"
     spork_requirement = config.spork_version or f"=={spork.__version__}"
-    if not spork_requirement.startswith(("<", ">", "=", "!", "~")):
+    try:
+        supported_compilers = SpecifierSet(spork_requirement)
+    except InvalidSpecifier as error:
         raise ValueError(
             ":spork-version must be a version specifier such as "
-            '\">=0.4.0,<0.5\"'
+            '\">=0.5.0,<0.6\"'
+        ) from error
+    if Version(spork.__version__) not in supported_compilers:
+        raise ValueError(
+            f"project requires spork-lang{spork_requirement}, but the active "
+            f"compiler is spork-lang=={spork.__version__}"
         )
-    all_dependencies = [f"spork-lang{spork_requirement}", *config.dependencies]
+    all_dependencies = [SPORK_RUNTIME_REQUIREMENT, *config.dependencies]
 
     lines = [
         "[build-system]",
@@ -251,15 +263,15 @@ def build_sdist(
             )
         try:
             sdist_name = f"{config.name}-{config.version}"
-            sdist_path = dist_dir / f"{sdist_name}.tar.gz"
+            manual_sdist_path = dist_dir / f"{sdist_name}.tar.gz"
 
-            with tarfile.open(sdist_path, "w:gz") as tar:
+            with tarfile.open(manual_sdist_path, "w:gz") as tar:
                 for item in out_dir.iterdir():
                     if item.name.startswith("."):
                         continue
                     tar.add(item, arcname=f"{sdist_name}/{item.name}")
 
-            return sdist_path
+            return manual_sdist_path
         except Exception as e:
             if verbose:
                 print(f"Error creating tarball: {e}", file=sys.stderr)

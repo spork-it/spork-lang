@@ -6,6 +6,8 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-29
+
 ### Added
 
 - Added `spork check` for project-wide reader/compiler validation, namespace-path and duplicate checks, Spork/Python import resolution, referred-export validation, `:main` and generated `:api` validation, and versioned JSON diagnostics with stable codes.
@@ -13,6 +15,8 @@ This history was backfilled from release tags, commit history, and published rel
 
 ### Changed
 
+- Removed the in-tree runtime and Spork-source standard library in favor of the separately released `spork-runtime` dependency, including its Python-backed `std.*` namespaces and prelude macros.
+- Built Spork project distributions now depend directly on `spork-runtime` instead of pulling in the `spork-lang` compiler; `:spork-version` is enforced as a build-time compiler constraint.
 - Enforced a one-way compiler-to-runtime dependency by moving Spork source namespace loading behind a compiler-installed runtime provider.
 - `spork test` now discovers only files containing top-level `deftest` declarations; convention-named script-style test files are no longer supported.
 - Converted the language suite to granular declared tests and a cross-platform native test harness.
@@ -257,7 +261,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.4.4...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/spork-it/spork-lang/compare/v0.4.4...v0.5.0
 [0.4.4]: https://github.com/spork-it/spork-lang/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/spork-it/spork-lang/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/spork-it/spork-lang/compare/v0.4.1...v0.4.2

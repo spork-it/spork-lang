@@ -433,6 +433,20 @@ class TestSporkLanguageServer(unittest.TestCase):
         self.assertIn("deftest", labels)
         self.assertIn("defmacro", labels)
 
+        server._handle_did_change(
+            {
+                "textDocument": {"uri": "file:///test.spork", "version": 2},
+                "contentChanges": [{"text": "(with-m"}],
+            }
+        )
+        result = server._handle_completion(
+            {
+                "textDocument": {"uri": "file:///test.spork"},
+                "position": {"line": 0, "character": 7},
+            }
+        )
+        self.assertIn("with-mutable", [item["label"] for item in result["items"]])
+
     def test_deftest_is_a_document_symbol(self):
         """Expose decorated test declarations to editor symbol lists."""
         from spork.compiler.reader import read_str
@@ -536,9 +550,8 @@ class TestSporkLanguageServer(unittest.TestCase):
             }
         )
 
-        # Python 3.12's inspect module tokenizes the original Spork file and
-        # may reject it as Python source. Completion and navigation should use
-        # the compiled function's code location as a fallback.
+        # Completion retains Spork source spelling for Python-backed standard
+        # namespaces, and navigation resolves to their Python implementation.
         with patch(
             "inspect.getsourcelines",
             side_effect=tokenize.TokenError("invalid Python source", (1, 0)),
@@ -560,7 +573,7 @@ class TestSporkLanguageServer(unittest.TestCase):
         self.assertIn("j.dumps-pretty", labels)
         self.assertIsNotNone(definition)
         assert definition is not None
-        self.assertTrue(definition["uri"].endswith("/spork/std/json.spork"))
+        self.assertTrue(definition["uri"].endswith("/spork/std/json.py"))
 
         macro_completion = server._handle_completion(
             {

@@ -41,7 +41,7 @@ A manifest is a Spork map containing project metadata and tooling settings:
  :version "0.1.0"
  :description "A small Spork application"
  :requires-python ">=3.10"
- :spork-version ">=0.4.0,<0.5"
+ :spork-version ">=0.5.0,<0.6"
  :dependencies ["httpx>=0.27" "rich"]
  :dev-dependencies []
  :source-paths ["src"]
@@ -57,7 +57,7 @@ Paths are relative to the directory containing `spork.it`.
 | `:version` | yes | — | Project version string. |
 | `:description` | no | none | Distribution description. |
 | `:requires-python` | no | `">=3.10"` | Python compatibility written to package metadata. |
-| `:spork-version` | no | build version | Compatible `spork-lang` version specifier for built distributions. |
+| `:spork-version` | no | build version | Compatible `spork-lang` compiler version, checked when building distributions. |
 | `:api` | no | none | Generate public Spork and Python package APIs from one canonical namespace. |
 | `:dependencies` | no | `[]` | Runtime package requirements accepted by `pip`. |
 | `:dev-dependencies` | no | `[]` | Local tools installed by `spork sync --dev`. |
@@ -336,7 +336,7 @@ The generated package files are build artifacts: do not add source `__init__.spo
 spork dist --clean
 ```
 
-By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The generated package metadata includes the configured Spork compatibility range, runtime dependencies, optional extras, README, license, authors, classifiers, and project URLs from `spork.it`. `--clean` removes stale build and distribution output before rebuilding.
+By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The configured `:spork-version` is checked against the active compiler at build time. Generated package metadata directly requires `spork-runtime`—not `spork-lang`—alongside the project dependencies, optional extras, README, license, authors, classifiers, and project URLs from `spork.it`. `--clean` removes stale build and distribution output before rebuilding.
 
 Useful variants:
 

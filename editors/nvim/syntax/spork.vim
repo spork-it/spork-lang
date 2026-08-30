@@ -42,13 +42,13 @@ syntax keyword sporkSpecial ns import
 syntax keyword sporkSpecial await yield yield-from
 syntax keyword sporkSpecial match with apply call
 
-" Macros from spork/std/prelude.spork
+" Prelude macros provided by spork-runtime
 syntax keyword sporkMacro when unless cond
 syntax keyword sporkMacro -> ->>
 syntax keyword sporkMacro comment fmt assert
 syntax keyword sporkMacro mapv filterv doseq for-all
 syntax keyword sporkMacro comp partial identity constantly complement
-syntax keyword sporkMacro defprotocol extend-type extend-protocol
+syntax keyword sporkMacro defprotocol extend-type extend-protocol with-mutable
 
 " Predicates from prelude
 syntax match sporkMacro /\v<nil\?>/

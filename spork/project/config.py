@@ -10,7 +10,7 @@ The spork.it file uses Spork map syntax:
      :version "0.1.0"
      :description "A sample project"
      :requires-python ">=3.10"
-     :spork-version ">=0.4.0,<0.5"
+     :spork-version ">=0.5.0,<0.6"
      :dependencies ["requests" "numpy>=1.20"]
      :dev-dependencies ["mypy>=1.11"]
      :source-paths ["src"]
@@ -133,7 +133,7 @@ class ProjectConfig:
         requires_python: Supported Python requirement
         readme/license/authors/keywords/classifiers/urls: Distribution metadata
         optional_dependencies: Named Python package extras
-        spork_version: spork-lang runtime compatibility requirement
+        spork_version: spork-lang compiler compatibility requirement
         api: Generated Spork and Python public API configuration
 
     Computed fields:

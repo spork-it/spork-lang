@@ -13,7 +13,8 @@ jobs:
       full: true
 
   # spork-lang is pure Python; its single py3-none-any wheel supports every
-  # interpreter in the 3.10-3.14t test matrix. Native wheels come from spork-pds.
+  # interpreter in the 3.10-3.14t test matrix. Runtime code comes from
+  # spork-runtime, whose spork-pds dependency provides native wheels.
   build:
     name: Build universal Python 3 distributions
     needs: full_tests
@@ -30,6 +31,26 @@ jobs:
       - name: Install build tools
         run: python -m pip install build twine
 
+      - name: Verify tag matches package version
+        shell: python
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          import os
+          import re
+          from pathlib import Path
+
+          project = Path("pyproject.toml").read_text(encoding="utf-8")
+          match = re.search(r'^version\s*=\s*"([^"]+)"', project, re.MULTILINE)
+          if match is None:
+              raise SystemExit("could not read project version from pyproject.toml")
+          version = match.group(1)
+          tag_version = os.environ["RELEASE_TAG"].removeprefix("v")
+          if version != tag_version:
+              raise SystemExit(
+                  f"tag {os.environ['RELEASE_TAG']!r} does not match package version {version!r}"
+              )
+
       - name: Build distributions
         run: python -m build
 
@@ -38,6 +59,19 @@ jobs:
           python -m twine check dist/*
           test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
           test "$(find dist -maxdepth 1 -name '*-py3-none-any.whl' | wc -l)" -eq 1
+
+      - name: Verify compiler-only wheel contents
+        shell: python
+        run: |
+          import glob
+          import zipfile
+
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+          assert not any(name.startswith("spork/runtime/") for name in names)
+          assert not any(name.startswith("spork/std/") for name in names)
+          assert "spork/compiler/__init__.py" in names
 
       - name: Upload distributions
         uses: actions/upload-artifact@v6
@@ -76,8 +110,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install dist/*.whl
           cd "$RUNNER_TEMP"
-          python -c "import spork.pds as pds; from spork.runtime import Vector; assert Vector is pds.Vector"
+          python -c "import importlib.metadata as m; import spork.pds as pds; from spork.runtime import Vector; from spork.std.prelude import MACROS; assert m.version('spork-runtime'); assert Vector is pds.Vector; assert 'when' in MACROS"
           python -m spork -c "(print (+ 1 2))"
+          python -m spork -c $'(ns smoke (:require [std.string :as s]))\n(print (s.join "," ["a" "b"]))'
 
   publish:
     name: Publish to PyPI

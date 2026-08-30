@@ -51,9 +51,10 @@ def write_project(root: Path, *, invalid_test: bool = False) -> Path:
     )
     (root / "src" / "sample_app" / "core.spork").write_text(
         """(ns sample-app.core
-  (:require [sample-app.util :refer [answer]])
+  (:require [sample-app.util :refer [answer]]
+            [std.string :refer [join]])
   (:import [sample_app.helpers :refer [serialize]]))
-(def result (serialize {:answer answer}))
+(def result (join "-" [(serialize {:answer answer}) "ok"]))
 (defn main [] 0)
 """,
         encoding="utf-8",

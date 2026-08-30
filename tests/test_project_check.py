@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from spork.cli import _main, create_parser
+from spork.cli import _main, create_command_parser
 from spork.project.check import (
     COMPILE_ERROR,
     DUPLICATE_NAMESPACE,
@@ -302,8 +302,7 @@ def test_check_cli_reports_manifest_errors_as_json(tmp_path: Path, monkeypatch, 
     assert payload["diagnostics"][0]["code"] == PARSE_ERROR
 
 
-def test_check_is_a_real_subcommand_not_a_file_argument():
-    args = create_parser().parse_args(["check", "--warnings-as-errors"])
+def test_check_has_an_isolated_command_parser():
+    args = create_command_parser("check").parse_args(["--warnings-as-errors"])
 
-    assert args.subcommand == "check"
     assert args.warnings_as_errors

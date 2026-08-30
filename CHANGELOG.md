@@ -6,6 +6,15 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+### Added
+
+- Added immutable command provider, context, and specification primitives with a shared raw-argument invocation contract for core and future extension commands.
+- Added a static core command registry and isolated parser construction for each core command.
+
+### Changed
+
+- Separated top-level legacy/file dispatch from core command parsing while preserving existing command syntax and project-toolchain delegation.
+
 ## [0.5.3] - 2026-08-30
 
 ### Added

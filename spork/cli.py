@@ -26,7 +26,17 @@ import platform
 import subprocess
 import sys
 import traceback
-from typing import Optional
+from dataclasses import dataclass
+from pathlib import Path
+from types import MappingProxyType
+from typing import Callable, Mapping, Optional
+
+from spork.commands import (
+    CommandContext,
+    CommandProvider,
+    CommandSpec,
+    invoke_command,
+)
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -747,23 +757,6 @@ def cmd_nrepl_client(host: str, port: int) -> int:
     return 0
 
 
-# Known subcommands - used to differentiate from file arguments
-SUBCOMMANDS = {
-    "repl",
-    "new",
-    "add",
-    "remove",
-    "sync",
-    "run",
-    "test",
-    "check",
-    "build",
-    "dist",
-    "clean",
-    "lsp",
-    "version",
-}
-
 # These commands must remain available when the project environment is absent,
 # stale, or being removed. Other commands require a compatible toolchain.
 _TOOLCHAIN_OPTIONAL_COMMANDS = {"add", "remove", "sync", "version"}
@@ -771,8 +764,8 @@ _NEVER_DELEGATE_COMMANDS = {"new", "clean"}
 
 
 def _project_command(argv: list[str]) -> Optional[str]:
-    """Return the explicit project subcommand, if one was supplied."""
-    if argv and argv[0] in SUBCOMMANDS:
+    """Return the explicit project command, if one was supplied."""
+    if argv and argv[0] in CORE_COMMANDS:
         return argv[0]
     return None
 
@@ -865,13 +858,294 @@ def _delegate_to_project_toolchain(argv: list[str]) -> Optional[int]:
     return 1
 
 
+ParsedCommandHandler = Callable[[argparse.Namespace], int]
+ParserConfigurer = Callable[[argparse.ArgumentParser], None]
+
+
+def _no_arguments(parser: argparse.ArgumentParser) -> None:
+    """Configure a command that accepts only the standard help flag."""
+
+
+def _configure_new(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("name", help="Name of the new project")
+    parser.add_argument(
+        "--path",
+        "-p",
+        help="Parent directory for the project (default: current directory)",
+    )
+
+
+def _configure_add(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "packages", nargs="+", metavar="PACKAGE", help="Package requirement(s) to add"
+    )
+
+
+def _configure_remove(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "packages", nargs="+", metavar="PACKAGE", help="Package name(s) to remove"
+    )
+
+
+def _configure_sync(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Suppress pip output"
+    )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Also install :dev-dependencies from spork.it",
+    )
+
+
+def _configure_run(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--main",
+        "-m",
+        help="Main entry point (namespace:function), overrides spork.it",
+    )
+    parser.add_argument(
+        "args",
+        nargs="*",
+        help="Arguments to pass to the main function",
+    )
+
+
+def _configure_check(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--format",
+        choices=("human", "json"),
+        default="human",
+        help="Diagnostic output format (default: human)",
+    )
+    parser.add_argument(
+        "--json",
+        dest="format",
+        action="store_const",
+        const="json",
+        help="Shortcut for --format json",
+    )
+    parser.add_argument(
+        "--no-tests",
+        action="store_true",
+        help="Check only :source-paths, excluding :test-paths",
+    )
+    parser.add_argument(
+        "--warnings-as-errors",
+        action="store_true",
+        help="Return a failure status when warnings are reported",
+    )
+
+
+def _configure_build(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--out-dir",
+        "-o",
+        default=".spork-out",
+        help="Output directory (default: .spork-out)",
+    )
+    parser.add_argument(
+        "--clean",
+        "-c",
+        action="store_true",
+        help="Remove existing output directory before building",
+    )
+
+
+def _configure_dist(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--dist-dir",
+        "-d",
+        default="dist",
+        help="Output directory for distributions (default: dist)",
+    )
+    parser.add_argument(
+        "--out-dir",
+        "-o",
+        default=".spork-out",
+        help="Compiled output directory (default: .spork-out)",
+    )
+    parser.add_argument(
+        "--clean",
+        "-c",
+        action="store_true",
+        help="Remove existing dist directory before building",
+    )
+    parser.add_argument(
+        "--no-build",
+        action="store_true",
+        help="Skip running `spork build` first (use existing .spork-out)",
+    )
+    parser.add_argument(
+        "--wheel-only",
+        action="store_true",
+        help="Only build wheel, skip sdist",
+    )
+    parser.add_argument(
+        "--sdist-only",
+        action="store_true",
+        help="Only build sdist, skip wheel",
+    )
+
+
+def _configure_clean(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--all",
+        "-a",
+        action="store_true",
+        help="Remove all artifacts, not just .venv",
+    )
+
+
+def _configure_lsp(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--log",
+        metavar="FILE",
+        help="Log file for debugging LSP communication",
+    )
+
+
+@dataclass(frozen=True)
+class _CoreCommandDefinition:
+    name: str
+    summary: str
+    action: ParsedCommandHandler
+    configure_parser: ParserConfigurer = _no_arguments
+
+
+_CORE_COMMAND_DEFINITIONS = (
+    _CoreCommandDefinition("repl", "Start the interactive REPL", cmd_repl),
+    _CoreCommandDefinition(
+        "new", "Create a new Spork project", cmd_new, _configure_new
+    ),
+    _CoreCommandDefinition(
+        "add",
+        "Add packages to :dependencies in spork.it",
+        cmd_add,
+        _configure_add,
+    ),
+    _CoreCommandDefinition(
+        "remove",
+        "Remove packages from :dependencies in spork.it",
+        cmd_remove,
+        _configure_remove,
+    ),
+    _CoreCommandDefinition(
+        "sync",
+        "Sync project dependencies (create venv, install deps)",
+        cmd_sync,
+        _configure_sync,
+    ),
+    _CoreCommandDefinition(
+        "run", "Run the project's main function", cmd_run, _configure_run
+    ),
+    _CoreCommandDefinition("test", "Discover and run project Spork tests", cmd_test),
+    _CoreCommandDefinition(
+        "check",
+        "Check project sources without producing build artifacts",
+        cmd_check,
+        _configure_check,
+    ),
+    _CoreCommandDefinition(
+        "build",
+        "Build project to .spork-out/ with Python + source maps",
+        cmd_build,
+        _configure_build,
+    ),
+    _CoreCommandDefinition(
+        "dist",
+        "Create wheel and sdist from compiled Spork project",
+        cmd_dist,
+        _configure_dist,
+    ),
+    _CoreCommandDefinition(
+        "clean", "Clean project artifacts", cmd_clean, _configure_clean
+    ),
+    _CoreCommandDefinition(
+        "lsp", "Start the Language Server Protocol server", cmd_lsp, _configure_lsp
+    ),
+    _CoreCommandDefinition(
+        "version", "Print Spork version and Python host information", cmd_version
+    ),
+)
+_CORE_COMMAND_DEFINITIONS_BY_NAME = {
+    definition.name: definition for definition in _CORE_COMMAND_DEFINITIONS
+}
+
+
+def create_command_parser(command: str) -> argparse.ArgumentParser:
+    """Create the isolated argument parser for one static core command."""
+    try:
+        definition = _CORE_COMMAND_DEFINITIONS_BY_NAME[command]
+    except KeyError as error:
+        raise ValueError(f"unknown core command: {command}") from error
+
+    parser = argparse.ArgumentParser(
+        prog=f"spork {definition.name}",
+        description=definition.summary,
+    )
+    definition.configure_parser(parser)
+    return parser
+
+
+def _create_core_command_spec(
+    definition: _CoreCommandDefinition,
+    provider: CommandProvider,
+) -> CommandSpec:
+    def handler(context: CommandContext, argv: list[str]) -> int:
+        # Context is intentionally accepted even though the existing core
+        # actions do not need it yet. Extensions use this exact boundary.
+        del context
+        args = create_command_parser(definition.name).parse_args(argv)
+        return definition.action(args)
+
+    return CommandSpec(
+        name=definition.name,
+        summary=definition.summary,
+        handler=handler,
+        provider=provider,
+    )
+
+
+def _create_core_command_registry() -> Mapping[str, CommandSpec]:
+    import spork
+
+    provider = CommandProvider(
+        name="spork-lang",
+        version=spork.__version__,
+        scope="core",
+        location=Path(__file__).resolve(),
+    )
+    return MappingProxyType(
+        {
+            definition.name: _create_core_command_spec(definition, provider)
+            for definition in _CORE_COMMAND_DEFINITIONS
+        }
+    )
+
+
+CORE_COMMANDS = _create_core_command_registry()
+# Backwards-compatible command-name view for code that only needs membership.
+SUBCOMMANDS = frozenset(CORE_COMMANDS)
+
+
+def _core_command_help() -> str:
+    width = max(len(name) for name in CORE_COMMANDS)
+    return "\n".join(
+        f"  {name:<{width}}  {spec.summary}" for name, spec in CORE_COMMANDS.items()
+    )
+
+
 def create_parser() -> argparse.ArgumentParser:
-    """Create the argument parser with all subcommands."""
+    """Create the top-level parser for legacy flags and general help."""
     parser = argparse.ArgumentParser(
         prog="spork",
         description="Spork - A Lisp to Python transpiler",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
+core commands:
+{_core_command_help()}
+
 examples:
   spork                         Start interactive REPL
   spork repl                    Start interactive REPL (explicit)
@@ -888,219 +1162,46 @@ examples:
         """,
     )
 
-    # Legacy/shortcut flags (these work without subcommands)
+    # Legacy/shortcut flags are intentionally separate from command parsers.
     parser.add_argument(
         "-c",
         "--command",
         metavar="CODE",
         help="Execute Spork code directly (like python -c)",
     )
-
     parser.add_argument(
         "-e",
         "--export",
         metavar="FILE",
         help="Export Spork file to Python code and print to stdout",
     )
-
     parser.add_argument(
         "-i",
         "--interactive",
         action="store_true",
         help="Start REPL after executing file or command",
     )
-
     parser.add_argument(
         "--nrepl",
         action="store_true",
         help="Start nREPL server for editor integration",
     )
-
     parser.add_argument(
         "--nrepl-client",
         action="store_true",
         help="Connect to nREPL server as a test client",
     )
-
     parser.add_argument(
         "--host",
         default="127.0.0.1",
         help="Host for nREPL server (default: 127.0.0.1)",
     )
-
     parser.add_argument(
         "--port",
         type=int,
         default=7888,
         help="Port for nREPL server (default: 7888)",
     )
-
-    # Subcommands
-    subparsers = parser.add_subparsers(dest="subcommand", help="Available commands")
-
-    # repl subcommand
-    subparsers.add_parser("repl", help="Start the interactive REPL")
-
-    # new subcommand
-    new_parser = subparsers.add_parser("new", help="Create a new Spork project")
-    new_parser.add_argument("name", help="Name of the new project")
-    new_parser.add_argument(
-        "--path",
-        "-p",
-        help="Parent directory for the project (default: current directory)",
-    )
-
-    # dependency manifest subcommands
-    add_parser = subparsers.add_parser(
-        "add", help="Add packages to :dependencies in spork.it"
-    )
-    add_parser.add_argument(
-        "packages", nargs="+", metavar="PACKAGE", help="Package requirement(s) to add"
-    )
-
-    remove_parser = subparsers.add_parser(
-        "remove", help="Remove packages from :dependencies in spork.it"
-    )
-    remove_parser.add_argument(
-        "packages", nargs="+", metavar="PACKAGE", help="Package name(s) to remove"
-    )
-
-    # sync subcommand
-    sync_parser = subparsers.add_parser(
-        "sync", help="Sync project dependencies (create venv, install deps)"
-    )
-    sync_parser.add_argument(
-        "--quiet", "-q", action="store_true", help="Suppress pip output"
-    )
-    sync_parser.add_argument(
-        "--dev",
-        action="store_true",
-        help="Also install :dev-dependencies from spork.it",
-    )
-
-    # run subcommand
-    run_parser = subparsers.add_parser("run", help="Run the project's main function")
-    run_parser.add_argument(
-        "--main",
-        "-m",
-        help="Main entry point (namespace:function), overrides spork.it",
-    )
-    run_parser.add_argument(
-        "args",
-        nargs="*",
-        help="Arguments to pass to the main function",
-    )
-
-    # test subcommand
-    subparsers.add_parser("test", help="Discover and run project Spork tests")
-
-    # check subcommand
-    check_parser = subparsers.add_parser(
-        "check", help="Check project sources without producing build artifacts"
-    )
-    check_parser.add_argument(
-        "--format",
-        choices=("human", "json"),
-        default="human",
-        help="Diagnostic output format (default: human)",
-    )
-    check_parser.add_argument(
-        "--json",
-        dest="format",
-        action="store_const",
-        const="json",
-        help="Shortcut for --format json",
-    )
-    check_parser.add_argument(
-        "--no-tests",
-        action="store_true",
-        help="Check only :source-paths, excluding :test-paths",
-    )
-    check_parser.add_argument(
-        "--warnings-as-errors",
-        action="store_true",
-        help="Return a failure status when warnings are reported",
-    )
-
-    # build subcommand
-    build_parser = subparsers.add_parser(
-        "build", help="Build project to .spork-out/ with Python + source maps"
-    )
-    build_parser.add_argument(
-        "--out-dir",
-        "-o",
-        default=".spork-out",
-        help="Output directory (default: .spork-out)",
-    )
-    build_parser.add_argument(
-        "--clean",
-        "-c",
-        action="store_true",
-        help="Remove existing output directory before building",
-    )
-
-    # dist subcommand
-    dist_parser = subparsers.add_parser(
-        "dist", help="Create wheel and sdist from compiled Spork project"
-    )
-    dist_parser.add_argument(
-        "--dist-dir",
-        "-d",
-        default="dist",
-        help="Output directory for distributions (default: dist)",
-    )
-    dist_parser.add_argument(
-        "--out-dir",
-        "-o",
-        default=".spork-out",
-        help="Compiled output directory (default: .spork-out)",
-    )
-    dist_parser.add_argument(
-        "--clean",
-        "-c",
-        action="store_true",
-        help="Remove existing dist directory before building",
-    )
-    dist_parser.add_argument(
-        "--no-build",
-        action="store_true",
-        help="Skip running `spork build` first (use existing .spork-out)",
-    )
-    dist_parser.add_argument(
-        "--wheel-only",
-        action="store_true",
-        help="Only build wheel, skip sdist",
-    )
-    dist_parser.add_argument(
-        "--sdist-only",
-        action="store_true",
-        help="Only build sdist, skip wheel",
-    )
-
-    # clean subcommand
-    clean_parser = subparsers.add_parser("clean", help="Clean project artifacts")
-    clean_parser.add_argument(
-        "--all",
-        "-a",
-        action="store_true",
-        help="Remove all artifacts, not just .venv",
-    )
-
-    # lsp subcommand
-    lsp_parser = subparsers.add_parser(
-        "lsp", help="Start the Language Server Protocol server"
-    )
-    lsp_parser.add_argument(
-        "--log",
-        metavar="FILE",
-        help="Log file for debugging LSP communication",
-    )
-
-    # version subcommand
-    subparsers.add_parser(
-        "version", help="Print Spork version and Python host information"
-    )
-
     return parser
 
 
@@ -1110,54 +1211,28 @@ def main(argv: Optional[list[str]] = None) -> None:
 
 
 def _main(argv: Optional[list[str]] = None) -> int:
-    """Internal main that returns exit code."""
-    if argv is None:
-        argv = sys.argv[1:]
+    """Dispatch one CLI invocation and return its exit status."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
 
-    delegated_result = _delegate_to_project_toolchain(argv)
+    delegated_result = _delegate_to_project_toolchain(arguments)
     if delegated_result is not None:
         return delegated_result
 
-    # Pre-parse to detect if first arg is a file (not a subcommand or flag)
-    # This allows `spork myfile.spork` to work without a subcommand
+    # A core command owns every argument after its top-level name. This is the
+    # same raw-argument boundary that package-provided commands will use.
+    if arguments and arguments[0] in CORE_COMMANDS:
+        command = CORE_COMMANDS[arguments[0]]
+        return invoke_command(command, arguments[1:])
+
+    # Preserve direct file execution and legacy flags outside command parsing.
     file_to_run = None
-    if argv and not argv[0].startswith("-") and argv[0] not in SUBCOMMANDS:
-        # First arg looks like a file, not a subcommand
-        file_to_run = argv[0]
-        argv = argv[1:]  # Remove it from argv for argparse
+    legacy_arguments = arguments
+    if arguments and not arguments[0].startswith("-"):
+        file_to_run = arguments[0]
+        legacy_arguments = arguments[1:]
 
-    parser = create_parser()
-    args = parser.parse_args(argv)
+    args = create_parser().parse_args(legacy_arguments)
 
-    # Handle subcommands first
-    if args.subcommand == "repl":
-        return cmd_repl(args)
-    elif args.subcommand == "new":
-        return cmd_new(args)
-    elif args.subcommand == "add":
-        return cmd_add(args)
-    elif args.subcommand == "remove":
-        return cmd_remove(args)
-    elif args.subcommand == "sync":
-        return cmd_sync(args)
-    elif args.subcommand == "run":
-        return cmd_run(args)
-    elif args.subcommand == "test":
-        return cmd_test(args)
-    elif args.subcommand == "check":
-        return cmd_check(args)
-    elif args.subcommand == "build":
-        return cmd_build(args)
-    elif args.subcommand == "dist":
-        return cmd_dist(args)
-    elif args.subcommand == "clean":
-        return cmd_clean(args)
-    elif args.subcommand == "lsp":
-        return cmd_lsp(args)
-    elif args.subcommand == "version":
-        return cmd_version(args)
-
-    # Handle legacy flags
     if args.nrepl:
         return cmd_nrepl_server(args.host, args.port)
 
@@ -1170,12 +1245,12 @@ def _main(argv: Optional[list[str]] = None) -> int:
     if args.export:
         return cmd_export_file(args.export)
 
-    # Handle file execution (detected in pre-parse)
     if file_to_run:
         return cmd_exec_file(file_to_run, args.interactive)
 
-    # No arguments - start REPL
-    return cmd_repl(args)
+    # No arguments retain the historical implicit REPL command while still
+    # passing through the common command context and handler contract.
+    return invoke_command(CORE_COMMANDS["repl"], [])
 
 
 if __name__ == "__main__":

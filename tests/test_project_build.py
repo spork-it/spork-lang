@@ -231,7 +231,7 @@ def test_dist_contains_metadata_sources_and_works_for_both_consumers(
         metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
         metadata = wheel.read(metadata_name).decode()
         assert 'Summary: A "quoted" fixture' in metadata
-        assert "Requires-Dist: spork-runtime<0.2.0,>=0.1.0" in metadata
+        assert "Requires-Dist: spork-runtime<0.2.0,>=0.1.1" in metadata
         assert "Requires-Dist: spork-lang" not in metadata
         assert "Provides-Extra: test" in metadata
         assert "Project-URL: Homepage, https://example.com/fixture" in metadata

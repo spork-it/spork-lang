@@ -10,7 +10,7 @@ The spork.it file uses Spork map syntax:
      :version "0.1.0"
      :description "A sample project"
      :requires-python ">=3.10"
-     :spork-version ">=0.5.2,<0.6"
+     :spork-version ">=0.5.3,<0.6"
      :dependencies ["requests" "numpy>=1.20"]
      :dev-dependencies ["mypy>=1.11"]
      :source-paths ["src"]
@@ -367,7 +367,7 @@ class ProjectConfig:
             except InvalidSpecifier as error:
                 raise ValueError(
                     ":spork-version must be a version specifier such as "
-                    '\">=0.5.2,<0.6\"'
+                    '\">=0.5.3,<0.6\"'
                 ) from error
 
         if not isinstance(authors, list) or not all(

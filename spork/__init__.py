@@ -146,7 +146,7 @@ except ImportError as e:
     print(f"  {e}", file=sys.stderr)
     print("", file=sys.stderr)
     print("The required spork-runtime package may not be installed. Try:", file=sys.stderr)
-    print("  python -m pip install 'spork-runtime>=0.1.0,<0.2.0'", file=sys.stderr)
+    print("  python -m pip install 'spork-runtime>=0.1.1,<0.2.0'", file=sys.stderr)
     print("", file=sys.stderr)
     sys.exit(1)
 
@@ -169,7 +169,7 @@ from spork.compiler import (
 
 install_import_hook()
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 
 __all__ = [
     # Data structures

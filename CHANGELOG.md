@@ -6,6 +6,20 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-30
+
+### Added
+
+- Added eager `(for [binding collection] body...)` expressions that return persistent vectors, including destructuring, nested expressions, and enclosing-local updates.
+- Added eager `(async-for [binding async-collection] body...)` expressions that resolve to persistent vectors inside async functions.
+- Added eager `(sorted-for [binding collection] body :key key-fn :reverse bool)` expressions that return `SortedVector` values.
+
+### Changed
+
+- Removed the special `[for ...]` and `[sorted-for ...]` vector-literal comprehension syntax in favor of ordinary expression forms.
+- Removed the redundant `for-all` prelude macro; use `(for ...)` directly.
+- Documented `doseq` as the explicit allocation-free form for effect-only iteration.
+
 ## [0.5.2] - 2026-08-30
 
 ### Fixed
@@ -277,7 +291,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/spork-it/spork-lang/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/spork-it/spork-lang/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/spork-it/spork-lang/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/spork-it/spork-lang/compare/v0.4.4...v0.5.0

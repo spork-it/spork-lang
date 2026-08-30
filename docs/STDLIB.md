@@ -225,8 +225,8 @@ Persistent sorted vectors retain duplicates in sorted order using a red-black tr
 
 **Iteration:**
 ```clojure
-; Iterates in sorted order
-(for [x (sorted-vec [3 1 4 1 5])]
+; Iterates in sorted order for effects
+(doseq [x (sorted-vec [3 1 4 1 5])]
   (print x))
 ; prints one value per line: 1, 1, 3, 4, 5
 
@@ -234,9 +234,9 @@ Persistent sorted vectors retain duplicates in sorted order using a red-black tr
 (vec (sorted-vec [3 1 4]))  ; => [1 3 4]
 ```
 
-**Sorted Vector Comprehension:**
+**Sorted Iteration Expression:**
 
-`sorted-for` is comprehension syntax rather than a library function. See [Sorted Vector Comprehension](LANG.md#sorted-vector-comprehension) in the Language Reference.
+`sorted-for` is an eager language expression rather than a library function. See [Sorted For Expression](LANG.md#sorted-for-expression) in the Language Reference.
 
 **Transient Operations:**
 
@@ -1587,13 +1587,6 @@ Executes the body for each value from one binding pair and returns `nil`. Use it
 (doseq [item items]
   (process item)
   (save item))
-```
-
-#### `for-all`
-Evaluates one binding and result expression eagerly, returning a vector.
-```clojure
-(for-all [x [1 2 3]] (* x x))       ; => [1 4 9]
-(for-all [x [1 2 3]] [x (* x 10)])  ; => [[1 10] [2 20] [3 30]]
 ```
 
 ### Function Composition

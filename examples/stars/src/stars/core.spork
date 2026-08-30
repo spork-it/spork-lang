@@ -23,10 +23,10 @@
 ;; Get top repos by star count
 (defn top-repos [names]
   ;; Return sorted list of maps with :name and :stars
-  [sorted-for [full-name names]
-               {:name full-name
-                :stars (fetch-stars full-name)}
-               :key :stars :reverse true])
+  (sorted-for [full-name names]
+    {:name full-name
+     :stars (fetch-stars full-name)}
+    :key :stars :reverse true))
 
 (defn main []
   (let [repos ["pallets/flask"
@@ -34,7 +34,7 @@
                "tiangolo/fastapi"
                "psf/requests"]
         ranked (profile "GitHub fetch" (top-repos repos))]
-    (for [row ranked]
+    (doseq [row ranked]
       (let [{:keys [name stars]} row]
         (print stars "-" name)))))
 

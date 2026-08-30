@@ -212,30 +212,30 @@
 
 
 ; ============================================
-; Test vector comprehension (uses transients internally)
+; Test eager for expressions (use transients internally)
 ; ============================================
-(deftest vector-comprehension-for-expr
+(deftest eager-for-expression
 
-  (def squares [for [x (range 10)] (* x x)])
+  (def squares (for [x (range 10)] (* x x)))
   (assert (= (count squares) 10) "squares count should be 10")
   (assert (= (nth squares 0) 0) "squares[0] should be 0")
   (assert (= (nth squares 9) 81) "squares[9] should be 81")
 
   ; With conditional expression
-  (def evens [for [x (range 10)] (if (even? x) x nil)])
+  (def evens (for [x (range 10)] (if (even? x) x nil)))
   (assert (= (nth evens 0) 0) "evens[0] should be 0")
   (assert (= (nth evens 1) nil) "evens[1] should be nil")
   (assert (= (nth evens 4) 4) "evens[4] should be 4")
 
   ; With destructuring
   (def pairs [[1 2] [3 4] [5 6]])
-  (def sums [for [[a b] pairs] (+ a b)])
+  (def sums (for [[a b] pairs] (+ a b)))
   (assert (= (count sums) 3) "sums count should be 3")
   (assert (= (nth sums 0) 3) "sums[0] should be 3")
   (assert (= (nth sums 2) 11) "sums[2] should be 11")
 
   ; Large vector to test efficiency
-  (def big-comp [for [x (range 1000)] (* x 2)])
+  (def big-comp (for [x (range 1000)] (* x 2)))
   (assert (= (count big-comp) 1000) "big-comp count should be 1000")
   (assert (= (nth big-comp 500) 1000) "big-comp[500] should be 1000")
 

@@ -554,7 +554,7 @@ def compile_pattern_dispatch_clause(
                 body_stmts.extend(
                     flatten_stmts([compile_do_stmt_with_return(last_form[1:])])
                 )
-            elif head_name in ("while", "for", "set!"):
+            elif head_name in ("while", "set!"):
                 body_stmts.extend(flatten_stmts([compile_stmt(last_form)]))
                 if not is_generator:
                     body_stmts.append(ast.Return(value=ast.Constant(value=None)))
@@ -600,7 +600,7 @@ def compile_pattern_dispatch_clause(
                 match_body.extend(
                     flatten_stmts([compile_do_stmt_with_return(last_form[1:])])
                 )
-            elif head_name in ("while", "for", "set!"):
+            elif head_name in ("while", "set!"):
                 match_body.extend(flatten_stmts([compile_stmt(last_form)]))
                 if not is_generator:
                     match_body.append(ast.Return(value=ast.Constant(value=None)))
@@ -1318,7 +1318,7 @@ def compile_arity_dispatch_body(params, body_forms, has_kwargs, is_generator=Fal
         elif head_name == "with":
             with_stmt = compile_with_stmt_with_return(last_form[1:])
             body_nodes.append(with_stmt)
-        elif head_name in ("while", "for", "async-for", "set!"):
+        elif head_name in ("while", "set!"):
             stmts = compile_stmt(last_form)
             body_nodes.extend(flatten_stmts([stmts]))
             # Only add return None if not a generator
@@ -1446,7 +1446,7 @@ def compile_defn(args, form_loc=None):
             # Compile loop as statements, with last body form returned
             loop_stmts = compile_loop_stmt_with_return(last_form[1:])
             body_nodes.extend(flatten_stmts([loop_stmts]))
-        elif head_name in ("while", "for", "async-for", "set!"):
+        elif head_name in ("while", "set!"):
             # Pure statement forms - no return value
             stmts = compile_stmt(last_form)
             body_nodes.extend(flatten_stmts([stmts]))
@@ -2006,7 +2006,7 @@ def compile_fn_expr(args, ctx=None):
         elif head_name == "with":
             with_stmt = compile_with_stmt_with_return(last_form[1:])
             body_nodes.append(with_stmt)
-        elif head_name in ("while", "for", "async-for", "set!"):
+        elif head_name in ("while", "set!"):
             stmts = compile_stmt(last_form)
             body_nodes.extend(flatten_stmts([stmts]))
             # Only add return None if not a generator

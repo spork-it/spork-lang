@@ -282,59 +282,68 @@ A test passes when its body returns normally and fails when it raises an uncaugh
   (set! i (inc i)))
 ```
 
-### For Loop
+### For Expression
+
+`for` eagerly evaluates its body once for each input and returns a persistent vector of the body results. It never returns a lazy iterator. `nil` results are retained, and binding patterns support destructuring.
 
 ```clojure
-; `for` performs its body for each item and returns nil rather than a collection
-(for [x [1 2 3]]
-  (print x))
-```
-
-### Vector Comprehension
-
-```clojure
-; Placing `for` directly inside vector brackets builds a vector
-(def squares [for [x (range 10)] (* x x)])
+(def squares
+  (for [x (range 10)] (* x x)))
 ; => [0 1 4 9 16 25 36 49 64 81]
 
 ; Works with any expression, including conditionals
-[for [x (range 10)] (if (even? x) (* x 2) nil)]
+(for [x (range 10)]
+  (if (even? x) (* x 2) nil))
 ; => [0 nil 4 nil 8 nil 12 nil 16 nil]
 
 ; Supports destructuring
 (def pairs [[1 2] [3 4] [5 6]])
-[for [[a b] pairs] (+ a b)]
+(for [[a b] pairs] (+ a b))
 ; => [3 7 11]
 
-; Can use let and other expressions in body
-[for [x (range 5)] (let [sq (* x x)] (+ sq 1))]
+; Earlier body forms run for effects; the final value is retained
+(def recorded (list))
+(for [x (range 5)]
+  (recorded.append x)
+  (let [sq (* x x)] (+ sq 1)))
 ; => [1 2 5 10 17]
 ```
 
-### Sorted Vector Comprehension
+Because `for` is an ordinary expression form, it composes directly in calls, conditionals, `let`, markup, and function tail positions. The former `[for ...]` vector-comprehension syntax is no longer supported.
 
-`sorted-for` uses the same binding and body positions as vector `for`, followed by optional `:key` and `:reverse` values.
+### Effect-only Iteration
+
+Use `doseq` when body results are intentionally discarded. It evaluates eagerly and returns `nil` without constructing a result vector.
 
 ```clojure
-; Use sorted-for to build a sorted vector from a comprehension
-[sorted-for [x (range 10)] (* x x)]
+(doseq [x [1 2 3]]
+  (print x))
+; prints 1, 2, and 3; returns nil
+```
+
+### Sorted For Expression
+
+`sorted-for` eagerly returns a `SortedVector`. It uses the same binding and body positions as `for`, followed by optional `:key` and `:reverse` values.
+
+```clojure
+(sorted-for [x (range 10)] (* x x))
 ; => sorted_vec(0, 1, 4, 9, 16, 25, 36, 49, 64, 81)
 
 ; With :key function for custom sorting
-[sorted-for [s ["banana" "apple" "fig"]] s :key len]
+(sorted-for [s ["banana" "apple" "fig"]] s :key len)
 ; => sorted_vec("fig", "apple", "banana")
 
 ; With :reverse for descending order
-[sorted-for [x [3 1 4 1 5]] x :reverse true]
+(sorted-for [x [3 1 4 1 5]] x :reverse true)
 ; => sorted_vec(5, 4, 3, 1, 1)
 
 ; A keyword such as :score is a lookup function and can be the sort key
 (def score-items
   [{:name "alpha" :score 8} {:name "beta" :score 13}])
 (def ranked-items
-  [sorted-for [item score-items]
-              {:name (:name item) :score (:score item)}
-              :key :score :reverse true])
+  (sorted-for [item score-items]
+    {:name (:name item) :score (:score item)}
+    :key :score :reverse true))
 (isinstance ranked-items SortedVector) ; => true
 (vec ranked-items)
 ; => [{:name "beta" :score 13} {:name "alpha" :score 8}]
@@ -1008,17 +1017,17 @@ Inside a quasiquoted template, appending `#` to a symbol creates a unique genera
 
 ### Async Functions
 
-Place the `^async` compiler flag before the function name. `await` and `async-for` may only appear inside an async function.
+Place the `^async` compiler flag before the function name. `await` and `async-for` may only appear inside an async function. Like `for`, `async-for` eagerly returns a persistent vector after consuming the asynchronous iterable; it does not return a lazy async iterator.
 
 ```clojure
 (defn ^async fetch-data [url]
   (let [response (await (http.get url))]
     (await (response.json))))
 
-; Iterate an asynchronous iterable
-(defn ^async consume-items []
+; Eagerly transform an asynchronous iterable
+(defn ^async load-items []
   (async-for [item (async-iterator)]
-    (process item)))
+    (await (transform item))))
 ```
 
 ### Generators
@@ -1033,7 +1042,7 @@ Place `^generator` before the function name when its body uses `yield` or `yield
 
 ; Yield from (delegation)
 (defn ^generator chain [& iterables]
-  (for [it iterables]
+  (doseq [it iterables]
     (yield-from it)))
 ```
 

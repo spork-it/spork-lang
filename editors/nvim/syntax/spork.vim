@@ -35,7 +35,7 @@ syntax keyword sporkNil nil
 
 " Special forms - from the compiler lowering modules
 syntax keyword sporkSpecial def defn defmacro defclass fn let set!
-syntax keyword sporkSpecial if do loop recur for while async-for
+syntax keyword sporkSpecial if do loop recur for sorted-for while async-for
 syntax keyword sporkSpecial try catch finally throw return
 syntax keyword sporkSpecial quote quasiquote
 syntax keyword sporkSpecial ns import
@@ -46,7 +46,7 @@ syntax keyword sporkSpecial match with apply call
 syntax keyword sporkMacro when unless cond
 syntax keyword sporkMacro -> ->>
 syntax keyword sporkMacro comment fmt assert
-syntax keyword sporkMacro mapv filterv doseq for-all
+syntax keyword sporkMacro mapv filterv doseq
 syntax keyword sporkMacro comp partial identity constantly complement
 syntax keyword sporkMacro defprotocol extend-type extend-protocol with-mutable
 

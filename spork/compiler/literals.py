@@ -117,7 +117,7 @@ def compile_anon_fn_literal(form: AnonFnLiteral):
             elif head_name == "do":
                 do_stmts = compile_do_stmt_with_return(last_form[1:])
                 body_nodes.extend(flatten_stmts([do_stmts]))
-            elif head_name in ("while", "for", "set!"):
+            elif head_name in ("while", "set!"):
                 stmts = compile_stmt(last_form)
                 body_nodes.extend(flatten_stmts([stmts]))
                 body_nodes.append(ast.Return(value=ast.Constant(value=None)))

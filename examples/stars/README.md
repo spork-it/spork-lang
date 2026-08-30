@@ -6,7 +6,7 @@ This project ranks a small list of GitHub repositories by star count. It demonst
 - a user-defined profiling macro;
 - type annotations;
 - pattern matching on HTTP status codes;
-- a `sorted-for` comprehension with `:key` and `:reverse`;
+- an eager `sorted-for` expression with `:key` and `:reverse`;
 - map destructuring.
 
 ## Run it
@@ -34,4 +34,4 @@ GitHub fetch took 0.42s
 - [`spork.it`](spork.it) declares `requests` and the `stars.core:main` entry point.
 - [`src/stars/core.spork`](src/stars/core.spork) contains the macro and application.
 
-See [Projects and CLI](../../docs/PROJECTS.md) for manifest and dependency details. The [Language Reference](../../docs/LANG.md) covers [macros](../../docs/LANG.md#11-macros), [pattern matching](../../docs/LANG.md#7-pattern-matching), and [sorted vector comprehensions](../../docs/LANG.md#sorted-vector-comprehension).
+See [Projects and CLI](../../docs/PROJECTS.md) for manifest and dependency details. The [Language Reference](../../docs/LANG.md) covers [macros](../../docs/LANG.md#11-macros), [pattern matching](../../docs/LANG.md#7-pattern-matching), and [sorted iteration expressions](../../docs/LANG.md#sorted-for-expression).

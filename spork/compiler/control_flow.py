@@ -292,7 +292,7 @@ def compile_let_stmt_with_return(args):
                 # Loop form - compile with return
                 s = compile_loop_stmt_with_return(last_form[1:])
                 stmts.extend(flatten_stmts([s]))
-            elif head_name in ("while", "for", "set!"):
+            elif head_name in ("while", "set!"):
                 # Statement form - compile as statement, return None
                 s = compile_stmt(last_form)
                 stmts.extend(flatten_stmts([s]))
@@ -340,7 +340,7 @@ def compile_do_stmt_with_return(args):
             # With form - compile with return
             s = compile_with_stmt_with_return(last_form[1:])
             stmts.append(s)
-        elif head_name in ("while", "for", "set!"):
+        elif head_name in ("while", "set!"):
             # Statement form - compile as statement, return None
             s = compile_stmt(last_form)
             stmts.extend(flatten_stmts([s]))
@@ -674,7 +674,7 @@ def compile_with_stmt_with_return(args):
                 # Nested async-with - compile with return
                 s = compile_async_with_stmt_with_return(last_form[1:])
                 body.append(s)
-            elif head_name in ("while", "for", "async-for", "set!"):
+            elif head_name in ("while", "set!"):
                 # Statement form - compile as statement, return None
                 s = compile_stmt(last_form)
                 body.extend(flatten_stmts([s]))
@@ -947,7 +947,7 @@ def compile_async_with_stmt_with_return(args):
                 # Nested async-with - compile with return
                 s = compile_async_with_stmt_with_return(last_form[1:])
                 body.append(s)
-            elif head_name in ("while", "for", "async-for", "set!"):
+            elif head_name in ("while", "set!"):
                 # Statement form - compile as statement, return None
                 s = compile_stmt(last_form)
                 body.extend(flatten_stmts([s]))
@@ -1096,7 +1096,7 @@ def compile_block_with_result(forms, ret_name="_spork_ret"):
     - If there are no forms, ret_name is left as-is (caller should init to None)
     - All but the last form are compiled as statements
     - The last form:
-      - If it's a statement-only construct (while/for/set!/throw/return), compile as statement
+      - If it's a statement-only construct (while/set!/throw/return), compile as statement
       - Otherwise, compile as expression and assign to ret_name
 
     Returns a list of statement nodes.
@@ -1118,7 +1118,7 @@ def compile_block_with_result(forms, ret_name="_spork_ret"):
     is_stmt_only = False
     if isinstance(last, list) and last and is_symbol(last[0]):
         head = last[0].name
-        if head in ("while", "for", "set!", "throw", "return"):
+        if head in ("while", "set!", "throw", "return"):
             is_stmt_only = True
 
     if is_stmt_only:
@@ -1153,11 +1153,11 @@ def compile_do_expr(forms):
     # Check if single form is a statement-only construct that needs wrapping
     if len(forms) == 1:
         form = forms[0]
-        # Check if it's a statement-only form (for, while, set!, etc.)
+        # Check if it's a statement-only form (while, set!, etc.)
         is_statement_form = False
         if isinstance(form, list) and form and isinstance(form[0], Symbol):
             head_name = form[0].name
-            if head_name in ("for", "while", "async-for", "set!"):
+            if head_name in ("while", "set!"):
                 is_statement_form = True
 
         if not is_statement_form:

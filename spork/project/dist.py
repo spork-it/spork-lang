@@ -26,7 +26,7 @@ import spork
 from spork.project.build import build_project, find_project_root
 from spork.project.config import ProjectConfig
 
-SPORK_RUNTIME_REQUIREMENT = "spork-runtime>=0.1.0,<0.2.0"
+SPORK_RUNTIME_REQUIREMENT = "spork-runtime>=0.1.1,<0.2.0"
 
 
 @dataclass
@@ -99,7 +99,7 @@ def generate_dist_pyproject(
     except InvalidSpecifier as error:
         raise ValueError(
             ":spork-version must be a version specifier such as "
-            '\">=0.5.2,<0.6\"'
+            '\">=0.5.3,<0.6\"'
         ) from error
     if Version(spork.__version__) not in supported_compilers:
         raise ValueError(

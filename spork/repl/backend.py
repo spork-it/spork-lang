@@ -1071,6 +1071,7 @@ _INDENT_FORMS = {
     "finally",
     "loop",
     "for",
+    "sorted-for",
     "while",
     "doseq",
     "dotimes",

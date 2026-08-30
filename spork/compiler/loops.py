@@ -1,4 +1,4 @@
-"""Lowering for loops, ``recur``, and vector comprehensions."""
+"""Lowering for eager iteration expressions, effect loops, and ``recur``."""
 
 import ast
 from typing import Optional, cast
@@ -13,14 +13,33 @@ from spork.compiler.destructuring import compile_destructure
 from spork.compiler.generated_names import gensym
 from spork.compiler.lowering import compile_expr, compile_stmt
 from spork.compiler.macros import is_symbol
-from spork.compiler.reader import (
-    SourceLocation,
-    copy_location,
-    get_source_location,
-    set_location,
-)
-from spork.runtime import Keyword, Symbol, VectorLiteral
+from spork.compiler.reader import SourceLocation, get_source_location, set_location
+from spork.runtime import Keyword, MapLiteral, Symbol, VectorLiteral
 from spork.runtime.types import normalize_name
+
+
+def _binding_names(pattern) -> set[str]:
+    """Collect normalized names introduced by an iteration binding pattern."""
+    if isinstance(pattern, Symbol):
+        return {normalize_name(pattern.name)}
+    if isinstance(pattern, VectorLiteral):
+        names: set[str] = set()
+        for item in pattern.items:
+            if not (isinstance(item, Symbol) and item.name == "&"):
+                names.update(_binding_names(item))
+        return names
+    if isinstance(pattern, MapLiteral):
+        names = set()
+        for key, value in pattern.pairs:
+            if isinstance(key, Keyword) and key.name == "keys":
+                if isinstance(value, VectorLiteral):
+                    for symbol in value.items:
+                        if isinstance(symbol, Symbol):
+                            names.add(normalize_name(symbol.name))
+            elif isinstance(value, Symbol):
+                names.add(normalize_name(value.name))
+        return names
+    return set()
 
 
 def compile_loop(args, form_loc=None):
@@ -580,13 +599,11 @@ def compile_while(args, form_loc=None):
 
 
 def compile_for(args, form_loc=None):
-    """
-    Compile (for [x xs] body...) to ast.For.
+    """Compile a discarded ``for`` expression as an allocation-free loop.
 
-    Supports destructuring patterns in the loop variable:
-    - Simple: (for [x items] ...)
-    - Vector destructuring: (for [[a b] pairs] ...)
-    - Dict destructuring: (for [{:keys [k v]} items] ...)
+    Statement context does not observe the vector produced by ``for``, so this
+    lowering evaluates the same body forms without building that vector.  The
+    ``doseq`` prelude form intentionally expands through this path.
     """
     if len(args) < 1:
         raise SyntaxError("for requires binding vector")
@@ -599,6 +616,8 @@ def compile_for(args, form_loc=None):
     var_form = bindings.items[0]
     seq_form = bindings.items[1]
     body_forms = args[1:]
+    if not body_forms:
+        raise SyntaxError("for requires a body expression")
 
     iter_expr = compile_expr(seq_form)
 
@@ -645,25 +664,25 @@ def compile_for(args, form_loc=None):
         return node
 
 
-def compile_vector_comprehension(for_form, body_expr, form):
-    """
-    Compile [for [x coll] expr] to efficient vector building using transients.
+def compile_for_expr(args, form_loc=None):
+    """Compile ``(for [x coll] body...)`` to an eager persistent vector.
 
-    Always generates an IIFE to ensure proper scoping:
-        def _vec_comp():
-            _t = EMPTY_VECTOR.transient()
-            for x in coll:
-                _t.conj_mut(expr)
-            return _t.persistent()
-        _vec_comp()
+    A transient vector keeps construction efficient, while the enclosing IIFE
+    gives iteration bindings expression-local scope.  Earlier body forms are
+    evaluated for effects and each iteration's final body value is retained.
     """
-    # Parse the for form: (for [var coll] ...) - we ignore extra body forms in for
-    if len(for_form) < 2:
-        raise SyntaxError("for in vector comprehension requires [var coll]")
+    if len(args) < 1:
+        raise SyntaxError("for requires binding vector")
 
-    bindings = for_form[1]
-    if not isinstance(bindings, VectorLiteral) or len(bindings.items) != 2:
-        raise SyntaxError("for binding must be [var coll]")
+    bindings = args[0]
+    if not isinstance(bindings, VectorLiteral):
+        raise SyntaxError("for binding must be a vector")
+    if len(bindings.items) != 2:
+        raise SyntaxError("for binding must have exactly 2 elements [var seq]")
+
+    body_forms = args[1:]
+    if not body_forms:
+        raise SyntaxError("for requires a body expression")
 
     var_form = bindings.items[0]
     coll_form = bindings.items[1]
@@ -671,12 +690,14 @@ def compile_vector_comprehension(for_form, body_expr, form):
     iter_expr = compile_expr(coll_form)
 
     # Generate unique names
-    func_name = gensym("_vec_comp_")
+    func_name = gensym("_for_expr_")
     transient_name = gensym("_t_")
 
     # Save the current nested functions state so we can capture any new ones
     ctx = get_compile_context()
     saved_funcs_count = len(ctx.nested_functions)
+    ctx.push_scope(_binding_names(var_form))
+    ctx.push_nonlocal_frame()
 
     # Build the function body
     func_body = []
@@ -710,13 +731,24 @@ def compile_vector_comprehension(for_form, body_expr, form):
         item_load = ast.Name(id=item_temp, ctx=ast.Load())
         loop_body.extend(compile_destructure(var_form, item_load))
 
-    # Compile body expression INSIDE the loop context (after variable is bound)
-    body_compiled = compile_expr(body_expr)
+    # Evaluate all but the final body form for effects. The final value is
+    # retained in the result vector for this iteration.
+    for body_form in body_forms[:-1]:
+        statement = compile_stmt(body_form)
+        loop_body.extend(flatten_stmts([statement]))
+
+    body_compiled = compile_expr(body_forms[-1])
 
     # Capture any nested functions that were generated during body compilation
     # These need to be defined INSIDE our function, not at module level
     nested_funcs = ctx.nested_functions[saved_funcs_count:]
     ctx.nested_functions = ctx.nested_functions[:saved_funcs_count]
+    nonlocals = ctx.pop_nonlocal_frame()
+    ctx.pop_scope()
+
+    # Python requires nonlocal declarations before assignments in the helper.
+    if nonlocals:
+        func_body.insert(0, ast.Nonlocal(names=sorted(nonlocals)))
 
     # Add captured nested functions at the start of our function body
     for nf in nested_funcs:
@@ -779,12 +811,137 @@ def compile_vector_comprehension(for_form, body_expr, form):
         func=ast.Name(id=func_name, ctx=ast.Load()), args=[], keywords=[]
     )
 
-    return copy_location(call_expr, form)
+    return set_location(call_expr, form_loc)
 
 
-def compile_sorted_vector_comprehension(for_form, body_expr, options, form):
+def compile_async_for_expr(args, form_loc=None):
+    """Compile ``(async-for [x coll] body...)`` to an awaited eager vector."""
+    if len(args) < 1:
+        raise SyntaxError("async-for requires binding vector")
+
+    bindings = args[0]
+    if not isinstance(bindings, VectorLiteral):
+        raise SyntaxError("async-for binding must be a vector")
+    if len(bindings.items) != 2:
+        raise SyntaxError(
+            "async-for binding must have exactly 2 elements [var seq]"
+        )
+
+    body_forms = args[1:]
+    if not body_forms:
+        raise SyntaxError("async-for requires a body expression")
+
+    var_form = bindings.items[0]
+    coll_form = bindings.items[1]
+    iter_expr = compile_expr(coll_form)
+
+    func_name = gensym("_async_for_expr_")
+    transient_name = gensym("_t_")
+
+    ctx = get_compile_context()
+    saved_funcs_count = len(ctx.nested_functions)
+    ctx.push_scope(_binding_names(var_form))
+    ctx.push_nonlocal_frame()
+
+    func_body: list[ast.stmt] = [
+        ast.Assign(
+            targets=[ast.Name(id=transient_name, ctx=ast.Store())],
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id="EMPTY_VECTOR", ctx=ast.Load()),
+                    attr="transient",
+                    ctx=ast.Load(),
+                ),
+                args=[],
+                keywords=[],
+            ),
+        )
+    ]
+    loop_body: list[ast.stmt] = []
+
+    if isinstance(var_form, Symbol):
+        target = ast.Name(id=normalize_name(var_form.name), ctx=ast.Store())
+    else:
+        item_temp = gensym("_item_")
+        target = ast.Name(id=item_temp, ctx=ast.Store())
+        loop_body.extend(
+            compile_destructure(
+                var_form, ast.Name(id=item_temp, ctx=ast.Load())
+            )
+        )
+
+    for body_form in body_forms[:-1]:
+        statement = compile_stmt(body_form)
+        loop_body.extend(flatten_stmts([statement]))
+
+    body_compiled = compile_expr(body_forms[-1])
+    loop_body.append(
+        ast.Expr(
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id=transient_name, ctx=ast.Load()),
+                    attr="conj_mut",
+                    ctx=ast.Load(),
+                ),
+                args=[body_compiled],
+                keywords=[],
+            )
+        )
+    )
+
+    nested_funcs = ctx.nested_functions[saved_funcs_count:]
+    ctx.nested_functions = ctx.nested_functions[:saved_funcs_count]
+    nonlocals = ctx.pop_nonlocal_frame()
+    ctx.pop_scope()
+
+    if nonlocals:
+        func_body.insert(0, ast.Nonlocal(names=sorted(nonlocals)))
+    func_body.extend(nested_funcs)
+    func_body.append(
+        ast.AsyncFor(target=target, iter=iter_expr, body=loop_body, orelse=[])
+    )
+    func_body.append(
+        ast.Return(
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id=transient_name, ctx=ast.Load()),
+                    attr="persistent",
+                    ctx=ast.Load(),
+                ),
+                args=[],
+                keywords=[],
+            )
+        )
+    )
+
+    func_def = ast.AsyncFunctionDef(
+        name=func_name,
+        args=ast.arguments(
+            posonlyargs=[],
+            args=[],
+            vararg=None,
+            kwonlyargs=[],
+            kw_defaults=[],
+            kwarg=None,
+            defaults=[],
+        ),
+        body=func_body,
+        decorator_list=[],
+        returns=None,
+    )
+    set_location(func_def, form_loc)
+    ctx.add_function(func_def)
+
+    call_expr = ast.Call(
+        func=ast.Name(id=func_name, ctx=ast.Load()), args=[], keywords=[]
+    )
+    awaited = ast.Await(value=call_expr)
+    return set_location(awaited, form_loc)
+
+
+def compile_sorted_for_expr(args, form_loc=None):
     """
-    Compile [sorted-for [x coll] expr :key key-fn :reverse bool] to sorted vector building.
+    Compile (sorted-for [x coll] expr :key key-fn :reverse bool) to a SortedVector.
 
     Generates an IIFE that builds a sorted vector:
         def _sorted_vec_comp():
@@ -798,16 +955,23 @@ def compile_sorted_vector_comprehension(for_form, body_expr, options, form):
         :key <fn>      - Key function for sorting
         :reverse <bool> - Whether to sort in reverse order
     """
-    # Parse the for form: (sorted-for [var coll] ...)
-    if len(for_form) < 2:
-        raise SyntaxError("sorted-for in vector comprehension requires [var coll]")
+    if len(args) < 1:
+        raise SyntaxError("sorted-for requires binding vector")
 
-    bindings = for_form[1]
-    if not isinstance(bindings, VectorLiteral) or len(bindings.items) != 2:
-        raise SyntaxError("sorted-for binding must be [var coll]")
+    bindings = args[0]
+    if not isinstance(bindings, VectorLiteral):
+        raise SyntaxError("sorted-for binding must be a vector")
+    if len(bindings.items) != 2:
+        raise SyntaxError(
+            "sorted-for binding must have exactly 2 elements [var seq]"
+        )
+    if len(args) < 2:
+        raise SyntaxError("sorted-for requires a body expression")
 
     var_form = bindings.items[0]
     coll_form = bindings.items[1]
+    body_expr = args[1]
+    options = args[2:]
 
     iter_expr = compile_expr(coll_form)
 
@@ -833,6 +997,8 @@ def compile_sorted_vector_comprehension(for_form, body_expr, options, form):
     # Save the current nested functions state so we can capture any new ones
     ctx = get_compile_context()
     saved_funcs_count = len(ctx.nested_functions)
+    ctx.push_scope(_binding_names(var_form))
+    ctx.push_nonlocal_frame()
 
     # Build the function body
     func_body = []
@@ -903,6 +1069,11 @@ def compile_sorted_vector_comprehension(for_form, body_expr, options, form):
     # Capture any nested functions that were generated during body compilation
     nested_funcs = ctx.nested_functions[saved_funcs_count:]
     ctx.nested_functions = ctx.nested_functions[:saved_funcs_count]
+    nonlocals = ctx.pop_nonlocal_frame()
+    ctx.pop_scope()
+
+    if nonlocals:
+        func_body.insert(0, ast.Nonlocal(names=sorted(nonlocals)))
 
     # Add captured nested functions at the start of our function body
     for nf in nested_funcs:
@@ -965,18 +1136,11 @@ def compile_sorted_vector_comprehension(for_form, body_expr, options, form):
         func=ast.Name(id=func_name, ctx=ast.Load()), args=[], keywords=[]
     )
 
-    return copy_location(call_expr, form)
+    return set_location(call_expr, form_loc)
 
 
 def compile_async_for(args, form_loc=None):
-    """
-    Compile (async-for [x xs] body...) to ast.AsyncFor.
-
-    Supports destructuring patterns in the loop variable:
-    - Simple: (async-for [x items] ...)
-    - Vector destructuring: (async-for [[a b] pairs] ...)
-    - Dict destructuring: (async-for [{:keys [k v]} items] ...)
-    """
+    """Compile a discarded ``async-for`` expression without allocation."""
     if len(args) < 1:
         raise SyntaxError("async-for requires binding vector")
     bindings = args[0]
@@ -988,47 +1152,25 @@ def compile_async_for(args, form_loc=None):
     var_form = bindings.items[0]
     seq_form = bindings.items[1]
     body_forms = args[1:]
+    if not body_forms:
+        raise SyntaxError("async-for requires a body expression")
 
     iter_expr = compile_expr(seq_form)
+    body: list[ast.stmt] = []
 
-    # Check if we need destructuring
     if isinstance(var_form, Symbol):
-        # Simple case: no destructuring needed
         target = ast.Name(id=normalize_name(var_form.name), ctx=ast.Store())
-
-        body = []
-        if not body_forms:
-            body.append(ast.Pass())
-        else:
-            for f in body_forms:
-                s = compile_stmt(f)
-                body.extend(flatten_stmts([s]))
-
-        node = ast.AsyncFor(target=target, iter=iter_expr, body=body, orelse=[])
-        set_location(node, form_loc)
-        return node
     else:
-        # Destructuring case: use a temp variable and destructure in body
         temp = gensym("__async_for_item_")
         target = ast.Name(id=temp, ctx=ast.Store())
-        temp_load = ast.Name(id=temp, ctx=ast.Load())
+        body.extend(
+            compile_destructure(var_form, ast.Name(id=temp, ctx=ast.Load()))
+        )
 
-        body = []
-        # First, add destructuring assignments
-        body.extend(compile_destructure(var_form, temp_load))
+    for body_form in body_forms:
+        statement = compile_stmt(body_form)
+        body.extend(flatten_stmts([statement]))
 
-        # Then add the actual body
-        if not body_forms:
-            pass  # Destructuring is enough, no need for Pass
-        else:
-            for f in body_forms:
-                s = compile_stmt(f)
-                body.extend(flatten_stmts([s]))
-
-        # Ensure body is not empty
-        if not body:
-            body.append(ast.Pass())
-
-        node = ast.AsyncFor(target=target, iter=iter_expr, body=body, orelse=[])
-        set_location(node, form_loc)
-        return node
+    node = ast.AsyncFor(target=target, iter=iter_expr, body=body, orelse=[])
+    set_location(node, form_loc)
+    return node

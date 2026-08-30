@@ -417,6 +417,7 @@ class SporkLanguageServer:
             "loop",
             "recur",
             "for",
+            "sorted-for",
             "while",
             "async-for",
             "async-with",

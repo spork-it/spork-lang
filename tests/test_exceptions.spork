@@ -123,7 +123,7 @@
       nil)))
 
 (defn process-list [lst]
-  (for [item lst]
+  (doseq [item lst]
     (let [result (safe-process (fn [x] (/ 100 x)) item)]
       (if result
         nil))))

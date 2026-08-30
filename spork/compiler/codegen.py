@@ -57,12 +57,13 @@ from spork.compiler.literals import (
 )
 from spork.compiler.loops import (
     compile_async_for,
+    compile_async_for_expr,
     compile_for,
+    compile_for_expr,
     compile_loop,
     compile_loop_expr,
     compile_loop_stmt_with_return,
-    compile_sorted_vector_comprehension,
-    compile_vector_comprehension,
+    compile_sorted_for_expr,
     compile_while,
 )
 from spork.compiler.lowering import install_lowerer
@@ -410,36 +411,9 @@ def compile_expr(form):
         )
         return copy_location(node, form)
 
-    # VectorLiteral -> Vector via vec()
-    # Special case: [for [x coll] expr] -> vector comprehension using transients
+    # VectorLiteral -> Vector via vec(). Iteration expressions use ordinary
+    # list syntax: (for ...) and (sorted-for ...).
     if isinstance(form, VectorLiteral):
-        items = form.items
-        if (
-            len(items) == 3
-            and is_symbol(items[0], "for")
-            and isinstance(items[1], VectorLiteral)
-        ):
-            # Vector comprehension: [for [x coll] expr]
-            # items[0] = 'for', items[1] = [x coll], items[2] = expr
-            for_form = [items[0], items[1]]  # Reconstruct (for [x coll])
-            body_expr = items[2]
-            return compile_vector_comprehension(for_form, body_expr, form)
-
-        # Check for sorted vector comprehension: [sorted-for [x coll] expr :key fn :reverse bool]
-        if (
-            len(items) >= 3
-            and is_symbol(items[0], "sorted-for")
-            and isinstance(items[1], VectorLiteral)
-        ):
-            # Sorted vector comprehension: [sorted-for [x coll] expr ...]
-            # items[0] = 'sorted-for', items[1] = [x coll], items[2] = expr, items[3:] = options
-            for_form = [items[0], items[1]]
-            body_expr = items[2]
-            options = items[3:]  # Remaining items are :key/:reverse options
-            return compile_sorted_vector_comprehension(
-                for_form, body_expr, options, form
-            )
-
         elts = [compile_expr(x) for x in form.items]
         node = ast.Call(
             func=ast.Name(id="vec", ctx=ast.Load()),
@@ -602,6 +576,17 @@ def compile_expr(form):
         # expression do
         if is_symbol(head, "do"):
             return compile_do_expr(form[1:])
+
+        # Eager iteration expressions. Statement context may lower `for`
+        # allocation-free when its result is discarded.
+        if is_symbol(head, "for"):
+            return compile_for_expr(form[1:], loc)
+
+        if is_symbol(head, "async-for"):
+            return compile_async_for_expr(form[1:], loc)
+
+        if is_symbol(head, "sorted-for"):
+            return compile_sorted_for_expr(form[1:], loc)
 
         # expression let
         if is_symbol(head, "let"):

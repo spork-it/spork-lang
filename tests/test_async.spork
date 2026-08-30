@@ -1,7 +1,8 @@
 ; Test file for async/await support
 
 (ns test-async
-  (:import [asyncio]))
+  (:import [asyncio]
+           [spork.pds :as pds]))
 
 ; Test 1: Simple async function
 (defn ^async simple-async []
@@ -43,6 +44,15 @@
     (.append results x))
   results)
 
+(defn ^async collect-async-values [visited]
+  (async-for [x (async-range 4)]
+    (visited.append x)
+    (* x 10)))
+
+(def collect-async-fn
+  (fn ^async [n]
+    (async-for [x (async-range n)] (inc x))))
+
 ; Test 6: Async anonymous function (fn ^async ...)
 (defn ^async test-async-fn []
   (def async-lambda (fn ^async [x]
@@ -73,6 +83,15 @@
 (deftest ^async async-for-loop
   (def result (await (test-async-for)))
   (assert (= (vec result) [0 1 2 3 4])))
+
+(deftest ^async async-for-eagerly-returns-a-persistent-vector
+  (def visited (list))
+  (def result (await (collect-async-values visited)))
+  (assert (isinstance result pds.Vector))
+  (assert (= result [0 10 20 30]))
+  (assert (= visited (list [0 1 2 3])))
+  (def fn-result (await (collect-async-fn 3)))
+  (assert (= fn-result [1 2 3])))
 
 (deftest ^async anonymous-async-function
   (def result (await (test-async-fn)))

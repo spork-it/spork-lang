@@ -26,7 +26,7 @@ let s:indent_forms = [
   \ 'do', 'let', 'fn', 'defn', 'defmacro', 'defclass', 'def',
   \ 'if', 'when', 'unless', 'cond', 'match',
   \ 'try', 'catch', 'finally',
-  \ 'loop', 'for', 'while', 'doseq', 'dotimes', 'async-for',
+  \ 'loop', 'for', 'sorted-for', 'while', 'doseq', 'dotimes', 'async-for',
   \ 'extend-type', 'extend-protocol', 'defprotocol',
   \ 'with', 'ns', '->', '->>'
   \ ]

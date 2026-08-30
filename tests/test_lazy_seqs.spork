@@ -267,8 +267,8 @@
   (def fv (filterv even? [1 2 3 4 5 6]))
   (assert (= fv [2 4 6]))
 
-  ; for-all
-  (def fa (for-all [x [1 2 3]] (* x x)))
+  ; eager for expression
+  (def fa (for [x [1 2 3]] (* x x)))
   (assert (= fa [1 4 9]))
 
   ; nil? some?

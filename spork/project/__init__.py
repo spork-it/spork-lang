@@ -52,6 +52,7 @@ from spork.project.config import (
     DEFAULT_TEST_PATHS,
     PROJECT_FILENAME,
     APIConfig,
+    CommandConfig,
     ProjectConfig,
     PythonAPIConfig,
     SporkAPIConfig,
@@ -71,6 +72,15 @@ from spork.project.dist import (
 from spork.project.manager import (
     ProjectManager,
     sync_project,
+)
+from spork.project.runtime import (
+    InvalidProjectEntryError,
+    ProjectEntryNotCallableError,
+    ProjectEntryNotFoundError,
+    ProjectEnvironmentError,
+    ProjectNamespaceNotFoundError,
+    ProjectRuntime,
+    ProjectRuntimeError,
 )
 from spork.project.scaffold import (
     create_project,
@@ -115,6 +125,7 @@ __all__ = [
     "remove_dependencies",
     # Config
     "ProjectConfig",
+    "CommandConfig",
     "APIConfig",
     "SporkAPIConfig",
     "PythonAPIConfig",
@@ -128,6 +139,14 @@ __all__ = [
     # Manager
     "ProjectManager",
     "sync_project",
+    # Runtime
+    "ProjectRuntime",
+    "ProjectRuntimeError",
+    "ProjectEnvironmentError",
+    "InvalidProjectEntryError",
+    "ProjectNamespaceNotFoundError",
+    "ProjectEntryNotFoundError",
+    "ProjectEntryNotCallableError",
     # Scaffold
     "create_project",
     "normalize_project_name",

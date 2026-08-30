@@ -10,6 +10,7 @@ Output structure:
         <project>-<version>.tar.gz
 """
 
+import ast
 import json
 import os
 import shutil
@@ -23,6 +24,7 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import Version
 
 import spork
+from spork.commands import COMMAND_ENTRY_POINT_GROUP
 from spork.project.build import build_project, find_project_root
 from spork.project.config import ProjectConfig
 
@@ -150,6 +152,10 @@ def generate_dist_pyproject(
         lines.extend(["", "[project.urls]"])
         for label, url in config.urls.items():
             lines.append(f"{_toml_string(label)} = {_toml_string(url)}")
+    if config.commands:
+        lines.extend(["", f'[project.entry-points."{COMMAND_ENTRY_POINT_GROUP}"]'])
+        for name, command in sorted(config.commands.items()):
+            lines.append(f"{name} = {_toml_string(command.python_target)}")
 
     lines.extend(
         [
@@ -193,6 +199,73 @@ def discover_packages(out_dir: Path) -> list[str]:
             packages.append(package_name)
 
     return sorted(packages)
+
+
+def validate_command_sources(config: ProjectConfig) -> None:
+    """Reject command targets that are not source-defined functions."""
+    if not config.commands:
+        return
+
+    from spork.project.check import INVALID_COMMAND, check_project
+
+    result = check_project(config, include_tests=False)
+    invalid = [
+        item.message for item in result.diagnostics if item.code == INVALID_COMMAND
+    ]
+    if invalid:
+        raise ValueError("; ".join(invalid))
+
+
+def validate_command_payload(
+    out_dir: Path,
+    config: ProjectConfig,
+    packages: list[str],
+) -> None:
+    """Ensure generated entry-point modules and functions enter the distribution."""
+    for name, command in sorted(config.commands.items()):
+        module_name, function_name = command.python_target.split(":", 1)
+        relative = Path(*module_name.split("."))
+        candidates = [
+            out_dir / relative.with_suffix(".py"),
+            out_dir / relative / "__init__.py",
+        ]
+        existing = [path for path in candidates if path.is_file()]
+        if not existing:
+            raise ValueError(
+                f":commands {name!r} generated module {module_name!r} is missing "
+                "from compiled output"
+            )
+        if len(existing) > 1:
+            raise ValueError(
+                f":commands {name!r} generated module {module_name!r} is ambiguous"
+            )
+        if not any(
+            module_name == package or module_name.startswith(f"{package}.")
+            for package in packages
+        ):
+            raise ValueError(
+                f":commands {name!r} generated module {module_name!r} is not "
+                "included in a distribution package"
+            )
+
+        generated_path = existing[0]
+        try:
+            tree = ast.parse(generated_path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeError) as error:
+            raise ValueError(
+                f":commands {name!r} could not inspect generated module "
+                f"{module_name!r}: {error}"
+            ) from error
+        functions = {
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        if function_name not in functions:
+            raise ValueError(
+                f":commands {name!r} generated function {function_name!r} is "
+                f"missing from module {module_name!r}"
+            )
 
 
 def generate_setup_py(out_dir: Path, packages: list[str]) -> Path:
@@ -346,6 +419,17 @@ def create_dist(
             error=f"Failed to load project config: {e}",
         )
 
+    try:
+        validate_command_sources(config)
+    except Exception as error:
+        return DistResult(
+            wheel_path=None,
+            sdist_path=None,
+            dist_dir=Path("dist"),
+            success=False,
+            error=f"Command validation failed: {error}",
+        )
+
     # Determine project-relative directories consistently from any cwd.
     if out_dir is None:
         out_dir = project_root / ".spork-out"
@@ -415,6 +499,7 @@ def create_dist(
         print("Generating distribution metadata...")
 
     try:
+        validate_command_payload(out_dir, config, packages)
         readme_name = stage_project_metadata(out_dir, project_root, config)
         generate_dist_pyproject(out_dir, config, packages, readme_name)
         generate_setup_py(out_dir, packages)

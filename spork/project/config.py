@@ -18,9 +18,11 @@ The spork.it file uses Spork map syntax:
      :main "my-project.core:main"}
 """
 
+import keyword
 import os
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
@@ -32,6 +34,34 @@ DEFAULT_SOURCE_PATHS = ["src"]
 DEFAULT_TEST_PATHS = ["tests"]
 DEFAULT_REQUIRES_PYTHON = ">=3.10"
 PROJECT_FILENAME = "spork.it"
+
+
+@dataclass(frozen=True)
+class CommandConfig:
+    """One package-provided top-level command declaration."""
+
+    main: str
+    description: Optional[str] = None
+
+    @property
+    def namespace(self) -> str:
+        """Return the Spork namespace containing the command function."""
+        return self.main.rsplit(":", 1)[0]
+
+    @property
+    def function(self) -> str:
+        """Return the Spork function selected by the declaration."""
+        return self.main.rsplit(":", 1)[1]
+
+    @property
+    def python_target(self) -> str:
+        """Return the normalized Python entry-point target."""
+        from spork.runtime.types import normalize_name
+
+        module = ".".join(
+            normalize_name(part) for part in self.namespace.split(".")
+        )
+        return f"{module}:{normalize_name(self.function)}"
 
 
 @dataclass(frozen=True)
@@ -83,6 +113,120 @@ def spork_to_python(value: Any) -> Any:
         return {spork_to_python(k): spork_to_python(v) for k, v in value.items()}
     else:
         return value
+
+
+def _freeze_manifest_value(value: Any) -> Any:
+    """Recursively expose parsed manifest values through immutable containers."""
+    if isinstance(value, dict):
+        return MappingProxyType(
+            {key: _freeze_manifest_value(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_manifest_value(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(_freeze_manifest_value(item) for item in value)
+    return value
+
+
+def _validate_command_target(command_name: str, target: Any) -> str:
+    """Validate and return one source namespace/function target."""
+    from spork.runtime.types import normalize_name
+
+    field = f":commands {command_name!r} :main"
+    if not isinstance(target, str) or not target:
+        raise ValueError(f"{field} must be a non-empty string")
+    if target != target.strip() or target.count(":") != 1:
+        raise ValueError(f"{field} must use namespace:function form")
+
+    namespace, function = target.split(":", 1)
+    namespace_parts = namespace.split(".")
+    normalized_parts = [normalize_name(part) for part in namespace_parts]
+    if (
+        not namespace
+        or any(not part for part in namespace_parts)
+        or any(
+            not part.isidentifier() or keyword.iskeyword(part)
+            for part in normalized_parts
+        )
+    ):
+        raise ValueError(
+            f"{field} namespace must normalize to a dotted Python module name"
+        )
+
+    normalized_function = normalize_name(function)
+    if (
+        not function
+        or not normalized_function.isidentifier()
+        or keyword.iskeyword(normalized_function)
+    ):
+        raise ValueError(f"{field} function must normalize to a Python identifier")
+    return target
+
+
+def _validate_raw_command_names(config_form: MapLiteral) -> None:
+    """Retain the schema distinction between string and keyword map keys."""
+    for key, value in config_form.pairs:
+        key_name = key.name if isinstance(key, Keyword) else key
+        if key_name != "commands" or not isinstance(value, MapLiteral):
+            continue
+        seen: set[str] = set()
+        for command_name, _declaration in value.pairs:
+            if not isinstance(command_name, str):
+                raise ValueError(":commands names must be strings")
+            if command_name in seen:
+                raise ValueError(
+                    f":commands contains duplicate name {command_name!r}"
+                )
+            seen.add(command_name)
+
+
+def _parse_commands(value: Any) -> dict[str, CommandConfig]:
+    """Parse typed package command declarations from a manifest value."""
+    from spork.commands import COMMAND_NAME_PATTERN, RESERVED_COMMAND_NAMES
+
+    if not isinstance(value, dict):
+        raise ValueError(":commands must be a map")
+
+    commands: dict[str, CommandConfig] = {}
+    for name, declaration in value.items():
+        if not isinstance(name, str) or not COMMAND_NAME_PATTERN.fullmatch(name):
+            raise ValueError(
+                ":commands names must use lowercase letters, digits, and single "
+                "hyphens, beginning with a letter"
+            )
+        if name in RESERVED_COMMAND_NAMES:
+            raise ValueError(f":commands name {name!r} is reserved by spork-lang")
+
+        description: Optional[str] = None
+        if isinstance(declaration, str):
+            main = declaration
+        elif isinstance(declaration, dict):
+            unknown = set(declaration).difference({"main", "description"})
+            if unknown:
+                fields = ", ".join(sorted(repr(item) for item in unknown))
+                raise ValueError(
+                    f":commands {name!r} contains unknown fields: {fields}"
+                )
+            if "main" not in declaration:
+                raise ValueError(f":commands {name!r} is missing required field :main")
+            main = declaration["main"]
+            description = declaration.get("description")
+            if description is not None and (
+                not isinstance(description, str) or not description.strip()
+            ):
+                raise ValueError(
+                    f":commands {name!r} :description must be a non-empty string"
+                )
+        else:
+            raise ValueError(
+                f":commands {name!r} must be a target string or a command map"
+            )
+
+        commands[name] = CommandConfig(
+            main=_validate_command_target(name, main),
+            description=description,
+        )
+    return commands
 
 
 def find_project_root(start_path: Optional[str] = None) -> Optional[str]:
@@ -137,6 +281,7 @@ class ProjectConfig:
         optional_dependencies: Named Python package extras
         spork_version: spork-lang compiler compatibility requirement
         api: Generated Spork and Python public API configuration
+        commands: Package-provided top-level command declarations
 
     Computed fields:
         project_root: Absolute path to the directory containing spork.it
@@ -162,9 +307,29 @@ class ProjectConfig:
     optional_dependencies: dict[str, list[str]] = field(default_factory=dict)
     spork_version: Optional[str] = None
     api: Optional[APIConfig] = None
+    commands: dict[str, CommandConfig] = field(default_factory=dict)
 
-    # Store the raw config for any additional fields
+    # Store the raw config for internal tooling and expose an immutable view.
     _raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    _manifest: Mapping[str, Any] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        self._manifest = _freeze_manifest_value(self._raw)
+
+    @property
+    def manifest(self) -> Mapping[str, Any]:
+        """Return the complete parsed manifest through a read-only view."""
+        return self._manifest
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return a read-only manifest value, including package-specific data."""
+        return self._manifest.get(key, default)
+
+    def get_plugin_config(self, name: str, default: Any = None) -> Any:
+        """Return read-only configuration owned by a command-provider package."""
+        if not isinstance(name, str) or not name:
+            raise ValueError("plugin configuration name must be a non-empty string")
+        return self._manifest.get(name, default)
 
     @property
     def venv_path(self) -> str:
@@ -287,6 +452,10 @@ class ProjectConfig:
                 raise ValueError(f"{project_file} must contain a map as the main form")
             parsed = config_form
 
+        # Preserve string-only command keys before generic keyword conversion.
+        if isinstance(parsed, MapLiteral):
+            _validate_raw_command_names(parsed)
+
         # Convert to Python types
         config_dict = spork_to_python(parsed)
 
@@ -323,6 +492,7 @@ class ProjectConfig:
         optional_dependencies = config_dict.get("optional-dependencies", {})
         spork_version = config_dict.get("spork-version")
         api_value = config_dict.get("api")
+        commands_value = config_dict.get("commands", {})
         if "python-api" in config_dict:
             raise ValueError(":python-api was replaced by :api in spork-lang 0.4")
 
@@ -501,6 +671,8 @@ class ProjectConfig:
                 python=python_api,
             )
 
+        commands = _parse_commands(commands_value)
+
         return cls(
             name=name,
             version=version,
@@ -522,6 +694,7 @@ class ProjectConfig:
             optional_dependencies=optional_dependencies,
             spork_version=spork_version,
             api=api,
+            commands=commands,
             _raw=config_dict,
         )
 

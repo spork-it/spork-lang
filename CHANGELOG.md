@@ -6,6 +6,27 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+### Added
+
+- Added immutable command provider, context, and specification primitives with a shared raw-argument invocation contract for core and future extension commands.
+- Added a static core command registry and isolated parser construction for each core command.
+- Added `ProjectRuntime` for loading values and invoking functions directly from unbuilt project source or installed Spork namespaces.
+- Added project-aware `CommandContext.load_entry`, `invoke_entry`, and `require_project` operations.
+- Added recursive read-only access to package-specific manifest configuration.
+- Added typed `:commands` declarations with reserved-name, target, description, and normalized identifier validation.
+- Added generated `spork.commands.v1` entry points and command payload verification for wheels and source distributions.
+- Added static `spork check` diagnostics for package command namespaces, functions, and target kinds.
+- Added a minimal source-only command-provider example.
+- Added metadata-only discovery and lazy invocation of project-local and active `spork.commands.v1` providers.
+- Added deterministic extension precedence, collision and malformed-metadata diagnostics, top-level help listings, and unknown-command suggestions.
+- Added end-to-end coverage for a source-only provider installed as a normal consumer dependency.
+
+### Changed
+
+- Separated top-level legacy/file dispatch from core command parsing while preserving existing command syntax and project-toolchain delegation.
+- Refactored `spork run` to use the shared project runtime while retaining environment bootstrap, normalized entry names, process statuses, and source tracebacks.
+- Generalized project-toolchain delegation to preserve extension commands and raw arguments, while keeping explicit file forms and the `plugin` bootstrap name non-delegated.
+
 ## [0.5.3] - 2026-08-30
 
 ### Added

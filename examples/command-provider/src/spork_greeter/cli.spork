@@ -1,0 +1,5 @@
+(ns spork-greeter.cli)
+
+(defn ^int command [context argv]
+  (print "Hello from a Spork command provider")
+  0)

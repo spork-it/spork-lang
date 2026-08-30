@@ -58,6 +58,40 @@ def test_project_command_delegates_to_compatible_environment(
     ]
 
 
+def test_extension_candidate_delegates_with_arguments_unchanged(
+    tmp_path: Path, monkeypatch
+):
+    config = project_config(tmp_path)
+    install_config(monkeypatch, config)
+    calls = []
+
+    monkeypatch.setattr(
+        ProjectManager, "active_spork_version", lambda self: "0.4.2"
+    )
+    monkeypatch.setattr(
+        ProjectManager, "is_running_in_project_venv", lambda self: False
+    )
+    monkeypatch.setattr(
+        ProjectManager, "get_project_spork_version", lambda self: "0.5.3"
+    )
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=9)
+
+    monkeypatch.setattr("spork.cli.subprocess.run", fake_run)
+    monkeypatch.chdir(tmp_path)
+    arguments = ["site", "build", "--output", "some path", "λ"]
+
+    assert _delegate_to_project_toolchain(arguments) == 9
+    assert calls == [
+        (
+            [config.venv_python, "-m", "spork", *arguments],
+            {"cwd": str(tmp_path), "check": False},
+        )
+    ]
+
+
 def test_sync_bootstraps_when_project_toolchain_is_incompatible(
     tmp_path: Path, monkeypatch
 ):
@@ -98,6 +132,47 @@ def test_incompatible_project_command_requires_sync(
     error = capsys.readouterr().err
     assert "project environment has spork-lang==0.4.2" in error
     assert "Run `spork sync`" in error
+
+
+def test_incompatible_extension_candidate_requires_sync(
+    tmp_path: Path, monkeypatch, capsys
+):
+    config = project_config(tmp_path)
+    install_config(monkeypatch, config)
+
+    monkeypatch.setattr(ProjectManager, "has_venv", lambda self: True)
+    monkeypatch.setattr(
+        ProjectManager, "active_spork_version", lambda self: "0.4.2"
+    )
+    monkeypatch.setattr(
+        ProjectManager, "is_running_in_project_venv", lambda self: False
+    )
+    monkeypatch.setattr(
+        ProjectManager, "get_project_spork_version", lambda self: "0.4.2"
+    )
+
+    assert _delegate_to_project_toolchain(["site", "build"]) == 1
+    error = capsys.readouterr().err
+    assert "project environment has spork-lang==0.4.2" in error
+    assert "Run `spork sync`" in error
+
+    assert _delegate_to_project_toolchain(["site", "--help"]) == 1
+    assert "Run `spork sync`" in capsys.readouterr().err
+
+
+def test_plugin_bootstrap_command_never_delegates(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        ProjectConfig,
+        "load",
+        classmethod(
+            lambda cls, path=None: (_ for _ in ()).throw(
+                AssertionError("plugin must not inspect project toolchains")
+            )
+        ),
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert _delegate_to_project_toolchain(["plugin", "list"]) is None
 
 
 def test_project_interpreter_does_not_delegate_again(tmp_path: Path, monkeypatch):

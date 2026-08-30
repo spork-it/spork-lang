@@ -12,7 +12,8 @@ This module provides the main CLI entry point for Spork with subcommand support:
 - spork test          Run project Spork tests
 - spork check         Check all project sources without executing them
 - spork build         Build project to .spork-out/ with Python + source maps
-- spork <file>        Execute a Spork file directly
+- spork <provider>    Run a project-local or active extension command
+- spork <file>        Execute an explicit Spork file path
 
 Legacy flags are still supported for backwards compatibility:
 - spork -c <code>     Execute code directly
@@ -26,7 +27,30 @@ import platform
 import subprocess
 import sys
 import traceback
-from typing import Optional
+from dataclasses import dataclass
+from difflib import get_close_matches
+from pathlib import Path
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Callable, Mapping, Optional
+
+from spork.command_discovery import (
+    CommandCatalog,
+    CommandProviderLoadError,
+    DiscoveredCommand,
+    discover_extension_commands,
+)
+from spork.commands import (
+    CommandContext,
+    CommandProvider,
+    CommandResultError,
+    CommandSpec,
+    ProjectRequiredError,
+    create_command_context,
+    invoke_command,
+)
+
+if TYPE_CHECKING:
+    from spork.project.config import ProjectConfig
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -194,31 +218,19 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run the project's main entry point."""
-    from spork.compiler import exec_file
-    from spork.project import ProjectConfig, ProjectManager
-    from spork.runtime.ns import (
-        NamespaceProxy,
-        add_source_root,
-        find_spork_file_for_ns,
-        get_namespace,
-        init_source_roots,
-        register_namespace,
-    )
-    from spork.runtime.types import normalize_name
+    """Run the project's main entry point through the reusable runtime."""
+    from spork.project import ProjectConfig, ProjectRuntime, ProjectRuntimeError
 
     try:
         config = ProjectConfig.load()
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except FileNotFoundError as error:
+        print(f"Error: {error}", file=sys.stderr)
         return 1
-    except ValueError as e:
-        print(f"Error in spork.it: {e}", file=sys.stderr)
+    except ValueError as error:
+        print(f"Error in spork.it: {error}", file=sys.stderr)
         return 1
 
-    # Determine what to run
     main_entry = args.main or config.main
-
     if not main_entry:
         print(
             "Error: No main entry point specified. Use --main or set :main in spork.it",
@@ -226,96 +238,21 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # Parse main entry (format: namespace:function)
-    if ":" in main_entry:
-        ns_name, fn_name = main_entry.rsplit(":", 1)
-    else:
-        # Assume it's just a namespace, call main function
-        ns_name = main_entry
-        fn_name = "main"
-
-    # Normalize function name (hyphens to underscores for Python)
-    fn_name_py = normalize_name(fn_name)
-
-    # Setup environment - ensure venv exists and has dependencies
-    manager = ProjectManager(config)
-    if not manager.has_venv():
+    runtime = ProjectRuntime(config)
+    environment_missing = runtime.environment_missing
+    if environment_missing:
         print("Project venv not found, initializing...")
-        try:
-            success = manager.install_dependencies(quiet=False)
-            if not success:
-                print(
-                    "Error: Failed to initialize project environment", file=sys.stderr
-                )
-                return 1
-            print()  # Blank line after setup output
-        except Exception as e:
-            print(f"Error initializing project environment: {e}", file=sys.stderr)
-            return 1
 
-    # Inject venv paths for imports
-    manager.inject_venv_paths()
-
-    init_source_roots(include_cwd=True)
-
-    # Add project source paths
-    for source_path in config.get_absolute_source_paths():
-        if os.path.isdir(source_path):
-            add_source_root(source_path, prepend=True)
-
-    # Load the namespace and run the function
     try:
-        # Find and load the namespace file
-        spork_file = find_spork_file_for_ns(ns_name)
-        if spork_file is None:
-            print(f"Error: Namespace '{ns_name}' not found", file=sys.stderr)
-            print(f"Searched in: {config.get_absolute_source_paths()}", file=sys.stderr)
-            return 1
-
-        # Execute the file to load the namespace
-        env = exec_file(spork_file)
-
-        # Get the namespace info
-        ns_info = get_namespace(ns_name)
-        if ns_info is None:
-            # Register it ourselves if the file didn't declare the namespace
-            register_namespace(
-                name=ns_name,
-                file=os.path.abspath(spork_file),
-                env=env,
-                macros=env.get("__spork_macros__", {}),
-            )
-            ns_info = get_namespace(ns_name)
-
-        if ns_info is None:
-            print(f"Error: Failed to load namespace '{ns_name}'", file=sys.stderr)
-            return 1
-
-        ns_proxy = NamespaceProxy(ns_info.env, ns_name)
-
-        # Get the function
-        try:
-            fn = getattr(ns_proxy, fn_name_py)
-        except AttributeError:
-            try:
-                fn = getattr(ns_proxy, fn_name)
-            except AttributeError:
-                print(
-                    f"Error: Function '{fn_name}' not found in namespace '{ns_name}'",
-                    file=sys.stderr,
-                )
-                return 1
-
-        # Call the function with any additional arguments
-        result = fn(*args.args)
-
-        # If result is an integer, use as exit code
-        if isinstance(result, int):
-            return result
-        return 0
-
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        runtime.prepare()
+        if environment_missing:
+            print()
+        return runtime.invoke_entry(main_entry, args.args)
+    except ProjectRuntimeError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    except Exception as error:
+        print(f"Error: {error}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         return 1
 
@@ -747,33 +684,34 @@ def cmd_nrepl_client(host: str, port: int) -> int:
     return 0
 
 
-# Known subcommands - used to differentiate from file arguments
-SUBCOMMANDS = {
-    "repl",
-    "new",
-    "add",
-    "remove",
-    "sync",
-    "run",
-    "test",
-    "check",
-    "build",
-    "dist",
-    "clean",
-    "lsp",
-    "version",
-}
-
 # These commands must remain available when the project environment is absent,
 # stale, or being removed. Other commands require a compatible toolchain.
 _TOOLCHAIN_OPTIONAL_COMMANDS = {"add", "remove", "sync", "version"}
-_NEVER_DELEGATE_COMMANDS = {"new", "clean"}
+_NEVER_DELEGATE_COMMANDS = {"new", "clean", "plugin"}
+
+
+def _is_explicit_file_token(token: str) -> bool:
+    """Return whether a top-level token explicitly selects a file path."""
+    separators = {os.sep}
+    if os.altsep:
+        separators.add(os.altsep)
+    return (
+        token.endswith(".spork")
+        or Path(token).is_absolute()
+        or token in {".", ".."}
+        or any(separator in token for separator in separators)
+    )
 
 
 def _project_command(argv: list[str]) -> Optional[str]:
-    """Return the explicit project subcommand, if one was supplied."""
-    if argv and argv[0] in SUBCOMMANDS:
-        return argv[0]
+    """Return a core or extension candidate relevant to project delegation."""
+    if not argv:
+        return None
+    candidate = argv[0]
+    if candidate in CORE_COMMANDS or candidate == "plugin":
+        return candidate
+    if not candidate.startswith("-") and not _is_explicit_file_token(candidate):
+        return candidate
     return None
 
 
@@ -834,8 +772,9 @@ def _delegate_to_project_toolchain(argv: list[str]) -> Optional[int]:
             return 1
         return result.returncode
 
-    if command in _TOOLCHAIN_OPTIONAL_COMMANDS or any(
-        argument in {"-h", "--help"} for argument in argv
+    help_requested = any(argument in {"-h", "--help"} for argument in argv)
+    if command in _TOOLCHAIN_OPTIONAL_COMMANDS or (
+        help_requested and (command is None or command in CORE_COMMANDS)
     ):
         return None
 
@@ -865,13 +804,384 @@ def _delegate_to_project_toolchain(argv: list[str]) -> Optional[int]:
     return 1
 
 
-def create_parser() -> argparse.ArgumentParser:
-    """Create the argument parser with all subcommands."""
+ParsedCommandHandler = Callable[[argparse.Namespace], int]
+ParserConfigurer = Callable[[argparse.ArgumentParser], None]
+
+
+def _no_arguments(parser: argparse.ArgumentParser) -> None:
+    """Configure a command that accepts only the standard help flag."""
+
+
+def _configure_new(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("name", help="Name of the new project")
+    parser.add_argument(
+        "--path",
+        "-p",
+        help="Parent directory for the project (default: current directory)",
+    )
+
+
+def _configure_add(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "packages", nargs="+", metavar="PACKAGE", help="Package requirement(s) to add"
+    )
+
+
+def _configure_remove(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "packages", nargs="+", metavar="PACKAGE", help="Package name(s) to remove"
+    )
+
+
+def _configure_sync(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Suppress pip output"
+    )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Also install :dev-dependencies from spork.it",
+    )
+
+
+def _configure_run(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--main",
+        "-m",
+        help="Main entry point (namespace:function), overrides spork.it",
+    )
+    parser.add_argument(
+        "args",
+        nargs="*",
+        help="Arguments to pass to the main function",
+    )
+
+
+def _configure_check(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--format",
+        choices=("human", "json"),
+        default="human",
+        help="Diagnostic output format (default: human)",
+    )
+    parser.add_argument(
+        "--json",
+        dest="format",
+        action="store_const",
+        const="json",
+        help="Shortcut for --format json",
+    )
+    parser.add_argument(
+        "--no-tests",
+        action="store_true",
+        help="Check only :source-paths, excluding :test-paths",
+    )
+    parser.add_argument(
+        "--warnings-as-errors",
+        action="store_true",
+        help="Return a failure status when warnings are reported",
+    )
+
+
+def _configure_build(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--out-dir",
+        "-o",
+        default=".spork-out",
+        help="Output directory (default: .spork-out)",
+    )
+    parser.add_argument(
+        "--clean",
+        "-c",
+        action="store_true",
+        help="Remove existing output directory before building",
+    )
+
+
+def _configure_dist(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--dist-dir",
+        "-d",
+        default="dist",
+        help="Output directory for distributions (default: dist)",
+    )
+    parser.add_argument(
+        "--out-dir",
+        "-o",
+        default=".spork-out",
+        help="Compiled output directory (default: .spork-out)",
+    )
+    parser.add_argument(
+        "--clean",
+        "-c",
+        action="store_true",
+        help="Remove existing dist directory before building",
+    )
+    parser.add_argument(
+        "--no-build",
+        action="store_true",
+        help="Skip running `spork build` first (use existing .spork-out)",
+    )
+    parser.add_argument(
+        "--wheel-only",
+        action="store_true",
+        help="Only build wheel, skip sdist",
+    )
+    parser.add_argument(
+        "--sdist-only",
+        action="store_true",
+        help="Only build sdist, skip wheel",
+    )
+
+
+def _configure_clean(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--all",
+        "-a",
+        action="store_true",
+        help="Remove all artifacts, not just .venv",
+    )
+
+
+def _configure_lsp(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--log",
+        metavar="FILE",
+        help="Log file for debugging LSP communication",
+    )
+
+
+@dataclass(frozen=True)
+class _CoreCommandDefinition:
+    name: str
+    summary: str
+    action: ParsedCommandHandler
+    configure_parser: ParserConfigurer = _no_arguments
+
+
+_CORE_COMMAND_DEFINITIONS = (
+    _CoreCommandDefinition("repl", "Start the interactive REPL", cmd_repl),
+    _CoreCommandDefinition(
+        "new", "Create a new Spork project", cmd_new, _configure_new
+    ),
+    _CoreCommandDefinition(
+        "add",
+        "Add packages to :dependencies in spork.it",
+        cmd_add,
+        _configure_add,
+    ),
+    _CoreCommandDefinition(
+        "remove",
+        "Remove packages from :dependencies in spork.it",
+        cmd_remove,
+        _configure_remove,
+    ),
+    _CoreCommandDefinition(
+        "sync",
+        "Sync project dependencies (create venv, install deps)",
+        cmd_sync,
+        _configure_sync,
+    ),
+    _CoreCommandDefinition(
+        "run", "Run the project's main function", cmd_run, _configure_run
+    ),
+    _CoreCommandDefinition("test", "Discover and run project Spork tests", cmd_test),
+    _CoreCommandDefinition(
+        "check",
+        "Check project sources without producing build artifacts",
+        cmd_check,
+        _configure_check,
+    ),
+    _CoreCommandDefinition(
+        "build",
+        "Build project to .spork-out/ with Python + source maps",
+        cmd_build,
+        _configure_build,
+    ),
+    _CoreCommandDefinition(
+        "dist",
+        "Create wheel and sdist from compiled Spork project",
+        cmd_dist,
+        _configure_dist,
+    ),
+    _CoreCommandDefinition(
+        "clean", "Clean project artifacts", cmd_clean, _configure_clean
+    ),
+    _CoreCommandDefinition(
+        "lsp", "Start the Language Server Protocol server", cmd_lsp, _configure_lsp
+    ),
+    _CoreCommandDefinition(
+        "version", "Print Spork version and Python host information", cmd_version
+    ),
+)
+_CORE_COMMAND_DEFINITIONS_BY_NAME = {
+    definition.name: definition for definition in _CORE_COMMAND_DEFINITIONS
+}
+
+
+def create_command_parser(command: str) -> argparse.ArgumentParser:
+    """Create the isolated argument parser for one static core command."""
+    try:
+        definition = _CORE_COMMAND_DEFINITIONS_BY_NAME[command]
+    except KeyError as error:
+        raise ValueError(f"unknown core command: {command}") from error
+
+    parser = argparse.ArgumentParser(
+        prog=f"spork {definition.name}",
+        description=definition.summary,
+    )
+    definition.configure_parser(parser)
+    return parser
+
+
+def _create_core_command_spec(
+    definition: _CoreCommandDefinition,
+    provider: CommandProvider,
+) -> CommandSpec:
+    def handler(context: CommandContext, argv: list[str]) -> int:
+        # Context is intentionally accepted even though the existing core
+        # actions do not need it yet. Extensions use this exact boundary.
+        del context
+        args = create_command_parser(definition.name).parse_args(argv)
+        return definition.action(args)
+
+    return CommandSpec(
+        name=definition.name,
+        summary=definition.summary,
+        handler=handler,
+        provider=provider,
+    )
+
+
+def _create_core_command_registry() -> Mapping[str, CommandSpec]:
+    import spork
+
+    provider = CommandProvider(
+        name="spork-lang",
+        version=spork.__version__,
+        scope="core",
+        location=Path(__file__).resolve(),
+    )
+    return MappingProxyType(
+        {
+            definition.name: _create_core_command_spec(definition, provider)
+            for definition in _CORE_COMMAND_DEFINITIONS
+        }
+    )
+
+
+CORE_COMMANDS = _create_core_command_registry()
+# Backwards-compatible command-name view for code that only needs membership.
+SUBCOMMANDS = frozenset(CORE_COMMANDS)
+
+
+def _core_command_help() -> str:
+    width = max(len(name) for name in CORE_COMMANDS)
+    return "\n".join(
+        f"  {name:<{width}}  {spec.summary}" for name, spec in CORE_COMMANDS.items()
+    )
+
+
+def _extension_command_help(commands: Mapping[str, DiscoveredCommand]) -> str:
+    if not commands:
+        return ""
+    width = max(len(name) for name in commands)
+    entries = "\n".join(
+        f"  {name:<{width}}  {command.summary}"
+        for name, command in sorted(commands.items())
+    )
+    return f"\nextension commands:\n{entries}\n"
+
+
+@dataclass(frozen=True)
+class _ExtensionCommandState:
+    catalog: CommandCatalog
+    project: Optional["ProjectConfig"] = None
+    project_error: Optional[str] = None
+
+
+def _discover_extension_state() -> _ExtensionCommandState:
+    """Load optional project metadata and discover providers without imports."""
+    from spork.project.config import ProjectConfig
+
+    project = None
+    project_error = None
+    try:
+        project = ProjectConfig.load()
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError) as error:
+        project_error = str(error)
+    return _ExtensionCommandState(
+        catalog=discover_extension_commands(project),
+        project=project,
+        project_error=project_error,
+    )
+
+
+def _print_discovery_diagnostic(message: str, *, warning: bool = False) -> None:
+    prefix = "Warning" if warning else "Error"
+    print(f"{prefix}: {message}", file=sys.stderr)
+
+
+def _invoke_extension_command(
+    command: DiscoveredCommand,
+    argv: list[str],
+    project: Optional["ProjectConfig"],
+) -> int:
+    """Invoke one lazily loaded extension through the shared command contract."""
+    from spork.project.runtime import ProjectRuntimeError
+
+    spec = command.create_spec()
+    context = create_command_context(spec, project=project)
+    provider = command.provider
+    version = f"=={provider.version}" if provider.version else ""
+    provenance = (
+        f"command {command.name!r} from {provider.name}{version} "
+        f"({provider.scope})"
+    )
+    try:
+        return invoke_command(spec, argv, context=context)
+    except (
+        CommandProviderLoadError,
+        CommandResultError,
+        ProjectRequiredError,
+        ProjectRuntimeError,
+    ) as error:
+        _print_discovery_diagnostic(f"{provenance}: {error}")
+        return 1
+    except Exception as error:
+        _print_discovery_diagnostic(
+            f"{provenance} raised {type(error).__name__}: {error}"
+        )
+        raise
+
+
+def _unknown_command(command: str, catalog: CommandCatalog) -> int:
+    _print_discovery_diagnostic(f"unknown command {command!r}")
+    choices = [*CORE_COMMANDS, *catalog.commands]
+    matches = get_close_matches(command, choices, n=3, cutoff=0.6)
+    if matches:
+        print(
+            "Did you mean " + " or ".join(repr(match) for match in matches) + "?",
+            file=sys.stderr,
+        )
+    return 2
+
+
+def create_parser(
+    extension_commands: Optional[Mapping[str, DiscoveredCommand]] = None,
+) -> argparse.ArgumentParser:
+    """Create the top-level parser for legacy flags and general help."""
+    extension_help = _extension_command_help(extension_commands or {})
     parser = argparse.ArgumentParser(
         prog="spork",
         description="Spork - A Lisp to Python transpiler",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
+core commands:
+{_core_command_help()}
+{extension_help}
 examples:
   spork                         Start interactive REPL
   spork repl                    Start interactive REPL (explicit)
@@ -888,219 +1198,46 @@ examples:
         """,
     )
 
-    # Legacy/shortcut flags (these work without subcommands)
+    # Legacy/shortcut flags are intentionally separate from command parsers.
     parser.add_argument(
         "-c",
         "--command",
         metavar="CODE",
         help="Execute Spork code directly (like python -c)",
     )
-
     parser.add_argument(
         "-e",
         "--export",
         metavar="FILE",
         help="Export Spork file to Python code and print to stdout",
     )
-
     parser.add_argument(
         "-i",
         "--interactive",
         action="store_true",
         help="Start REPL after executing file or command",
     )
-
     parser.add_argument(
         "--nrepl",
         action="store_true",
         help="Start nREPL server for editor integration",
     )
-
     parser.add_argument(
         "--nrepl-client",
         action="store_true",
         help="Connect to nREPL server as a test client",
     )
-
     parser.add_argument(
         "--host",
         default="127.0.0.1",
         help="Host for nREPL server (default: 127.0.0.1)",
     )
-
     parser.add_argument(
         "--port",
         type=int,
         default=7888,
         help="Port for nREPL server (default: 7888)",
     )
-
-    # Subcommands
-    subparsers = parser.add_subparsers(dest="subcommand", help="Available commands")
-
-    # repl subcommand
-    subparsers.add_parser("repl", help="Start the interactive REPL")
-
-    # new subcommand
-    new_parser = subparsers.add_parser("new", help="Create a new Spork project")
-    new_parser.add_argument("name", help="Name of the new project")
-    new_parser.add_argument(
-        "--path",
-        "-p",
-        help="Parent directory for the project (default: current directory)",
-    )
-
-    # dependency manifest subcommands
-    add_parser = subparsers.add_parser(
-        "add", help="Add packages to :dependencies in spork.it"
-    )
-    add_parser.add_argument(
-        "packages", nargs="+", metavar="PACKAGE", help="Package requirement(s) to add"
-    )
-
-    remove_parser = subparsers.add_parser(
-        "remove", help="Remove packages from :dependencies in spork.it"
-    )
-    remove_parser.add_argument(
-        "packages", nargs="+", metavar="PACKAGE", help="Package name(s) to remove"
-    )
-
-    # sync subcommand
-    sync_parser = subparsers.add_parser(
-        "sync", help="Sync project dependencies (create venv, install deps)"
-    )
-    sync_parser.add_argument(
-        "--quiet", "-q", action="store_true", help="Suppress pip output"
-    )
-    sync_parser.add_argument(
-        "--dev",
-        action="store_true",
-        help="Also install :dev-dependencies from spork.it",
-    )
-
-    # run subcommand
-    run_parser = subparsers.add_parser("run", help="Run the project's main function")
-    run_parser.add_argument(
-        "--main",
-        "-m",
-        help="Main entry point (namespace:function), overrides spork.it",
-    )
-    run_parser.add_argument(
-        "args",
-        nargs="*",
-        help="Arguments to pass to the main function",
-    )
-
-    # test subcommand
-    subparsers.add_parser("test", help="Discover and run project Spork tests")
-
-    # check subcommand
-    check_parser = subparsers.add_parser(
-        "check", help="Check project sources without producing build artifacts"
-    )
-    check_parser.add_argument(
-        "--format",
-        choices=("human", "json"),
-        default="human",
-        help="Diagnostic output format (default: human)",
-    )
-    check_parser.add_argument(
-        "--json",
-        dest="format",
-        action="store_const",
-        const="json",
-        help="Shortcut for --format json",
-    )
-    check_parser.add_argument(
-        "--no-tests",
-        action="store_true",
-        help="Check only :source-paths, excluding :test-paths",
-    )
-    check_parser.add_argument(
-        "--warnings-as-errors",
-        action="store_true",
-        help="Return a failure status when warnings are reported",
-    )
-
-    # build subcommand
-    build_parser = subparsers.add_parser(
-        "build", help="Build project to .spork-out/ with Python + source maps"
-    )
-    build_parser.add_argument(
-        "--out-dir",
-        "-o",
-        default=".spork-out",
-        help="Output directory (default: .spork-out)",
-    )
-    build_parser.add_argument(
-        "--clean",
-        "-c",
-        action="store_true",
-        help="Remove existing output directory before building",
-    )
-
-    # dist subcommand
-    dist_parser = subparsers.add_parser(
-        "dist", help="Create wheel and sdist from compiled Spork project"
-    )
-    dist_parser.add_argument(
-        "--dist-dir",
-        "-d",
-        default="dist",
-        help="Output directory for distributions (default: dist)",
-    )
-    dist_parser.add_argument(
-        "--out-dir",
-        "-o",
-        default=".spork-out",
-        help="Compiled output directory (default: .spork-out)",
-    )
-    dist_parser.add_argument(
-        "--clean",
-        "-c",
-        action="store_true",
-        help="Remove existing dist directory before building",
-    )
-    dist_parser.add_argument(
-        "--no-build",
-        action="store_true",
-        help="Skip running `spork build` first (use existing .spork-out)",
-    )
-    dist_parser.add_argument(
-        "--wheel-only",
-        action="store_true",
-        help="Only build wheel, skip sdist",
-    )
-    dist_parser.add_argument(
-        "--sdist-only",
-        action="store_true",
-        help="Only build sdist, skip wheel",
-    )
-
-    # clean subcommand
-    clean_parser = subparsers.add_parser("clean", help="Clean project artifacts")
-    clean_parser.add_argument(
-        "--all",
-        "-a",
-        action="store_true",
-        help="Remove all artifacts, not just .venv",
-    )
-
-    # lsp subcommand
-    lsp_parser = subparsers.add_parser(
-        "lsp", help="Start the Language Server Protocol server"
-    )
-    lsp_parser.add_argument(
-        "--log",
-        metavar="FILE",
-        help="Log file for debugging LSP communication",
-    )
-
-    # version subcommand
-    subparsers.add_parser(
-        "version", help="Print Spork version and Python host information"
-    )
-
     return parser
 
 
@@ -1110,54 +1247,74 @@ def main(argv: Optional[list[str]] = None) -> None:
 
 
 def _main(argv: Optional[list[str]] = None) -> int:
-    """Internal main that returns exit code."""
-    if argv is None:
-        argv = sys.argv[1:]
+    """Dispatch one CLI invocation and return its exit status."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
 
-    delegated_result = _delegate_to_project_toolchain(argv)
+    delegated_result = _delegate_to_project_toolchain(arguments)
     if delegated_result is not None:
         return delegated_result
 
-    # Pre-parse to detect if first arg is a file (not a subcommand or flag)
-    # This allows `spork myfile.spork` to work without a subcommand
+    # Core commands remain reliable bootstrap operations and never require
+    # dynamic metadata discovery.
+    if arguments and arguments[0] in CORE_COMMANDS:
+        command = CORE_COMMANDS[arguments[0]]
+        return invoke_command(command, arguments[1:])
+
+    extension_state: Optional[_ExtensionCommandState] = None
+    command_candidate = None
+    if (
+        arguments
+        and not arguments[0].startswith("-")
+        and not _is_explicit_file_token(arguments[0])
+    ):
+        command_candidate = arguments[0]
+        extension_state = _discover_extension_state()
+        if extension_state.project_error is not None:
+            _print_discovery_diagnostic(
+                f"could not load project configuration: "
+                f"{extension_state.project_error}"
+            )
+            return 1
+
+        diagnostics = extension_state.catalog.diagnostics_for(command_candidate)
+        if diagnostics:
+            for diagnostic in diagnostics:
+                _print_discovery_diagnostic(diagnostic.message)
+            return 1
+
+        extension = extension_state.catalog.commands.get(command_candidate)
+        if extension is not None:
+            return _invoke_extension_command(
+                extension,
+                arguments[1:],
+                extension_state.project,
+            )
+        return _unknown_command(command_candidate, extension_state.catalog)
+
+    # Preserve explicit file execution and legacy flags outside command parsing.
     file_to_run = None
-    if argv and not argv[0].startswith("-") and argv[0] not in SUBCOMMANDS:
-        # First arg looks like a file, not a subcommand
-        file_to_run = argv[0]
-        argv = argv[1:]  # Remove it from argv for argparse
+    legacy_arguments = arguments
+    if arguments and _is_explicit_file_token(arguments[0]):
+        file_to_run = arguments[0]
+        legacy_arguments = arguments[1:]
 
-    parser = create_parser()
-    args = parser.parse_args(argv)
+    show_help = any(argument in {"-h", "--help"} for argument in legacy_arguments)
+    if show_help and extension_state is None:
+        extension_state = _discover_extension_state()
+        if extension_state.project_error is not None:
+            _print_discovery_diagnostic(
+                f"could not load project configuration: "
+                f"{extension_state.project_error}",
+                warning=True,
+            )
+        for diagnostic in extension_state.catalog.diagnostics:
+            _print_discovery_diagnostic(diagnostic.message, warning=True)
 
-    # Handle subcommands first
-    if args.subcommand == "repl":
-        return cmd_repl(args)
-    elif args.subcommand == "new":
-        return cmd_new(args)
-    elif args.subcommand == "add":
-        return cmd_add(args)
-    elif args.subcommand == "remove":
-        return cmd_remove(args)
-    elif args.subcommand == "sync":
-        return cmd_sync(args)
-    elif args.subcommand == "run":
-        return cmd_run(args)
-    elif args.subcommand == "test":
-        return cmd_test(args)
-    elif args.subcommand == "check":
-        return cmd_check(args)
-    elif args.subcommand == "build":
-        return cmd_build(args)
-    elif args.subcommand == "dist":
-        return cmd_dist(args)
-    elif args.subcommand == "clean":
-        return cmd_clean(args)
-    elif args.subcommand == "lsp":
-        return cmd_lsp(args)
-    elif args.subcommand == "version":
-        return cmd_version(args)
+    extension_commands = (
+        extension_state.catalog.commands if extension_state is not None else None
+    )
+    args = create_parser(extension_commands).parse_args(legacy_arguments)
 
-    # Handle legacy flags
     if args.nrepl:
         return cmd_nrepl_server(args.host, args.port)
 
@@ -1170,12 +1327,12 @@ def _main(argv: Optional[list[str]] = None) -> int:
     if args.export:
         return cmd_export_file(args.export)
 
-    # Handle file execution (detected in pre-parse)
     if file_to_run:
         return cmd_exec_file(file_to_run, args.interactive)
 
-    # No arguments - start REPL
-    return cmd_repl(args)
+    # No arguments retain the historical implicit REPL command while still
+    # passing through the common command context and handler contract.
+    return invoke_command(CORE_COMMANDS["repl"], [])
 
 
 if __name__ == "__main__":

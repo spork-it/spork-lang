@@ -45,6 +45,7 @@ INVALID_MAIN = "SPK010"
 INVALID_API = "SPK011"
 MISSING_SOURCE_ROOT = "SPK012"
 NO_SOURCE_FILES = "SPK013"
+INVALID_COMMAND = "SPK014"
 
 
 @dataclass(frozen=True)
@@ -880,6 +881,8 @@ def _validate_manifest(index: ProjectIndex, diagnostics: list[CheckDiagnostic]) 
                         )
                     )
 
+    _validate_commands(index, diagnostics, manifest)
+
     api = config.api
     if api is None:
         return
@@ -1056,6 +1059,82 @@ def _validate_manifest(index: ProjectIndex, diagnostics: list[CheckDiagnostic]) 
                                 message="Generated Python API would overwrite a hand-written file",
                             )
                         )
+
+
+def _validate_commands(
+    index: ProjectIndex,
+    diagnostics: list[CheckDiagnostic],
+    manifest: Path,
+) -> None:
+    """Validate command targets without importing or executing provider code."""
+    for command_name, command in sorted(index.config.commands.items()):
+        document = index.namespaces.get(command.namespace)
+        if document is None or document.root_kind != "source":
+            diagnostics.append(
+                CheckDiagnostic(
+                    path=manifest,
+                    code=INVALID_COMMAND,
+                    message=(
+                        f":commands {command_name!r} namespace "
+                        f"{command.namespace!r} is not defined by project source"
+                    ),
+                )
+            )
+            continue
+        if document.expected_namespace != command.namespace:
+            diagnostics.append(
+                CheckDiagnostic(
+                    path=manifest,
+                    code=INVALID_COMMAND,
+                    message=(
+                        f":commands {command_name!r} namespace "
+                        f"{command.namespace!r} does not match source path "
+                        f"{document.expected_namespace!r}"
+                    ),
+                )
+            )
+            continue
+
+        definitions = [
+            item
+            for name, item in document.definitions.items()
+            if normalize_name(name) == normalize_name(command.function)
+        ]
+        if not definitions:
+            diagnostics.append(
+                CheckDiagnostic(
+                    path=manifest,
+                    code=INVALID_COMMAND,
+                    message=(
+                        f":commands {command_name!r} function "
+                        f"{command.function!r} is not defined by namespace "
+                        f"{command.namespace!r}"
+                    ),
+                )
+            )
+        elif len(definitions) > 1:
+            diagnostics.append(
+                CheckDiagnostic(
+                    path=manifest,
+                    code=INVALID_COMMAND,
+                    message=(
+                        f":commands {command_name!r} function "
+                        f"{command.function!r} has duplicate normalized definitions "
+                        f"in namespace {command.namespace!r}"
+                    ),
+                )
+            )
+        elif definitions[0].kind != "function":
+            diagnostics.append(
+                CheckDiagnostic(
+                    path=manifest,
+                    code=INVALID_COMMAND,
+                    message=(
+                        f":commands {command_name!r} target {command.main!r} is a "
+                        f"{definitions[0].kind}, not a function"
+                    ),
+                )
+            )
 
 
 def _validate_api_names(

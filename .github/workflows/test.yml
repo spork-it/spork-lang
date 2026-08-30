@@ -74,65 +74,10 @@ jobs:
       - name: Run Python tests
         run: python -m pytest
 
-      - name: Run spork tests (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          echo "Running all .spork tests..."
-          failed=0
-          passed=0
-          for test in tests/test_*.spork; do
-            echo ""
-            echo "=== Running $test ==="
-            if python -m spork "$test"; then
-              passed=$((passed + 1))
-            else
-              failed=$((failed + 1))
-              echo "FAILED: $test"
-            fi
-          done
-          echo ""
-          echo "=== Test Summary ==="
-          echo "Passed: $passed"
-          echo "Failed: $failed"
-          if [ $failed -gt 0 ]; then
-            echo "Some tests failed!"
-            exit 1
-          else
-            echo "All tests passed!"
-          fi
-
-      - name: Run spork tests (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Run declared Spork tests
         env:
           PYTHONIOENCODING: utf-8
-        run: |
-          Write-Host "Running all .spork tests..."
-          $failed = 0
-          $passed = 0
-          $tests = Get-ChildItem -Path "tests/test_*.spork"
-          foreach ($test in $tests) {
-            Write-Host ""
-            Write-Host "=== Running $($test.Name) ==="
-            python -m spork $test.FullName
-            if ($LASTEXITCODE -eq 0) {
-              $passed++
-            } else {
-              $failed++
-              Write-Host "FAILED: $($test.Name)"
-            }
-          }
-          Write-Host ""
-          Write-Host "=== Test Summary ==="
-          Write-Host "Passed: $passed"
-          Write-Host "Failed: $failed"
-          if ($failed -gt 0) {
-            Write-Host "Some tests failed!"
-            exit 1
-          } else {
-            Write-Host "All tests passed!"
-          }
+        run: python tools/run_spork_tests.py
 
   docs:
     name: Documentation examples - Python ${{ matrix.python-version }}

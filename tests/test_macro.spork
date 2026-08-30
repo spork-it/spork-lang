@@ -4,8 +4,8 @@
 (defmacro my-when [test & body]
   `(if ~test (do ~@body) nil))
 
-(my-when true
-  (print "This should print"))
+(deftest hyphenated-macro-runs-body-when-true
+  (assert (= (my-when true 42) 42)))
 
-(my-when false
-  (print "This should not print"))
+(deftest hyphenated-macro-skips-body-when-false
+  (assert (= (my-when false 42) nil)))

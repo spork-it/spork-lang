@@ -396,9 +396,6 @@ def cmd_test(args: argparse.Namespace) -> int:
                 "--result",
                 str(result_path),
             ]
-            if discovered.legacy:
-                command.append("--legacy")
-
             completed = subprocess.run(
                 command,
                 cwd=config.project_root,

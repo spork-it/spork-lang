@@ -1,75 +1,47 @@
-; Test source mapping - line numbers should be accurate in tracebacks
+; Exercises source-mapped functions through successful and exceptional paths.
 
-; Define a function that will raise an error
-; This is on line 4
 (defn divide [a b]
-  ; This division is on line 6
   (/ a b))
 
-; Define a function with nested let expressions
-; This is on line 10
-(defn test-nested []
-  ; This let is on line 12
+(defn nested-divide-by-zero []
   (let [x 10]
-    ; This inner let is on line 14
     (let [y 0]
-      ; This call is on line 16
       (divide x y))))
 
-; Define a function with complex control flow
-; This is on line 20
-(defn test-if [n]
-  ; This if is on line 22
+(defn checked-divide [n]
   (if (< n 0)
-    ; This throw is on line 24
     (throw (ValueError "negative number"))
-    ; This is on line 26
     (divide 100 n)))
 
-; Simple passing tests
-(print "=== Source Mapping Tests ===")
-(print "")
+(deftest source-mapped-function-returns-a-value
+  (assert (= (divide 10 2) 5)))
 
-(print "Test 1: Basic arithmetic")
-(print "  10 / 2 =" (divide 10 2))
+(deftest source-mapped-let-bindings-return-a-value
+  (let [a 6 b 2]
+    (assert (= (divide a b) 3))))
 
-(print "")
-(print "Test 2: Let bindings")
-(let [a 6
-      b 2]
-  (print "  6 / 2 =" (divide a b)))
+(deftest source-mapped-nested-call-raises-at-the-original-form
+  (def caught
+    (try
+      (nested-divide-by-zero)
+      false
+      (catch ZeroDivisionError _error true)))
+  (assert caught))
 
-(print "")
-(print "Test 3: Nested let with invalid values (should catch error)")
-(try
-  (let [x 10 y 0]
-    (print "  10 / 0 =" (divide x y))
-    (print "  ERROR: Should have thrown!"))
-  (catch ZeroDivisionError e
-    (print "  Caught expected ZeroDivisionError")
-    (print "  ✓ Error correctly caught")))
+(deftest source-mapped-conditional-success-path
+  (assert (= (checked-divide 5) 20)))
 
-(print "")
-(print "Test 4: If with positive number")
-(print "  100 / 5 =" (test-if 5))
+(deftest source-mapped-conditional-zero-path
+  (def caught
+    (try
+      (checked-divide 0)
+      false
+      (catch ZeroDivisionError _error true)))
+  (assert caught))
 
-(print "")
-(print "Test 5: If with zero (should catch error)")
-(try
-  (print "  100 / 0 =" (test-if 0))
-  (print "  ERROR: Should have thrown!")
-  (catch ZeroDivisionError e
-    (print "  Caught expected ZeroDivisionError")
-    (print "  ✓ Error correctly caught")))
-
-(print "")
-(print "Test 6: If with negative (should catch ValueError)")
-(try
-  (print "  Negative:" (test-if -1))
-  (print "  ERROR: Should have thrown!")
-  (catch ValueError e
-    (print "  Caught expected ValueError")
-    (print "  ✓ Error correctly caught")))
-
-(print "")
-(print "=== All Source Mapping Tests Passed! ===")
+(deftest source-mapped-throw-path
+  (def message
+    (try
+      (checked-divide -1)
+      (catch ValueError error (str error))))
+  (assert (= message "negative number")))

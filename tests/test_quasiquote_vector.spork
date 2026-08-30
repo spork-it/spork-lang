@@ -1,28 +1,37 @@
-;; Test quasiquote with vectors
+;; Tests for quasiquote with vectors.
 
-(def x 42)
-(def y 99)
+(deftest vector-quasiquote-preserves-literals
+  (def result `[1 2 3])
+  (assert (= (vec result.items) [1 2 3])))
 
-;; Basic vector quasiquote
-(print "Basic vector quasiquote:")
-(print `[1 2 3])
+(deftest vector-quasiquote-supports-unquote
+  (def value 42)
+  (def singleton `[~value])
+  (def mixed `[1 ~value 3])
+  (assert (= (vec singleton.items) [42]))
+  (assert (= (vec mixed.items) [1 42 3])))
 
-;; Vector with unquote
-(print "\nVector with unquote:")
-(print `[~x])
-(print `[1 ~x 3])
+(deftest vector-quasiquote-supports-multiple-unquotes
+  (def x 42)
+  (def y 99)
+  (def result `[~x ~y])
+  (assert (= (vec result.items) [42 99])))
 
-;; Vector with multiple unquotes
-(print "\nVector with multiple unquotes:")
-(print `[~x ~y])
+(deftest vector-quasiquote-supports-splicing
+  (def items [10 20 30])
+  (def spliced `[~@items])
+  (def surrounded `[1 ~@items 4])
+  (assert (= (vec spliced.items) [10 20 30]))
+  (assert (= (vec surrounded.items) [1 10 20 30 4])))
 
-;; Vector with unquote-splicing
-(print "\nVector with unquote-splicing:")
-(def items [10 20 30])
-(print `[~@items])
-(print `[1 ~@items 4])
-
-;; Nested vectors
-(print "\nNested vectors:")
-(print `[[~x]])
-(print `[1 [~x ~y] 3])
+(deftest vector-quasiquote-supports-nested-vectors
+  (def x 42)
+  (def y 99)
+  (def singleton `[[~x]])
+  (def mixed `[1 [~x ~y] 3])
+  (def singleton-inner (nth singleton.items 0))
+  (def mixed-inner (nth mixed.items 1))
+  (assert (= (vec singleton-inner.items) [42]))
+  (assert (= (nth mixed.items 0) 1))
+  (assert (= (vec mixed-inner.items) [42 99]))
+  (assert (= (nth mixed.items 2) 3)))

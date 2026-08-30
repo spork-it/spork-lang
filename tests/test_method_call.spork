@@ -1,6 +1,5 @@
 ;; Canonical dotted calls and backward-compatible leading-dot method calls
 
-(print "=== Testing Method Call Syntax ===\n")
 
 ;; Test 1: Basic method call - use Python list for mutation
 (def test-append
@@ -9,7 +8,6 @@
       (lst.append 4)
       lst)))
 
-(print "test-append:" (test-append))
 
 ;; Test 2: Method call with string
 (def test-string-methods
@@ -17,7 +15,6 @@
     (let [text "hello world"]
       (text.upper))))
 
-(print "test-string-methods:" (test-string-methods))
 
 ;; Test 3: Method call in let binding
 (def test-method-in-binding
@@ -26,7 +23,6 @@
           parts (text.split ",")]
       parts)))
 
-(print "test-method-in-binding:" (test-method-in-binding))
 
 ;; Test 4: Chained-ish method calls
 (def test-multiple-methods
@@ -36,7 +32,6 @@
           upper (trimmed.upper)]
       upper)))
 
-(print "test-multiple-methods:" (test-multiple-methods))
 
 ;; Test 5: Method with multiple args
 (def test-replace
@@ -44,21 +39,33 @@
     (let [text "hello world"]
       (text.replace "world" "python"))))
 
-(print "test-replace:" (test-replace))
 
 ;; Test 6: Method call in complex expression - use Python list for .count
 (def test-method-in-expr
   (fn []
     (+ 1 2 (.count (list [1 2 3 2 1]) 2))))
 
-(print "test-method-in-expr:" (test-method-in-expr))
+(deftest dotted-method-call-can-mutate-a-python-list
+  (assert (= (test-append) (list [1 2 3 4]))))
 
-;; Both runtime spellings remain equivalent. `call` also normalizes
-;; Lisp-style method names just like dotted and leading-dot calls.
-(let [text "compatibility"
-      n 8]
-  (assert (= (text.upper) (.upper text)))
-  (assert (= (n.bit-length) (.bit-length n)))
-  (assert (= (n.bit-length) (call n bit-length))))
+(deftest dotted-string-method-call
+  (assert (= (test-string-methods) "HELLO WORLD")))
 
-(print "\n=== All Method Call Tests Passed! ===")
+(deftest method-call-can-initialize-a-binding
+  (assert (= (test-method-in-binding) (list ["one" "two" "three"]))))
+
+(deftest method-calls-can-be-chained-through-bindings
+  (assert (= (test-multiple-methods) "HELLO")))
+
+(deftest method-call-supports-multiple-arguments
+  (assert (= (test-replace) "hello python")))
+
+(deftest method-call-can-appear-in-an-expression
+  (assert (= (test-method-in-expr) 5)))
+
+(deftest dotted-leading-dot-and-call-spellings-agree
+  (let [text "compatibility"
+        n 8]
+    (assert (= (text.upper) (.upper text)))
+    (assert (= (n.bit-length) (.bit-length n)))
+    (assert (= (n.bit-length) (call n bit-length)))))

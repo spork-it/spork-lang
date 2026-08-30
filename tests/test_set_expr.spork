@@ -1,43 +1,45 @@
-;; Test set! as expression with various targets
+;; Tests for set! as an expression with variable and attribute targets.
 
 (ns test-set-expr
   (:import [types]))
 
-(print "Testing set! as expression:\n")
+(deftest variable-assignment-returns-the-assigned-value
+  (def value 0)
+  (def result (set! value 42))
+  (assert (= value 42))
+  (assert (= result 42)))
 
-;; Simple variable assignment as expression
-(def x 0)
-(def result (set! x 42))
-(print "Simple assignment: x =" x ", result =" result)
+(deftest set-expression-can-initialize-a-let-binding
+  (def value 0)
+  (def result (let [assigned (set! value 100)] (+ assigned 50)))
+  ;; The expression runs in the let's generated scope; the outer binding is unchanged.
+  (assert (= value 0))
+  (assert (= result 150)))
 
-;; Using set! in let binding
-(def a 0)
-(def y (let [z (set! a 100)] (+ z 50)))
-(print "In let binding: a =" a ", y =" y)
+(deftest attribute-assignment-returns-the-assigned-value
+  (def object (types.SimpleNamespace))
+  (def result (set! (. object x) 99))
+  (assert (= object.x 99))
+  (assert (= result 99)))
 
-;; Attribute assignment as expression with objects
-(def obj (types.SimpleNamespace))
-(set! (. obj x) 10)
-(set! (. obj y) 20)
-(print "Object created with x =" (. obj x) "y =" (. obj y))
+(deftest set-expression-can-be-nested-in-arithmetic
+  (def object (types.SimpleNamespace))
+  (def result (+ (set! (. object y) 88) 12))
+  (assert (= object.y 88))
+  (assert (= result 100)))
 
-;; Using attribute set! as expression
-(def new-x (set! (. obj x) 99))
-(print "After (set! (. obj x) 99): x =" (. obj x) ", new-x =" new-x)
+(deftest set-expression-can-be-used-in-a-conditional
+  (def object (types.SimpleNamespace))
+  (def result
+    (if true
+      (set! (. object x) 777)
+      0))
+  (assert (= object.x 777))
+  ;; A statement-only conditional branch returns nil after performing the assignment.
+  (assert (= result nil)))
 
-;; Chaining set! expressions
-(def chain-result (+ (set! (. obj y) 88) 12))
-(print "Chained: y =" (. obj y) ", chain-result =" chain-result)
-
-;; In conditional
-(def conditional-result
-  (if true
-    (set! (. obj x) 777)
-    0))
-(print "In conditional: x =" (. obj x) ", conditional-result =" conditional-result)
-
-;; Nested in expression
-(def doubled (* 2 (set! (. obj y) 50)))
-(print "Nested: y =" (. obj y) ", doubled =" doubled)
-
-(print "\nAll set! expression tests passed!")
+(deftest set-expression-can-be-multiplied
+  (def object (types.SimpleNamespace))
+  (def result (* 2 (set! (. object y) 50)))
+  (assert (= object.y 50))
+  (assert (= result 100)))

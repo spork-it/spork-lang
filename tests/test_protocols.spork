@@ -16,9 +16,6 @@
   (farewell [s] (+ "Goodbye, " s "!")))
 
 ;; Test basic extension
-(print "Testing str extension:")
-(print (greet "World"))
-(print (farewell "World"))
 
 ;; === Define a Spork class and extend ===
 
@@ -32,16 +29,9 @@
   (farewell [p] (+ "See you later, " p.name "!")))
 
 (def alice (Person "Alice"))
-(print "\nTesting Person extension:")
-(print (greet alice))
-(print (farewell alice))
 
 ;; === Test isinstance with protocol ABC ===
 
-(print "\nTesting isinstance:")
-(print (+ "Is 'Bob' an IGreet? " (str (isinstance "Bob" IGreet))))
-(print (+ "Is alice an IGreet? " (str (isinstance alice IGreet))))
-(print (+ "Is 42 an IGreet? " (str (isinstance 42 IGreet))))
 
 ;; === Numeric protocol ===
 
@@ -60,11 +50,6 @@
   (add-one [n] (+ n 1.0))
   (double-val [n] (* n 2.0)))
 
-(print "\nTesting INumeric:")
-(print (+ "add-one 5: " (str (add-one 5))))
-(print (+ "double-val 5: " (str (double-val 5))))
-(print (+ "add-one 3.14: " (str (add-one 3.14))))
-(print (+ "double-val 3.14: " (str (double-val 3.14))))
 
 ;; === Structural protocol ===
 
@@ -79,13 +64,14 @@
     (set! self.closed false))
   (defn close [self]
     (set! self.closed true)
-    (print (+ "Closed " self.name))))
+    nil))
 
-(def res (Resource "my-resource"))
-(print "\nTesting structural protocol:")
-(print (+ "Resource closed before: " (str res.closed)))
-(close res)  ; Should work via structural dispatch
-(print (+ "Resource closed after: " (str res.closed)))
+(deftest structural-protocol
+  (def resource (Resource "my-resource"))
+  (assert (= resource.closed false))
+  (close resource)
+  (assert (= resource.closed true)))
+
 
 ;; === extend-protocol (sugar for multiple extend-type) ===
 
@@ -103,10 +89,6 @@
   str
   (stringify [s] (+ "Str<" s ">")))
 
-(print "\nTesting extend-protocol:")
-(print (stringify 42))
-(print (stringify 3.14))
-(print (stringify "hello"))
 
 ;; === Protocol with multiple args ===
 
@@ -123,24 +105,47 @@
       result))
   (get-item [coll idx] (nth coll idx)))
 
-(print "\nTesting multi-arg protocol:")
-(def my-list (list [1 2 3]))  ; Convert Vector to Python list
-(print (+ "Original: " (str my-list)))
-(def new-list (add-item my-list 4))
-(print (+ "After add-item: " (str new-list)))
-(print (+ "get-item at 0: " (str (get-item my-list 0))))
+(deftest protocol-with-multiple-args
+  (def original (list [1 2 3]))
+  (def updated (add-item original 4))
+  (assert (= updated (list [1 2 3 4])))
+  (assert (= original (list [1 2 3])))
+  (assert (= (get-item original 0) 1)))
+
 
 ;; === Pattern matching on protocols ===
 
-(print "\nTesting pattern matching on protocols:")
 (defn describe [x]
   (match x
     (^IGreet g) (+ "Greeter: " (greet g))
     (^INumeric n) (+ "Number: " (str (double-val n)))
     _ "Unknown"))
 
-(print (describe "Test"))
-(print (describe alice))
-(print (describe 10))
+(deftest protocol-extension-for-python-builtins
+  (assert (= (greet "World") "Hello, World!"))
+  (assert (= (farewell "World") "Goodbye, World!")))
 
-(print "\n=== All protocol tests passed! ===")
+(deftest protocol-extension-for-spork-classes
+  (assert (= (greet alice) "Hello, Alice!"))
+  (assert (= (farewell alice) "See you later, Alice!")))
+
+(deftest protocol-membership-reflects-extensions
+  (assert (isinstance "Bob" IGreet))
+  (assert (isinstance alice IGreet))
+  (assert (not (isinstance 42 IGreet))))
+
+(deftest protocol-can-extend-multiple-numeric-types
+  (assert (= (add-one 5) 6))
+  (assert (= (double-val 5) 10))
+  (assert (= (add-one 3.5) 4.5))
+  (assert (= (double-val 3.5) 7.0)))
+
+(deftest extend-protocol-registers-every-type
+  (assert (= (stringify 42) "Int<42>"))
+  (assert (= (stringify 3.14) "Float<3.14>"))
+  (assert (= (stringify "hello") "Str<hello>")))
+
+(deftest protocols-participate-in-pattern-matching
+  (assert (= (describe "Test") "Greeter: Hello, Test!"))
+  (assert (= (describe alice) "Greeter: Hello, Alice!"))
+  (assert (= (describe 10) "Number: 20")))

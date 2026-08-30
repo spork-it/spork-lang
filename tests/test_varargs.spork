@@ -1,6 +1,5 @@
 ; Test varargs support in fn and defn
 
-(print "\n=== Testing varargs ===\n")
 
 ; Test defn with varargs
 (defn sum [& nums]
@@ -9,11 +8,6 @@
       (set! total (+ total n)))
     total))
 
-(print "Testing defn with varargs:")
-(print "  (sum) =" (sum))
-(print "  (sum 1) =" (sum 1))
-(print "  (sum 1 2 3) =" (sum 1 2 3))
-(print "  (sum 1 2 3 4 5) =" (sum 1 2 3 4 5))
 
 ; Test defn with regular args and varargs
 (defn greet [greeting & names]
@@ -22,73 +16,83 @@
     (let [all-names (call " and " join names)]
       (+ greeting " " all-names "!"))))
 
-(print "\nTesting defn with regular args and varargs:")
-(print "  (greet \"Hello\") =" (greet "Hello"))
-(print "  (greet \"Hello\" \"Alice\") =" (greet "Hello" "Alice"))
-(print "  (greet \"Hello\" \"Alice\" \"Bob\") =" (greet "Hello" "Alice" "Bob"))
-(print "  (greet \"Hi\" \"Alice\" \"Bob\" \"Charlie\") =" (greet "Hi" "Alice" "Bob" "Charlie"))
 
 ; Test fn with varargs
-(print "\nTesting fn with varargs:")
-(let [add-all (fn [& nums]
-                (if (= (len nums) 0)
-                  0
-                  (+ (. nums 0) (if (> (len nums) 1) (. nums 1) 0) (if (> (len nums) 2) (. nums 2) 0))))]
-  (print "  (add-all) =" (add-all))
-  (print "  (add-all 2) =" (add-all 2))
-  (print "  (add-all 2 3) =" (add-all 2 3))
-  (print "  (add-all 2 3 4) =" (add-all 2 3 4)))
+(deftest test-fn-with-varargs
+  (let [add-all (fn [& nums]
+                  (if (= (len nums) 0)
+                    0
+                    (+ (. nums 0) (if (> (len nums) 1) (. nums 1) 0) (if (> (len nums) 2) (. nums 2) 0))))]
+    (assert (= (add-all) 0))
+    (assert (= (add-all 2) 2))
+    (assert (= (add-all 2 3) 5))
+    (assert (= (add-all 2 3 4) 9)))
+)
+
 
 ; Test fn with regular args and varargs
-(print "\nTesting fn with regular args and varargs:")
-(let [format-list (fn [prefix & items]
-                    (if (= (len items) 0)
-                      (+ prefix ": (empty)")
-                      (+ prefix ": " (str items))))]
-  (print "  (format-list \"Items\") =" (format-list "Items"))
-  (print "  (format-list \"Items\" \"a\") =" (format-list "Items" "a"))
-  (print "  (format-list \"Items\" \"a\" \"b\" \"c\") =" (format-list "Items" "a" "b" "c")))
+(deftest test-fn-with-regular-args-and-varargs
+  (let [format-list (fn [prefix & items]
+                      (if (= (len items) 0)
+                        (+ prefix ": (empty)")
+                        (+ prefix ": " (str items))))]
+    (assert (= (format-list "Items") "Items: (empty)"))
+    (assert (= (format-list "Items" "a") "Items: ('a',)"))
+    (assert (= (format-list "Items" "a" "b" "c") "Items: ('a', 'b', 'c')")))
+)
+
 
 ; Test fn with varargs passed directly
-(print "\nTesting fn with varargs in direct calls:")
-(let [join-strings (fn [& strs] (call "" join strs))]
-  (print "  (join-strings \"a\" \"b\") =" (join-strings "a" "b"))
-  (print "  (join-strings \"hello\" \"world\") =" (join-strings "hello" "world")))
+(deftest test-fn-with-varargs-passed-directly
+  (let [join-strings (fn [& strs] (call "" join strs))]
+    (assert (= (join-strings "a" "b") "ab"))
+    (assert (= (join-strings "hello" "world") "helloworld")))
+)
+
 
 ; Test nested functions with varargs
-(print "\nTesting nested functions with varargs:")
 (defn make-adder [base]
   (fn [& nums]
     (+ base (if (> (len nums) 0) (. nums 0) 0) (if (> (len nums) 1) (. nums 1) 0))))
 
-(let [add10 (make-adder 10)
-      add100 (make-adder 100)]
-  (print "  (add10 1 2) =" (add10 1 2))
-  (print "  (add100 5 10) =" (add100 5 10)))
+(deftest test-nested-functions-with-varargs
+  (let [add10 (make-adder 10)
+        add100 (make-adder 100)]
+    (assert (= (add10 1 2) 13))
+    (assert (= (add100 5 10) 115)))
+)
+
 
 ; Test varargs with apply-like behavior
-(print "\nTesting varargs with list spreading:")
 (defn max-of [& nums]
   (if (= (len nums) 0)
     nil
     (max nums)))
 
-(print "  (max-of 1 5 3 9 2) =" (max-of 1 5 3 9 2))
-(print "  (max-of 42) =" (max-of 42))
 
 ; Test varargs collecting into list
-(print "\nTesting varargs as list:")
-(let [make-list (fn [& items] items)]
-  (print "  (make-list 1 2 3) =" (make-list 1 2 3))
-  (print "  (make-list \"a\" \"b\" \"c\") =" (make-list "a" "b" "c"))
-  (print "  (type (make-list 1 2 3)) =" (type (make-list 1 2 3))))
+(deftest test-varargs-collecting-into-list
+  (let [make-list (fn [& items] items)]
+    (assert (= (vec (make-list 1 2 3)) [1 2 3]))
+    (assert (= (vec (make-list "a" "b" "c")) ["a" "b" "c"])))
+)
+
 
 ; Test method call syntax with varargs
-(print "\nTesting new method call syntax:")
-(let [words ["hello" "world" "from" "spork"]]
-  (print "  (call \" \" join words) =" (call " " join words)))
+(deftest test-method-call-syntax-with-varargs
+  (let [words ["hello" "world" "from" "spork"]]
+    (assert (= (call " " join words) "hello world from spork")))
 
-(let [numbers (list [1 2 3 4 5])]
-  (print "  (call numbers count 3) =" (call numbers count 3)))
+  (let [numbers (list [1 2 3 4 5])]
+    (assert (= (call numbers count 3) 1)))
+)
 
-(print "\n=== All varargs tests completed ===\n")
+(deftest named-function-varargs
+  (assert (= (sum) 0))
+  (assert (= (sum 1 2 3 4) 10))
+  (assert (= (greet "Hello") "Hello everyone!"))
+  (assert (= (greet "Hello" "Alice" "Bob") "Hello Alice and Bob!")))
+
+(deftest varargs-can-be-forwarded-to-builtins
+  (assert (= (max-of) nil))
+  (assert (= (max-of 3 9 4) 9)))

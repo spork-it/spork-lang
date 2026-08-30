@@ -68,15 +68,12 @@
           nil))
       result)))
 
-;; Test 8: let with print statements (side effects)
-(def test-let-with-prints
+;; Test 8: let with assignment side effects
+(def test-let-with-side-effects
   (fn []
     (let [step 1]
-      (print "Step" step)
       (set! step (+ step 1))
-      (print "Step" step)
       (set! step (+ step 1))
-      (print "Step" step)
       step)))
 
 ;; Test 9: let in let, both with statements
@@ -99,21 +96,32 @@
           (set! x (/ x 2))
           x)))))
 
-;; Run all tests
-(print "=== Testing Statement-Friendly Let Bodies ===\n")
+(deftest let-body-supports-while
+  (assert (= (test-let-with-while-statement) 10)))
 
-(print "test-let-with-while-statement:" (test-let-with-while-statement))
-(print "test-let-with-for-statement:" (test-let-with-for-statement))
-(print "test-let-with-multiple-statements:" (test-let-with-multiple-statements))
-(print "test-let-with-try-statements:" (test-let-with-try-statements))
-(print "test-let-with-nested-control:" (test-let-with-nested-control))
-(print "test-let-with-inner-fn-def:" (test-let-with-inner-fn-def))
-(print "test-let-complex-statements:" (test-let-complex-statements))
+(deftest let-body-supports-for
+  (assert (= (test-let-with-for-statement) 15)))
 
-(print "\ntest-let-with-prints:")
-(test-let-with-prints)
+(deftest let-body-supports-multiple-assignments
+  (assert (= (test-let-with-multiple-statements) 55)))
 
-(print "\ntest-nested-lets-with-statements:" (test-nested-lets-with-statements))
-(print "test-let-with-early-pattern:" (test-let-with-early-pattern))
+(deftest let-body-supports-try-catch
+  (assert (= (test-let-with-try-statements) 21)))
 
-(print "\n=== All Statement Tests Passed! ===")
+(deftest let-body-supports-nested-control-flow
+  (assert (= (test-let-with-nested-control) 10)))
+
+(deftest let-body-supports-anonymous-functions
+  (assert (= (test-let-with-inner-fn-def) 42)))
+
+(deftest let-body-supports-mixed-statements
+  (assert (= (vec (test-let-complex-statements)) [6 8 10])))
+
+(deftest let-body-preserves-side-effects
+  (assert (= (test-let-with-side-effects) 3)))
+
+(deftest nested-let-bodies-support-statements
+  (assert (= (test-nested-lets-with-statements) 30)))
+
+(deftest let-body-supports-conditional-value-patterns
+  (assert (= (test-let-with-early-pattern) 10)))

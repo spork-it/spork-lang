@@ -3,18 +3,13 @@
 (ns test-async
   (:import [asyncio]))
 
-(print "=== Testing async/await support ===\n")
-
 ; Test 1: Simple async function
 (defn ^async simple-async []
-  (print "In simple async function")
   42)
 
 ; Test 2: Async function with await
 (defn ^async with-await []
-  (print "Before await")
   (await (asyncio.sleep 0.01))
-  (print "After await")
   "completed")
 
 ; Test 3: Async function that awaits another async function
@@ -59,51 +54,30 @@
 (defn ^async await-in-expr []
   (+ 10 (await (fetch-data 5))))
 
-; Run all tests
-(defn ^async run-tests []
-  (print "Test 1: Simple async function")
-  (def r1 (await (simple-async)))
-  (print "Result:" r1)
-  (assert (= r1 42))
-  (print "PASS\n")
+(deftest ^async simple-async-function
+  (def result (await (simple-async)))
+  (assert (= result 42)))
 
-  (print "Test 2: Async with await")
-  (def r2 (await (with-await)))
-  (print "Result:" r2)
-  (assert (= r2 "completed"))
-  (print "PASS\n")
+(deftest ^async awaiting-python-coroutine
+  (def result (await (with-await)))
+  (assert (= result "completed")))
 
-  (print "Test 3: Nested async calls")
-  (def r3 (await (process-data)))
-  (print "Result:" r3)
-  (assert (= r3 30))  ; (5*2) + (10*2) = 10 + 20 = 30
-  (print "PASS\n")
+(deftest ^async nested-async-calls
+  (def result (await (process-data)))
+  (assert (= result 30)))
 
-  (print "Test 4: Multiple awaits")
-  (def r4 (await (multi-await)))
-  (print "Result:" r4)
-  (assert (= (vec r4) [2 4 6]))  ; [1*2, 2*2, 3*2]
-  (print "PASS\n")
+(deftest ^async multiple-sequential-awaits
+  (def result (await (multi-await)))
+  (assert (= (vec result) [2 4 6])))
 
-  (print "Test 5: Async for loop")
-  (def r5 (await (test-async-for)))
-  (print "Result:" r5)
-  (assert (= (vec r5) [0 1 2 3 4]))
-  (print "PASS\n")
+(deftest ^async async-for-loop
+  (def result (await (test-async-for)))
+  (assert (= (vec result) [0 1 2 3 4])))
 
-  (print "Test 6: Async anonymous function")
-  (def r6 (await (test-async-fn)))
-  (print "Result:" r6)
-  (assert (= r6 21))  ; 7 * 3
-  (print "PASS\n")
+(deftest ^async anonymous-async-function
+  (def result (await (test-async-fn)))
+  (assert (= result 21)))
 
-  (print "Test 7: Await in expression position")
-  (def r7 (await (await-in-expr)))
-  (print "Result:" r7)
-  (assert (= r7 20))  ; 10 + (5*2)
-  (print "PASS\n")
-
-  (print "=== All async tests passed! ==="))
-
-; Run the async tests
-(asyncio.run (run-tests))
+(deftest ^async await-in-expression-position
+  (def result (await (await-in-expr)))
+  (assert (= result 20)))

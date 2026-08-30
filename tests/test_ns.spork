@@ -6,31 +6,28 @@
            [statistics :as stats]))
 
 ;; Test Python module import
-(print "\nTesting Python module import:")
-(print "m.sqrt 16:" (m.sqrt 16))
-(assert (= (m.sqrt 16) (.sqrt m 16)) "Qualified and leading-dot module calls should agree")
-(print "m.pi:" m.pi)
-(assert (= (stats.mean [1 2 3]) 2) "Python modules load through :import")
+(deftest test-python-module-import
+  (assert (= (m.sqrt 16) (.sqrt m 16)) "Qualified and leading-dot module calls should agree")
+  (assert (= (stats.mean [1 2 3]) 2) "Python modules load through :import")
+)
+
 
 ;; Define something in this namespace
 (defn local-fn [x]
   "A function defined in the test namespace"
   (* x 10))
 
-(print "\nTesting local definition:")
-(print "local-fn 7:" (local-fn 7))
 
 ;; Test that std.json works with dot notation
-(print "\n--- Testing std.json with dot notation ---")
-(def json-str (json.dumps {:name "test" :value 42}))
-(print "json.dumps result:" json-str)
-(assert (in "name" json-str) "json.dumps should serialize map")
-(print "std.json with dot notation: passed")
+(deftest test-that-std-json-works-with-dot-notation
+  (def json-str (json.dumps {:name "test" :value 42}))
+  (assert (in "name" json-str) "json.dumps should serialize map")
+)
+
 
 ;; Test parsing
-(def parsed (json.loads "{\"x\": 1, \"y\": 2}"))
-(print "json.loads result:" parsed)
-(assert (= (get parsed "x") 1) "json.loads should parse JSON")
-(print "json.loads: passed")
+(deftest test-parsing
+  (def parsed (json.loads "{\"x\": 1, \"y\": 2}"))
+  (assert (= (get parsed "x") 1) "json.loads should parse JSON")
 
-(print "\nAll namespace tests passed!")
+)

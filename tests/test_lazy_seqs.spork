@@ -1,356 +1,332 @@
 ; Test lazy sequence functions
 
-(print "=== Testing Lazy Sequences ===\n")
 
 ; === map ===
-(print "--- map (lazy) ---")
-(def mapped (map inc [1 2 3 4 5]))
-(print "Type of (map inc [1 2 3 4 5]):" (type mapped))
-(print "Realized:" (vec mapped))
-(assert (= (vec (map inc [1 2 3])) [2 3 4]))
-(print "PASS: map works\n")
+(deftest map-lazy
+  (def mapped (map inc [1 2 3 4 5]))
+  (assert (= (vec (map inc [1 2 3])) [2 3 4]))
+)
+
 
 ; map with multiple collections
-(print "--- map with multiple collections ---")
-(def multi-map (map + [1 2 3] [10 20 30]))
-(print "(map + [1 2 3] [10 20 30]):" (vec multi-map))
-(assert (= (vec (map + [1 2 3] [10 20 30])) [11 22 33]))
-(print "PASS: multi-collection map works\n")
+(deftest map-with-multiple-collections
+  (def multi-map (map + [1 2 3] [10 20 30]))
+  (assert (= (vec (map + [1 2 3] [10 20 30])) [11 22 33]))
+)
+
 
 ; === filter ===
-(print "--- filter (lazy) ---")
-(def filtered (filter even? [1 2 3 4 5 6]))
-(print "Type of (filter even? ...):" (type filtered))
-(print "Realized:" (vec filtered))
-(assert (= (vec (filter even? [1 2 3 4 5 6])) [2 4 6]))
-(print "PASS: filter works\n")
+(deftest filter-lazy
+  (def filtered (filter even? [1 2 3 4 5 6]))
+  (assert (= (vec (filter even? [1 2 3 4 5 6])) [2 4 6]))
+)
+
 
 ; === take ===
-(print "--- take (lazy) ---")
-(def taken (take 3 [1 2 3 4 5]))
-(print "Type of (take 3 ...):" (type taken))
-(print "Realized:" (vec taken))
-(assert (= (vec (take 3 [1 2 3 4 5])) [1 2 3]))
-(assert (= (vec (take 10 [1 2 3])) [1 2 3]))  ; take more than available
-(print "PASS: take works\n")
+(deftest take-lazy
+  (def taken (take 3 [1 2 3 4 5]))
+  (assert (= (vec (take 3 [1 2 3 4 5])) [1 2 3]))
+  (assert (= (vec (take 10 [1 2 3])) [1 2 3]))  ; take more than available
+)
+
 
 ; === drop ===
-(print "--- drop (lazy) ---")
-(def dropped (drop 2 [1 2 3 4 5]))
-(print "Type of (drop 2 ...):" (type dropped))
-(print "Realized:" (vec dropped))
-(assert (= (vec (drop 2 [1 2 3 4 5])) [3 4 5]))
-(assert (= (vec (drop 10 [1 2 3])) []))  ; drop more than available
-(print "PASS: drop works\n")
+(deftest drop-lazy
+  (def dropped (drop 2 [1 2 3 4 5]))
+  (assert (= (vec (drop 2 [1 2 3 4 5])) [3 4 5]))
+  (assert (= (vec (drop 10 [1 2 3])) []))  ; drop more than available
+)
+
 
 ; === take-while ===
-(print "--- take-while (lazy) ---")
-(def tw (take-while (fn [x] (< x 4)) [1 2 3 4 5 6]))
-(print "Realized:" (vec tw))
-(assert (= (vec (take-while (fn [x] (< x 4)) [1 2 3 4 5])) [1 2 3]))
-(print "PASS: take-while works\n")
+(deftest take-while-lazy
+  (def tw (take-while (fn [x] (< x 4)) [1 2 3 4 5 6]))
+  (assert (= (vec (take-while (fn [x] (< x 4)) [1 2 3 4 5])) [1 2 3]))
+)
+
 
 ; === drop-while ===
-(print "--- drop-while (lazy) ---")
-(def dw (drop-while (fn [x] (< x 4)) [1 2 3 4 5 6]))
-(print "Realized:" (vec dw))
-(assert (= (vec (drop-while (fn [x] (< x 4)) [1 2 3 4 5 6])) [4 5 6]))
-(print "PASS: drop-while works\n")
+(deftest drop-while-lazy
+  (def dw (drop-while (fn [x] (< x 4)) [1 2 3 4 5 6]))
+  (assert (= (vec (drop-while (fn [x] (< x 4)) [1 2 3 4 5 6])) [4 5 6]))
+)
+
 
 ; === concat ===
-(print "--- concat (lazy) ---")
-(def concatenated (concat [1 2] [3 4] [5]))
-(print "Type of (concat ...):" (type concatenated))
-(print "Realized:" (vec concatenated))
-(assert (= (vec (concat [1 2] [3 4] [5])) [1 2 3 4 5]))
-(print "PASS: concat works\n")
+(deftest concat-lazy
+  (def concatenated (concat [1 2] [3 4] [5]))
+  (assert (= (vec (concat [1 2] [3 4] [5])) [1 2 3 4 5]))
+)
+
 
 ; === range ===
-(print "--- range (lazy) ---")
-(print "(range 5):" (vec (range 5)))
-(print "(range 2 7):" (vec (range 2 7)))
-(print "(range 0 10 2):" (vec (range 0 10 2)))
-(assert (= (vec (range 5)) [0 1 2 3 4]))
-(assert (= (vec (range 2 5)) [2 3 4]))
-(assert (= (vec (range 0 10 2)) [0 2 4 6 8]))
-(print "PASS: range works\n")
+(deftest range-lazy
+  (assert (= (vec (range 5)) [0 1 2 3 4]))
+  (assert (= (vec (range 2 5)) [2 3 4]))
+  (assert (= (vec (range 0 10 2)) [0 2 4 6 8]))
+)
+
 
 ; === repeat ===
-(print "--- repeat ---")
-(print "(take 5 (repeat :x)):" (vec (take 5 (repeat :x))))
-(print "(repeat :y 3):" (vec (repeat :y 3)))
-(assert (= (vec (take 3 (repeat 42))) [42 42 42]))
-(assert (= (vec (repeat "a" 4)) ["a" "a" "a" "a"]))
-(print "PASS: repeat works\n")
+(deftest repeat
+  (assert (= (vec (take 3 (repeat 42))) [42 42 42]))
+  (assert (= (vec (repeat "a" 4)) ["a" "a" "a" "a"]))
+)
+
 
 ; === cycle ===
-(print "--- cycle ---")
-(def cycled (take 7 (cycle [1 2 3])))
-(print "(take 7 (cycle [1 2 3])):" (vec cycled))
-(assert (= (vec (take 7 (cycle [1 2 3]))) [1 2 3 1 2 3 1]))
-(print "PASS: cycle works\n")
+(deftest cycle
+  (def cycled (take 7 (cycle [1 2 3])))
+  (assert (= (vec (take 7 (cycle [1 2 3]))) [1 2 3 1 2 3 1]))
+)
+
 
 ; === iterate ===
-(print "--- iterate ---")
-(def doubled (take 5 (iterate (fn [x] (* x 2)) 1)))
-(print "(take 5 (iterate #(* % 2) 1)):" (vec doubled))
-(assert (= (vec (take 5 (iterate (fn [x] (* x 2)) 1))) [1 2 4 8 16]))
-(print "PASS: iterate works\n")
+(deftest iterate
+  (def doubled (take 5 (iterate (fn [x] (* x 2)) 1)))
+  (assert (= (vec (take 5 (iterate (fn [x] (* x 2)) 1))) [1 2 4 8 16]))
+)
+
 
 ; === interleave ===
-(print "--- interleave ---")
-(def interleaved (interleave [1 2 3] [:a :b :c]))
-(print "(interleave [1 2 3] [:a :b :c]):" (vec interleaved))
-(assert (= (vec (interleave [1 2 3] [:a :b :c])) [1 :a 2 :b 3 :c]))
-(print "PASS: interleave works\n")
+(deftest interleave
+  (def interleaved (interleave [1 2 3] [:a :b :c]))
+  (assert (= (vec (interleave [1 2 3] [:a :b :c])) [1 :a 2 :b 3 :c]))
+)
+
 
 ; === interpose ===
-(print "--- interpose ---")
-(def interposed (interpose :sep [1 2 3]))
-(print "(interpose :sep [1 2 3]):" (vec interposed))
-(assert (= (vec (interpose :sep [1 2 3])) [1 :sep 2 :sep 3]))
-(print "PASS: interpose works\n")
+(deftest interpose
+  (def interposed (interpose :sep [1 2 3]))
+  (assert (= (vec (interpose :sep [1 2 3])) [1 :sep 2 :sep 3]))
+)
+
 
 ; === partition ===
-(print "--- partition ---")
-(def partitioned (partition 2 [1 2 3 4 5 6]))
-(print "(partition 2 [1 2 3 4 5 6]):" (vec partitioned))
-(assert (= (vec (partition 2 [1 2 3 4 5 6])) [[1 2] [3 4] [5 6]]))
-(print "PASS: partition works\n")
+(deftest partition
+  (def partitioned (partition 2 [1 2 3 4 5 6]))
+  (assert (= (vec (partition 2 [1 2 3 4 5 6])) [[1 2] [3 4] [5 6]]))
+)
+
 
 ; === partition-all ===
-(print "--- partition-all ---")
-(def part-all (partition-all 2 [1 2 3 4 5]))
-(print "(partition-all 2 [1 2 3 4 5]):" (vec part-all))
-(assert (= (vec (partition-all 2 [1 2 3 4 5])) [[1 2] [3 4] [5]]))
-(print "PASS: partition-all works\n")
+(deftest partition-all
+  (def part-all (partition-all 2 [1 2 3 4 5]))
+  (assert (= (vec (partition-all 2 [1 2 3 4 5])) [[1 2] [3 4] [5]]))
+)
+
 
 ; === dedupe ===
-(print "--- dedupe ---")
-(def deduped (dedupe [1 1 2 2 2 3 1 1]))
-(print "(dedupe [1 1 2 2 2 3 1 1]):" (vec deduped))
-(assert (= (vec (dedupe [1 1 2 2 2 3 1 1])) [1 2 3 1]))
-(print "PASS: dedupe works\n")
+(deftest dedupe
+  (def deduped (dedupe [1 1 2 2 2 3 1 1]))
+  (assert (= (vec (dedupe [1 1 2 2 2 3 1 1])) [1 2 3 1]))
+)
+
 
 ; === distinct ===
-(print "--- distinct ---")
-(def distincted (distinct [1 2 1 3 2 4 1]))
-(print "(distinct [1 2 1 3 2 4 1]):" (vec distincted))
-(assert (= (vec (distinct [1 2 1 3 2 4 1])) [1 2 3 4]))
-(print "PASS: distinct works\n")
+(deftest distinct
+  (def distincted (distinct [1 2 1 3 2 4 1]))
+  (assert (= (vec (distinct [1 2 1 3 2 4 1])) [1 2 3 4]))
+)
+
 
 ; === flatten ===
-(print "--- flatten ---")
-(def flattened (flatten [[1 2] [3 [4 5]] 6]))
-(print "(flatten [[1 2] [3 [4 5]] 6]):" (vec flattened))
-(assert (= (vec (flatten [[1 2] [3 [4 5]] 6])) [1 2 3 4 5 6]))
-(print "PASS: flatten works\n")
+(deftest flatten
+  (def flattened (flatten [[1 2] [3 [4 5]] 6]))
+  (assert (= (vec (flatten [[1 2] [3 [4 5]] 6])) [1 2 3 4 5 6]))
+)
+
 
 ; === mapcat ===
-(print "--- mapcat ---")
-(def mapcatted (mapcat (fn [x] [x x]) [1 2 3]))
-(print "(mapcat #(list % %) [1 2 3]):" (vec mapcatted))
-(assert (= (vec (mapcat (fn [x] [x x]) [1 2 3])) [1 1 2 2 3 3]))
-(print "PASS: mapcat works\n")
+(deftest mapcat
+  (def mapcatted (mapcat (fn [x] [x x]) [1 2 3]))
+  (assert (= (vec (mapcat (fn [x] [x x]) [1 2 3])) [1 1 2 2 3 3]))
+)
+
 
 ; === map-indexed ===
-(print "--- map-indexed ---")
-(def indexed (map-indexed (fn [i x] [i x]) [:a :b :c]))
-(print "(map-indexed vector [:a :b :c]):" (vec indexed))
-(assert (= (vec (map-indexed (fn [i x] [i x]) [:a :b :c])) [[0 :a] [1 :b] [2 :c]]))
-(print "PASS: map-indexed works\n")
+(deftest map-indexed
+  (def indexed (map-indexed (fn [i x] [i x]) [:a :b :c]))
+  (assert (= (vec (map-indexed (fn [i x] [i x]) [:a :b :c])) [[0 :a] [1 :b] [2 :c]]))
+)
+
 
 ; === keep ===
-(print "--- keep ---")
-(def kept (keep (fn [x] (if (even? x) (* x 2) nil)) [1 2 3 4 5]))
-(print "(keep #(when (even? %) (* % 2)) [1 2 3 4 5]):" (vec kept))
-(assert (= (vec (keep (fn [x] (if (even? x) (* x 2) nil)) [1 2 3 4 5])) [4 8]))
-(print "PASS: keep works\n")
+(deftest keep
+  (def kept (keep (fn [x] (if (even? x) (* x 2) nil)) [1 2 3 4 5]))
+  (assert (= (vec (keep (fn [x] (if (even? x) (* x 2) nil)) [1 2 3 4 5])) [4 8]))
+)
+
 
 ; === some ===
-(print "--- some ---")
-(print "(some even? [1 3 5 6 7]):" (some even? [1 3 5 6 7]))
-(print "(some even? [1 3 5 7]):" (some even? [1 3 5 7]))
-(assert (= (some even? [1 3 5 6 7]) true))
-(assert (= (some even? [1 3 5 7]) nil))
-(print "PASS: some works\n")
+(deftest some
+  (assert (= (some even? [1 3 5 6 7]) true))
+  (assert (= (some even? [1 3 5 7]) nil))
+)
+
 
 ; === every ===
-(print "--- every ---")
-(print "(every pos? [1 2 3]):" (every pos? [1 2 3]))
-(print "(every pos? [1 -2 3]):" (every pos? [1 -2 3]))
-(assert (= (every pos? [1 2 3]) true))
-(assert (= (every pos? [1 -2 3]) false))
-(print "PASS: every works\n")
+(deftest every
+  (assert (= (every pos? [1 2 3]) true))
+  (assert (= (every pos? [1 -2 3]) false))
+)
+
 
 ; === reduce ===
-(print "--- reduce ---")
-(print "(reduce + [1 2 3 4]):" (reduce + [1 2 3 4]))
-(print "(reduce + 10 [1 2 3 4]):" (reduce + 10 [1 2 3 4]))
-(assert (= (reduce + [1 2 3 4]) 10))
-(assert (= (reduce + 10 [1 2 3 4]) 20))
-(print "PASS: reduce works\n")
+(deftest reduce
+  (assert (= (reduce + [1 2 3 4]) 10))
+  (assert (= (reduce + 10 [1 2 3 4]) 20))
+)
+
 
 ; === reductions ===
-(print "--- reductions ---")
-(def reduced (reductions + [1 2 3 4]))
-(print "(reductions + [1 2 3 4]):" (vec reduced))
-(assert (= (vec (reductions + [1 2 3 4])) [1 3 6 10]))
-(assert (= (vec (reductions + 0 [1 2 3 4])) [0 1 3 6 10]))
-(print "PASS: reductions works\n")
+(deftest reductions
+  (def reduced (reductions + [1 2 3 4]))
+  (assert (= (vec (reductions + [1 2 3 4])) [1 3 6 10]))
+  (assert (= (vec (reductions + 0 [1 2 3 4])) [0 1 3 6 10]))
+)
+
 
 ; === reverse ===
-(print "--- reverse ---")
-(print "(vec (reverse [1 2 3])):" (vec (reverse [1 2 3])))
-(assert (= (vec (reverse [1 2 3])) [3 2 1]))
-(print "PASS: reverse works\n")
+(deftest reverse
+  (assert (= (vec (reverse [1 2 3])) [3 2 1]))
+)
+
 
 ; === sort ===
-(print "--- sort ---")
-(print "(sort [3 1 4 1 5 9 2]):" (sort [3 1 4 1 5 9 2]))
-(assert (= (sort [3 1 4 1 5 9 2]) [1 1 2 3 4 5 9]))
-(print "PASS: sort works\n")
+(deftest sort
+  (assert (= (sort [3 1 4 1 5 9 2]) [1 1 2 3 4 5 9]))
+)
+
 
 ; === sort-by ===
-(print "--- sort-by ---")
-(def items [{:name "b" :val 2} {:name "a" :val 1} {:name "c" :val 3}])
-(def sorted-items (sort-by (fn [x] (get x :val)) items))
-(print "Sorted by :val:" sorted-items)
-(print "PASS: sort-by works\n")
+(deftest sort-by
+  (def items [{:name "b" :val 2} {:name "a" :val 1} {:name "c" :val 3}])
+  (def sorted-items (sort-by (fn [x] (get x :val)) items))
+  (assert (= (mapv (fn [item] (get item :name)) sorted-items)
+             ["a" "b" "c"])))
+
 
 ; === frequencies ===
-(print "--- frequencies ---")
-(def freqs (frequencies [1 1 2 2 2 3]))
-(print "(frequencies [1 1 2 2 2 3]):" freqs)
-(assert (= (get freqs 1) 2))
-(assert (= (get freqs 2) 3))
-(assert (= (get freqs 3) 1))
-(print "PASS: frequencies works\n")
+(deftest frequencies
+  (def freqs (frequencies [1 1 2 2 2 3]))
+  (assert (= (get freqs 1) 2))
+  (assert (= (get freqs 2) 3))
+  (assert (= (get freqs 3) 1))
+)
+
 
 ; === group-by ===
-(print "--- group-by ---")
-(def groups (group-by even? [1 2 3 4 5 6]))
-(print "(group-by even? [1 2 3 4 5 6]):" groups)
-(assert (= (get groups true) [2 4 6]))
-(assert (= (get groups false) [1 3 5]))
-(print "PASS: group-by works\n")
+(deftest group-by
+  (def groups (group-by even? [1 2 3 4 5 6]))
+  (assert (= (get groups true) [2 4 6]))
+  (assert (= (get groups false) [1 3 5]))
+)
+
 
 ; === split-at ===
-(print "--- split-at ---")
-(def split (split-at 3 [1 2 3 4 5]))
-(print "(split-at 3 [1 2 3 4 5]):" split)
-(assert (= (. split 0) [1 2 3]))
-(assert (= (. split 1) [4 5]))
-(print "PASS: split-at works\n")
+(deftest split-at
+  (def split (split-at 3 [1 2 3 4 5]))
+  (assert (= (. split 0) [1 2 3]))
+  (assert (= (. split 1) [4 5]))
+)
+
 
 ; === split-with ===
-(print "--- split-with ---")
-(def sw (split-with (fn [x] (< x 4)) [1 2 3 4 5 6]))
-(print "(split-with #(< % 4) [1 2 3 4 5 6]):" sw)
-(assert (= (. sw 0) [1 2 3]))
-(assert (= (. sw 1) [4 5 6]))
-(print "PASS: split-with works\n")
+(deftest split-with
+  (def sw (split-with (fn [x] (< x 4)) [1 2 3 4 5 6]))
+  (assert (= (. sw 0) [1 2 3]))
+  (assert (= (. sw 1) [4 5 6]))
+)
+
 
 ; === zipmap ===
-(print "--- zipmap ---")
-(def zm (zipmap [:a :b :c] [1 2 3]))
-(print "(zipmap [:a :b :c] [1 2 3]):" zm)
-(assert (= (get zm :a) 1))
-(assert (= (get zm :b) 2))
-(assert (= (get zm :c) 3))
-(print "PASS: zipmap works\n")
+(deftest zipmap
+  (def zm (zipmap [:a :b :c] [1 2 3]))
+  (assert (= (get zm :a) 1))
+  (assert (= (get zm :b) 2))
+  (assert (= (get zm :c) 3))
+)
+
 
 ; === doall ===
-(print "--- doall ---")
-(def realized (doall (map inc [1 2 3])))
-(print "(doall (map inc [1 2 3])):" realized)
-(assert (= realized [2 3 4]))
-(print "PASS: doall works\n")
+(deftest doall
+  (def realized (doall (map inc [1 2 3])))
+  (assert (= realized [2 3 4]))
+)
+
 
 ; === Convenience macros ===
-(print "\n--- Convenience Macros ---")
+(deftest convenience-macros
 
-; mapv
-(def mv (mapv inc [1 2 3]))
-(print "(mapv inc [1 2 3]):" mv)
-(assert (= mv [2 3 4]))
-(print "PASS: mapv works")
+  ; mapv
+  (def mv (mapv inc [1 2 3]))
+  (assert (= mv [2 3 4]))
 
-; filterv
-(def fv (filterv even? [1 2 3 4 5 6]))
-(print "(filterv even? [1 2 3 4 5 6]):" fv)
-(assert (= fv [2 4 6]))
-(print "PASS: filterv works")
+  ; filterv
+  (def fv (filterv even? [1 2 3 4 5 6]))
+  (assert (= fv [2 4 6]))
 
-; for-all
-(def fa (for-all [x [1 2 3]] (* x x)))
-(print "(for-all [x [1 2 3]] (* x x)):" fa)
-(assert (= fa [1 4 9]))
-(print "PASS: for-all works")
+  ; for-all
+  (def fa (for-all [x [1 2 3]] (* x x)))
+  (assert (= fa [1 4 9]))
 
-; nil? some?
-(assert (nil? nil))
-(assert (not (nil? 1)))
-(assert (some? 1))
-(assert (not (some? nil)))
-(print "PASS: nil? and some? work")
+  ; nil? some?
+  (assert (nil? nil))
+  (assert (not (nil? 1)))
+  (assert (some? 1))
+  (assert (not (some? nil)))
 
-; empty? not-empty
-(assert (empty? []))
-(assert (not (empty? [1])))
-(assert (= (not-empty []) nil))
-(assert (= (not-empty [1 2]) [1 2]))
-(print "PASS: empty? and not-empty work")
+  ; empty? not-empty
+  (assert (empty? []))
+  (assert (not (empty? [1])))
+  (assert (= (not-empty []) nil))
+  (assert (= (not-empty [1 2]) [1 2]))
 
-; second ffirst last butlast
-(assert (= (second [1 2 3]) 2))
-(assert (= (ffirst [[1 2] [3 4]]) 1))
-(assert (= (last [1 2 3]) 3))
-(assert (= (vec (butlast [1 2 3 4])) [1 2 3]))
-(print "PASS: second, ffirst, last, butlast work")
+  ; second ffirst last butlast
+  (assert (= (second [1 2 3]) 2))
+  (assert (= (ffirst [[1 2] [3 4]]) 1))
+  (assert (= (last [1 2 3]) 3))
+  (assert (= (vec (butlast [1 2 3 4])) [1 2 3]))
 
-; comp
-(def f (comp inc inc))
-(assert (= (f 1) 3))
-(print "PASS: comp works")
+  ; comp
+  (def f (comp inc inc))
+  (assert (= (f 1) 3))
 
-; even? odd? pos? neg? zero?
-(assert (even? 2))
-(assert (not (even? 3)))
-(assert (odd? 3))
-(assert (not (odd? 2)))
-(assert (pos? 1))
-(assert (not (pos? -1)))
-(assert (neg? -1))
-(assert (not (neg? 1)))
-(assert (zero? 0))
-(assert (not (zero? 1)))
-(print "PASS: even?, odd?, pos?, neg?, zero? work")
+  ; even? odd? pos? neg? zero?
+  (assert (even? 2))
+  (assert (not (even? 3)))
+  (assert (odd? 3))
+  (assert (not (odd? 2)))
+  (assert (pos? 1))
+  (assert (not (pos? -1)))
+  (assert (neg? -1))
+  (assert (not (neg? 1)))
+  (assert (zero? 0))
+  (assert (not (zero? 1)))
+)
+
 
 ; === Threading with lazy seqs ===
-(print "\n--- Threading with Lazy Seqs ---")
+(deftest threading-with-lazy-seqs
 
-; Typical pipeline pattern: lazy transforms, realize at end
-(def result
-  (->> (range 10)
-       (map inc)
-       (filter even?)
-       (take 3)
-       vec))
-(print "(->> (range 10) (map inc) (filter even?) (take 3) vec):" result)
-(assert (= result [2 4 6]))
-(print "PASS: threading with lazy seqs works\n")
+  ; Typical pipeline pattern: lazy transforms, realize at end
+  (def result
+    (->> (range 10)
+         (map inc)
+         (filter even?)
+         (take 3)
+         vec))
+  (assert (= result [2 4 6]))
 
-; More complex pipeline
-(def complex-result
-  (->> (range 1 20)
-       (filter odd?)
-       (map (fn [x] (* x x)))
-       (take-while (fn [x] (< x 100)))
-       (drop 2)
-       vec))
-(print "Complex pipeline result:" complex-result)
-(assert (= complex-result [25 49 81]))
-(print "PASS: complex pipeline works\n")
+  ; More complex pipeline
+  (def complex-result
+    (->> (range 1 20)
+         (filter odd?)
+         (map (fn [x] (* x x)))
+         (take-while (fn [x] (< x 100)))
+         (drop 2)
+         vec))
+  (assert (= complex-result [25 49 81]))
 
-(print "=== All Lazy Sequence Tests Passed! ===")
+)

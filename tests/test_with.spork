@@ -5,7 +5,6 @@
            [os]
            [tempfile]))
 
-(print "=== Testing with Statement (Context Managers) ===\n")
 
 ; ============================================================================
 ; Helper: Create a simple context manager for testing
@@ -15,7 +14,7 @@
 
 (defn log [msg]
   (.append test-log msg)
-  (print msg))
+  nil)
 
 ; Use contextlib.contextmanager to create test context managers
 (def simple-cm
@@ -29,21 +28,20 @@
 ; 1. Basic with statement - simple binding
 ; ============================================================================
 
-(print "--- 1. Basic with statement ---")
+(deftest case-1-basic-with-statement
 
-(set! test-log (list))
-(with [r (simple-cm)]
-  (log (+ "using: " r)))
+  (test-log.clear)
+  (with [r (simple-cm)]
+    (log (+ "using: " r)))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["enter" "using: resource" "exit"]))
-(print "✓ Basic with works\n")
+  (assert (= (vec test-log) ["enter" "using: resource" "exit"]))
+)
+
 
 ; ============================================================================
 ; 2. With statement without binding
 ; ============================================================================
 
-(print "--- 2. With without binding ---")
 
 (def no-bind-cm
   ((. contextlib contextmanager)
@@ -52,19 +50,19 @@
      (yield)
      (log "no-bind exit"))))
 
-(set! test-log (list))
-(with [(no-bind-cm)]
-  (log "inside"))
+(deftest case-2-with-without-binding
+  (test-log.clear)
+  (with [(no-bind-cm)]
+    (log "inside"))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["no-bind enter" "inside" "no-bind exit"]))
-(print "✓ With without binding works\n")
+  (assert (= (vec test-log) ["no-bind enter" "inside" "no-bind exit"]))
+)
+
 
 ; ============================================================================
 ; 3. Multiple context managers
 ; ============================================================================
 
-(print "--- 3. Multiple context managers ---")
 
 (def cm1
   ((. contextlib contextmanager)
@@ -80,255 +78,242 @@
      (yield "r2")
      (log "cm2 exit"))))
 
-(set! test-log (list))
-(with [a (cm1)
-       b (cm2)]
-  (log (+ "using: " a " and " b)))
+(deftest case-3-multiple-context-managers
+  (test-log.clear)
+  (with [a (cm1)
+         b (cm2)]
+    (log (+ "using: " a " and " b)))
 
-(print "Log:" test-log)
-; Context managers enter in order, exit in reverse order
-(assert (= (vec test-log) ["cm1 enter" "cm2 enter" "using: r1 and r2" "cm2 exit" "cm1 exit"]))
-(print "✓ Multiple context managers work\n")
+  ; Context managers enter in order, exit in reverse order
+  (assert (= (vec test-log) ["cm1 enter" "cm2 enter" "using: r1 and r2" "cm2 exit" "cm1 exit"]))
+)
+
 
 ; ============================================================================
 ; 4. With in function returning value
 ; ============================================================================
 
-(print "--- 4. With returning value from function ---")
 
 (defn read-resource []
   (with [r (simple-cm)]
     (+ "got: " r)))
 
-(set! test-log (list))
-(def result (read-resource))
-(print "Result:" result)
-(print "Log:" test-log)
-(assert (= result "got: resource"))
-(assert (= (vec test-log) ["enter" "exit"]))
-(print "✓ With in function with return works\n")
+(deftest case-4-with-returning-value-from-function
+  (test-log.clear)
+  (def result (read-resource))
+  (assert (= result "got: resource"))
+  (assert (= (vec test-log) ["enter" "exit"]))
+)
+
 
 ; ============================================================================
 ; 5. Destructuring binding
 ; ============================================================================
 
-(print "--- 5. Destructuring binding ---")
+(deftest case-5-destructuring-binding
 
-(def pair-cm
-  ((. contextlib contextmanager)
-   (fn ^generator []
-     (log "pair enter")
-     (yield [1 2])
-     (log "pair exit"))))
+  (def pair-cm
+    ((. contextlib contextmanager)
+     (fn ^generator []
+       (log "pair enter")
+       (yield [1 2])
+       (log "pair exit"))))
 
-(set! test-log (list))
-(with [[a b] (pair-cm)]
-  (log (+ "a=" (str a) " b=" (str b))))
+  (test-log.clear)
+  (with [[a b] (pair-cm)]
+    (log (+ "a=" (str a) " b=" (str b))))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["pair enter" "a=1 b=2" "pair exit"]))
-(print "✓ Destructuring binding works\n")
+  (assert (= (vec test-log) ["pair enter" "a=1 b=2" "pair exit"]))
+)
+
 
 ; ============================================================================
 ; 6. Nested with statements
 ; ============================================================================
 
-(print "--- 6. Nested with statements ---")
+(deftest case-6-nested-with-statements
 
-(set! test-log (list))
-(with [outer (cm1)]
-  (log (+ "outer: " outer))
-  (with [inner (cm2)]
-    (log (+ "inner: " inner))))
+  (test-log.clear)
+  (with [outer (cm1)]
+    (log (+ "outer: " outer))
+    (with [inner (cm2)]
+      (log (+ "inner: " inner))))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["cm1 enter" "outer: r1" "cm2 enter" "inner: r2" "cm2 exit" "cm1 exit"]))
-(print "✓ Nested with works\n")
+  (assert (= (vec test-log) ["cm1 enter" "outer: r1" "cm2 enter" "inner: r2" "cm2 exit" "cm1 exit"]))
+)
+
 
 ; ============================================================================
 ; 7. With in let block
 ; ============================================================================
 
-(print "--- 7. With in let block ---")
+(deftest case-7-with-in-let-block
 
-(set! test-log (list))
-(let [prefix "test"]
-  (with [r (simple-cm)]
-    (log (+ prefix ": " r))))
+  (test-log.clear)
+  (let [prefix "test"]
+    (with [r (simple-cm)]
+      (log (+ prefix ": " r))))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["enter" "test: resource" "exit"]))
-(print "✓ With in let works\n")
+  (assert (= (vec test-log) ["enter" "test: resource" "exit"]))
+)
+
 
 ; ============================================================================
 ; 8. Exception handling in with
 ; ============================================================================
 
-(print "--- 8. Exception handling in with ---")
+(deftest case-8-exception-handling-in-with
 
-(def cleanup-cm
-  ((. contextlib contextmanager)
-   (fn ^generator []
-     (log "cleanup enter")
-     (try
-       (yield "cleanup-resource")
-       (finally
-         (log "cleanup exit"))))))
+  (def cleanup-cm
+    ((. contextlib contextmanager)
+     (fn ^generator []
+       (log "cleanup enter")
+       (try
+         (yield "cleanup-resource")
+         (finally
+           (log "cleanup exit"))))))
 
-(set! test-log (list))
-(try
-  (with [r (cleanup-cm)]
-    (log "before error")
-    (throw (RuntimeError "test error"))
-    (log "after error"))
-  (catch RuntimeError e
-    (log "caught error")))
+  (test-log.clear)
+  (try
+    (with [r (cleanup-cm)]
+      (log "before error")
+      (throw (RuntimeError "test error"))
+      (log "after error"))
+    (catch RuntimeError e
+      (log "caught error")))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["cleanup enter" "before error" "cleanup exit" "caught error"]))
-(print "✓ Exception handling with cleanup works\n")
+  (assert (= (vec test-log) ["cleanup enter" "before error" "cleanup exit" "caught error"]))
+)
+
 
 ; ============================================================================
 ; 9. Real file handling (if available)
 ; ============================================================================
 
-(print "--- 9. Real file handling ---")
+(deftest case-9-real-file-handling
 
-; Create a temp file, write to it, read from it
-(let [tmpdir (tempfile.gettempdir)
-      tmpfile (+ tmpdir "/spork_test_with.txt")]
+  ; Create a temp file, write to it, read from it
+  (let [tmpdir (tempfile.gettempdir)
+        tmpfile (+ tmpdir "/spork_test_with.txt")]
 
-  ; Write to file
-  (with [f (open tmpfile "w")]
-    (.write f "Hello from spork!"))
+    ; Write to file
+    (with [f (open tmpfile "w")]
+      (.write f "Hello from spork!"))
 
-  ; Read from file
-  (with [f (open tmpfile "r")]
-    (let [content (.read f)]
-      (print "File content:" content)
-      (assert (= content "Hello from spork!"))))
+    ; Read from file
+    (with [f (open tmpfile "r")]
+      (let [content (.read f)]
+        (assert (= content "Hello from spork!"))))
 
-  ; Clean up
-  (os.remove tmpfile))
+    ; Clean up
+    (os.remove tmpfile))
 
-(print "✓ Real file handling works\n")
+)
+
 
 ; ============================================================================
 ; 10. Dict destructuring in with
 ; ============================================================================
 
-(print "--- 10. Dict destructuring in with ---")
+(deftest case-10-dict-destructuring-in-with
 
-(def dict-cm
-  ((. contextlib contextmanager)
-   (fn ^generator []
-     (log "dict enter")
-     (yield {:name "Alice" :age 30})
-     (log "dict exit"))))
+  (def dict-cm
+    ((. contextlib contextmanager)
+     (fn ^generator []
+       (log "dict enter")
+       (yield {:name "Alice" :age 30})
+       (log "dict exit"))))
 
-(set! test-log (list))
-(with [{:keys [name age]} (dict-cm)]
-  (log (+ "name=" name " age=" (str age))))
+  (test-log.clear)
+  (with [{:keys [name age]} (dict-cm)]
+    (log (+ "name=" name " age=" (str age))))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["dict enter" "name=Alice age=30" "dict exit"]))
-(print "✓ Dict destructuring in with works\n")
+  (assert (= (vec test-log) ["dict enter" "name=Alice age=30" "dict exit"]))
+)
+
 
 ; ============================================================================
 ; 11. With as last expression in defn
 ; ============================================================================
 
-(print "--- 11. With as last expression in defn ---")
 
 (defn process-with-cm []
   (with [r (simple-cm)]
     42))
 
-(set! test-log (list))
-(def result11 (process-with-cm))
-(print "Result:" result11)
-(assert (= result11 42))
-(assert (= (vec test-log) ["enter" "exit"]))
-(print "✓ With as last expression in defn works\n")
+(deftest case-11-with-as-last-expression-in-defn
+  (test-log.clear)
+  (def result11 (process-with-cm))
+  (assert (= result11 42))
+  (assert (= (vec test-log) ["enter" "exit"]))
+)
+
 
 ; ============================================================================
 ; 12. Mixed binding and no-binding
 ; ============================================================================
 
-(print "--- 12. Mixed binding and no-binding ---")
+(deftest case-12-mixed-binding-and-no-binding
 
-(set! test-log (list))
-(with [r (cm1)
-       (no-bind-cm)]
-  (log (+ "got: " r)))
+  (test-log.clear)
+  (with [r (cm1)
+         (no-bind-cm)]
+    (log (+ "got: " r)))
 
-(print "Log:" test-log)
-(assert (= (vec test-log) ["cm1 enter" "no-bind enter" "got: r1" "no-bind exit" "cm1 exit"]))
-(print "✓ Mixed binding and no-binding works\n")
+  (assert (= (vec test-log) ["cm1 enter" "no-bind enter" "got: r1" "no-bind exit" "cm1 exit"]))
 
-; ============================================================================
-; Summary
-; ============================================================================
+  ; ============================================================================
+  ; Summary
+  ; ============================================================================
 
-(print "=== All with statement tests passed! ===")
-(print "✓ Basic with statement")
-(print "✓ With without binding")
-(print "✓ Multiple context managers")
-(print "✓ With returning value from function")
-(print "✓ Destructuring binding (vector)")
-(print "✓ Nested with statements")
-(print "✓ With in let block")
-(print "✓ Exception handling in with")
-(print "✓ Real file handling")
-(print "✓ Dict destructuring in with")
-(print "✓ With as last expression in defn")
-(print "✓ Mixed binding and no-binding")
+)
+
 
 ; ============================================================================
 ; 13. Test yield (used by context managers above)
 ; ============================================================================
 
-(print "\n--- 13. Testing yield ---")
 
 (defn ^generator simple-generator []
   (yield 1)
   (yield 2)
   (yield 3))
 
-(def gen-result (list (simple-generator)))
-(print "simple-generator result:" gen-result)
-(assert (= (vec gen-result) [1 2 3]))
-(print "✓ Basic yield works")
+(deftest case-13-testing-yield
+  (def gen-result (list (simple-generator)))
+  (assert (= (vec gen-result) [1 2 3]))
+)
+
 
 ; Test yield with expression value
 (defn ^generator double-generator [items]
   (for [x items]
     (yield (* x 2))))
 
-(def double-result (list (double-generator [1 2 3 4])))
-(print "double-generator [1 2 3 4]:" double-result)
-(assert (= (vec double-result) [2 4 6 8]))
-(print "✓ Yield in for loop works")
+(deftest test-yield-with-expression-value
+  (def double-result (list (double-generator [1 2 3 4])))
+  (assert (= (vec double-result) [2 4 6 8]))
+)
+
 
 ; Test yield as expression (returns sent value)
 (defn ^generator echo-generator []
   (let [received (yield "ready")]
     (yield (+ "got: " (str received)))))
 
-(let [gen (echo-generator)]
-  (def first-val (next gen))
-  (print "First yield:" first-val)
-  (assert (= first-val "ready"))
-  (def second-val (.send gen "hello"))
-  (print "After send:" second-val)
-  (assert (= second-val "got: hello")))
-(print "✓ Yield as expression works")
+(deftest test-yield-as-expression-returns-sent-value
+  (let [gen (echo-generator)]
+    (def first-val (next gen))
+    (assert (= first-val "ready"))
+    (def second-val (.send gen "hello"))
+    (assert (= second-val "got: hello")))
+)
+
 
 ; ============================================================================
 ; 14. Test yield-from
 ; ============================================================================
 
-(print "\n--- 14. Testing yield-from ---")
 
 (defn ^generator sub-generator []
   (yield "a")
@@ -340,19 +325,21 @@
   (yield-from (sub-generator))
   (yield "end"))
 
-(def delegate-result (list (delegating-generator)))
-(print "delegating-generator result:" delegate-result)
-(assert (= (vec delegate-result) ["start" "a" "b" "c" "end"]))
-(print "✓ Basic yield-from works")
+(deftest case-14-testing-yield-from
+  (def delegate-result (list (delegating-generator)))
+  (assert (= (vec delegate-result) ["start" "a" "b" "c" "end"]))
+)
+
 
 ; Test yield-from with built-in iterables
 (defn ^generator yield-range [n]
   (yield-from (range n)))
 
-(def range-result (list (yield-range 5)))
-(print "yield-range 5:" range-result)
-(assert (= (vec range-result) [0 1 2 3 4]))
-(print "✓ Yield-from with range works")
+(deftest test-yield-from-with-built-in-iterables
+  (def range-result (list (yield-range 5)))
+  (assert (= (vec range-result) [0 1 2 3 4]))
+)
+
 
 ; Test nested yield-from
 (defn ^generator nested-delegate []
@@ -360,10 +347,11 @@
   (yield-from [3 4])
   (yield-from [5]))
 
-(def nested-result (list (nested-delegate)))
-(print "nested-delegate result:" nested-result)
-(assert (= (vec nested-result) [1 2 3 4 5]))
-(print "✓ Multiple yield-from works")
+(deftest test-nested-yield-from
+  (def nested-result (list (nested-delegate)))
+  (assert (= (vec nested-result) [1 2 3 4 5]))
+)
+
 
 ; Test yield-from in expression context
 (defn ^generator gen-with-result []
@@ -371,16 +359,8 @@
     (yield (+ "done: " (str total)))))
 
 ; Note: yield-from returns the value from StopIteration, which is None for lists
-(def expr-result (list (gen-with-result)))
-(print "gen-with-result:" expr-result)
-(assert (= (vec expr-result) [1 2 3 "done: None"]))
-(print "✓ Yield-from as expression works")
+(deftest test-yield-from-in-expression-context
+  (def expr-result (list (gen-with-result)))
+  (assert (= (vec expr-result) [1 2 3 "done: None"]))
 
-(print "\n=== All yield tests passed! ===")
-(print "✓ Basic yield")
-(print "✓ Yield in loops")
-(print "✓ Yield as expression")
-(print "✓ Basic yield-from")
-(print "✓ Yield-from with iterables")
-(print "✓ Multiple yield-from")
-(print "✓ Yield-from as expression")
+)

@@ -4,7 +4,6 @@
   (:import [dataclasses :refer [dataclass field]]))
 
 ;; Test 1: Basic class with __init__ and methods
-(print "Test 1: Basic class definition")
 
 (defclass Point
   (defn __init__ [self x y]
@@ -17,13 +16,16 @@
   (defn distance-from-origin [self]
     (** (+ (* self.x self.x) (* self.y self.y)) 0.5)))
 
-(def p1 (Point 3 4))
-(print "  Created:" p1)
-(print "  Distance from origin:" (.distance-from-origin p1))
+(deftest basic-class-definition
+  (def point (Point 3 4))
+  (assert (= point.x 3))
+  (assert (= point.y 4))
+  (assert (= (.distance-from-origin point) 5.0))
+  (assert (= (str point) "Point(3, 4)")))
+
 ;; Should be 5.0 (3-4-5 triangle)
 
 ;; Test 2: Inheritance
-(print "\nTest 2: Inheritance")
 
 (defclass Point3D [Point]
   (defn __init__ [self x y z]
@@ -36,13 +38,16 @@
   (defn distance-from-origin [self]
     (** (+ (* self.x self.x) (* self.y self.y) (* self.z self.z)) 0.5)))
 
-(def p3d (Point3D 1 2 2))
-(print "  Created:" p3d)
-(print "  Distance from origin:" (.distance-from-origin p3d))
+(deftest inheritance
+  (def point (Point3D 1 2 2))
+  (assert (isinstance point Point))
+  (assert (= point.z 2))
+  (assert (= (.distance-from-origin point) 3.0))
+  (assert (= (str point) "Point3D(1, 2, 2)")))
+
 ;; Should be 3.0
 
 ;; Test 3: Class with staticmethod and classmethod
-(print "\nTest 3: Static and class methods")
 
 (defclass MathUtils
   (def pi 3.14159)
@@ -56,12 +61,8 @@
   (defn ^staticmethod circle-area [radius]
     (* MathUtils.pi radius radius)))
 
-(print "  Static add(3, 4):" (MathUtils.add 3 4))
-(print "  Class method get-pi:" (MathUtils.get-pi))
-(print "  Circle area (r=2):" (MathUtils.circle-area 2))
 
 ;; Test 4: Class with properties
-(print "\nTest 4: Properties")
 
 (defclass Temperature
   (defn __init__ [self celsius]
@@ -73,40 +74,46 @@
   (defn get-fahrenheit [self]
     (+ (* self._celsius 1.8) 32)))
 
-(def temp (Temperature 100))
-(assert (= temp.celsius 100) "^property should create a readable property")
-(assert (not (callable temp.celsius)) "property access should not return a bound method")
-(print "  Celsius:" temp.celsius)
-(print "  Fahrenheit:" (.get-fahrenheit temp))
+(deftest properties
+  (def temp (Temperature 100))
+  (assert (= temp.celsius 100) "^property should create a readable property")
+  (assert (not (callable temp.celsius)) "property access should not return a bound method")
+)
+
 
 ;; Test 5: Decorated class (dataclass)
-(print "\nTest 5: Dataclass decorator")
 
 (defclass ^dataclass Config
   (field name str "default")
   (field debug bool false)
   (field max-retries int 3))
 
-(def cfg1 (Config))
-(def cfg2 (Config "custom" true 5))
-(print "  Default config:" cfg1)
-(print "  Custom config:" cfg2)
+(deftest dataclass-decorator
+  (def default-config (Config))
+  (def custom-config (Config "custom" true 5))
+  (assert (= default-config.name "default"))
+  (assert (= default-config.debug false))
+  (assert (= default-config.max-retries 3))
+  (assert (= custom-config.name "custom"))
+  (assert (= custom-config.debug true))
+  (assert (= custom-config.max-retries 5)))
 
-;; Test 5b: Dataclass with required fields (no defaults)
-(print "\nTest 5b: Dataclass with required fields")
 
 (defclass ^dataclass Person
   (field name str)
   (field age int)
   (field email str "unknown@example.com"))
 
-(def person1 (Person "Alice" 30))
-(def person2 (Person "Bob" 25 "bob@example.com"))
-(print "  Person 1:" person1)
-(print "  Person 2:" person2)
+(deftest dataclass-required-and-default-fields
+  (def alice (Person "Alice" 30))
+  (def bob (Person "Bob" 25 "bob@example.com"))
+  (assert (= alice.email "unknown@example.com"))
+  (assert (= bob.name "Bob"))
+  (assert (= bob.age 25))
+  (assert (= bob.email "bob@example.com")))
+
 
 ;; Test 6: Multiple inheritance
-(print "\nTest 6: Multiple inheritance")
 
 (defclass Printable
   (defn describe [self]
@@ -126,14 +133,16 @@
   (defn get-type [self]
     (+ "Counter named '" self.name "'")))
 
-(def c1 (Counter "first"))
-(def c2 (Counter "second"))
-(print "  Counter 1:" (.describe c1))
-(print "  Counter 2:" (.describe c2))
-(print "  Total count:" Counter.count)
+(deftest multiple-inheritance
+  (def initial-count Counter.count)
+  (def first-counter (Counter "first"))
+  (def second-counter (Counter "second"))
+  (assert (= (.describe first-counter) "I am Counter named 'first'"))
+  (assert (= (.describe second-counter) "I am Counter named 'second'"))
+  (assert (= Counter.count (+ initial-count 2))))
+
 
 ;; Test 7: Class with class variables
-(print "\nTest 7: Class variables")
 
 (defclass Animal
   (def kingdom "Animalia")
@@ -147,15 +156,17 @@
   (defn __repr__ [self]
     (+ self.name " the " self.species)))
 
-(def dog (Animal "Buddy" "Dog"))
-(def cat (Animal "Whiskers" "Cat"))
-(print "  Kingdom:" Animal.kingdom)
-(print "  Animals created:" Animal.count)
-(print "  Dog:" dog)
-(print "  Cat:" cat)
+(deftest class-variables
+  (def initial-count Animal.count)
+  (def dog (Animal "Buddy" "Dog"))
+  (def cat (Animal "Whiskers" "Cat"))
+  (assert (= Animal.kingdom "Animalia"))
+  (assert (= Animal.count (+ initial-count 2)))
+  (assert (= (str dog) "Buddy the Dog"))
+  (assert (= (str cat) "Whiskers the Cat")))
+
 
 ;; Test 8: Magic methods
-(print "\nTest 8: Magic methods (__add__, __len__, etc.)")
 
 (defclass Vector
   (defn __init__ [self items]
@@ -173,13 +184,11 @@
   (defn __getitem__ [self index]
     (. self.items index)))
 
-(def v1 (Vector [1 2 3]))
-(def v2 (Vector [4 5 6]))
-(def v3 (+ v1 v2))
-(print "  v1:" v1)
-(print "  v2:" v2)
-(print "  v1 + v2:" v3)
-(print "  len(v3):" (len v3))
-(print "  v3[0]:" (. v3 items 0))
-
-(print "\nAll defclass tests passed!")
+(deftest magic-methods-add-len-etc
+  (def first-vector (Vector [1 2 3]))
+  (def second-vector (Vector [4 5 6]))
+  (def combined (+ first-vector second-vector))
+  (assert (= (len combined) 6))
+  (assert (= (. combined items 0) 1))
+  (assert (= (. combined items 5) 6))
+  (assert (= (str combined) "Vector([1, 2, 3, 4, 5, 6])")))

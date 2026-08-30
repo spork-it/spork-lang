@@ -45,7 +45,7 @@ def _print_test_exception(exception: Exception) -> None:
     traceback.print_exception(type(exception), exception, tb, file=sys.stdout)
 
 
-def run_test_file(path: Path, *, legacy: bool = False) -> TestRunSummary:
+def run_test_file(path: Path) -> TestRunSummary:
     """Load and run one test file, continuing after declared test failures."""
     summary = TestRunSummary()
     clear_registry()
@@ -72,13 +72,6 @@ def run_test_file(path: Path, *, legacy: bool = False) -> TestRunSummary:
                 summary.passed += 1
         return summary
 
-    if legacy:
-        # Loading the file already executed its top-level assertions and other
-        # script-style checks. Reaching this point means the legacy file passed.
-        print("[pass] legacy file", flush=True)
-        summary.passed += 1
-        return summary
-
     print("[error] no declared tests found", flush=True)
     summary.failed += 1
     return summary
@@ -92,14 +85,13 @@ def _write_result(path: Path, summary: TestRunSummary) -> None:
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run one Spork test file")
     parser.add_argument("file", type=Path)
-    parser.add_argument("--legacy", action="store_true")
     parser.add_argument("--result", type=Path)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = create_parser().parse_args(argv)
-    summary = run_test_file(args.file.resolve(), legacy=args.legacy)
+    summary = run_test_file(args.file.resolve())
     if args.result is not None:
         _write_result(args.result, summary)
     return 0 if summary.success else 1

@@ -1,111 +1,95 @@
 ; Test file for Stage 0 cleanup: do, booleans, and nil
 
-(print "=== Testing booleans and nil ===")
+(deftest case-1
 
-(def my-true true)
-(def my-false false)
-(def my-nil nil)
+  (def my-true true)
+  (def my-false false)
+  (def my-nil nil)
 
-(print "true is:" my-true)
-(print "false is:" my-false)
-(print "nil is:" my-nil)
+  (assert (= my-true true))
+  (assert (= my-false false))
+  (assert (= my-nil nil))
+  (assert (= (if true "yes" "no") "yes"))
+  (assert (= (if false "yes" "no") "no"))
+  (assert (= (if nil "yes" "no") "no"))
+)
+
 
 ; Test in if expressions
-(print "if true:" (if true "yes" "no"))
-(print "if false:" (if false "yes" "no"))
-(print "if nil:" (if nil "yes" "no"))
 
-(print "\n=== Testing do at statement level ===")
 
 ; do at statement level should execute multiple statements in sequence
-(defn test-stmt-do []
-  (print "Function starting")
+(defn test-stmt-do [events]
   (do
-    (print "Statement 1")
-    (print "Statement 2")
-    (print "Statement 3"))
-  (print "Function ending"))
+    (.append events :first)
+    (.append events :second)
+    (.append events :third)))
 
-(test-stmt-do)
+(deftest test-in-if-expressions
+  (def events (list))
+  (test-stmt-do events)
+  (assert (= (vec events) [:first :second :third]))
 
-(print "\n=== Testing do at expression level ===")
+  ; do at expression level should return the last value
+  (def result1 (do
+                 42))
 
-; do at expression level should return the last value
-(def result1 (do
-               (print "Computing...")
-               (print "Still computing...")
-               42))
+  (assert (= result1 42))
 
-(print "result1 =" result1)
+  ; do in function call
 
-; do in function call
-(print "do in call:" (do
-                        (print "Side effect 1")
-                        (print "Side effect 2")
-                        "final-value"))
+  ; do with different types
+  (def result2 (do
+                 1
+                 2
+                 3
+                 "hello"
+                 [1 2 3]))
 
-; do with different types
-(def result2 (do
-               1
-               2
-               3
-               "hello"
-               [1 2 3]))
+  (assert (= result2 [1 2 3]))
 
-(print "result2 =" result2)
+  ; do returning boolean
+  (def result3 (do
+                 true))
 
-; do returning boolean
-(def result3 (do
-               (print "Checking...")
-               true))
+  (assert (= result3 true))
 
-(print "result3 =" result3)
+  ; do returning nil
+  (def result4 (do
+                 nil))
 
-; do returning nil
-(def result4 (do
-               (print "Returning nil...")
-               nil))
+  (assert (= result4 nil))
 
-(print "result4 =" result4)
 
-(print "\n=== Testing do in if expressions ===")
+  ; do in if branches (expression context)
+  (def x (if true
+           (do
+             "true-result")
+           (do
+             "false-result")))
 
-; do in if branches (expression context)
-(def x (if true
-         (do
-           (print "True branch: step 1")
-           (print "True branch: step 2")
-           "true-result")
-         (do
-           (print "False branch: step 1")
-           "false-result")))
+  (assert (= x "true-result"))
 
-(print "if-do result:" x)
 
-(print "\n=== Testing nested do ===")
+  (def nested (do
+                (do
+                  "inner-value")
+                "outer-value"))
 
-(def nested (do
-              (print "Outer 1")
-              (do
-                (print "Inner 1")
-                (print "Inner 2")
-                "inner-value")
-              (print "Outer 2")
-              "outer-value"))
+  (assert (= nested "outer-value"))
 
-(print "nested result:" nested)
+)
 
-(print "\n=== Testing empty and single-element do ===")
 
 ; Empty do at statement level
 (defn test-empty-do []
-  (do)
-  (print "After empty do"))
+  (do))
 
-(test-empty-do)
+(deftest test-in-if-expressions-2
+  (assert (= (test-empty-do) nil))
 
-; Single element do
-(def single (do 99))
-(print "single do result:" single)
+  ; Single element do
+  (def single (do 99))
+  (assert (= single 99))
 
-(print "\n=== All tests complete! ===")
+)

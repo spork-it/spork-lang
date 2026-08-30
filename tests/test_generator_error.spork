@@ -5,42 +5,40 @@
 (ns test-generator-error
   (:import [asyncio]))
 
-(print "=== Testing Generator Annotation Requirement ===\n")
 
 ; Test 1: Verify that ^generator works correctly
-(print "Test 1: Function with ^generator annotation")
 (defn ^generator valid-gen []
   (yield 1)
   (yield 2)
   (yield 3))
 
-(def result1 (vec (valid-gen)))
-(print "Result:" result1)
-(assert (= result1 [1 2 3]))
-(print "PASS: ^generator annotation works\n")
+(deftest function-with-generator-annotation
+  (def result1 (vec (valid-gen)))
+  (assert (= result1 [1 2 3]))
+)
+
 
 ; Test 2: Verify anonymous function with ^generator
-(print "Test 2: Anonymous function with ^generator")
 (def anon-gen (fn ^generator []
                 (yield "a")
                 (yield "b")))
-(def result2 (vec (anon-gen)))
-(print "Result:" result2)
-(assert (= result2 ["a" "b"]))
-(print "PASS: (fn ^generator ...) works\n")
+(deftest anonymous-function-with-generator
+  (def result2 (vec (anon-gen)))
+  (assert (= result2 ["a" "b"]))
+)
+
 
 ; Test 3: Generator with yield-from
-(print "Test 3: Generator with yield-from")
 (defn ^generator delegate-gen []
   (yield-from [10 20 30]))
 
-(def result3 (vec (delegate-gen)))
-(print "Result:" result3)
-(assert (= result3 [10 20 30]))
-(print "PASS: yield-from with ^generator works\n")
+(deftest generator-with-yield-from
+  (def result3 (vec (delegate-gen)))
+  (assert (= result3 [10 20 30]))
+)
+
 
 ; Test 4: Async generator (both ^async and ^generator)
-(print "Test 4: Async generator with ^async ^generator")
 
 (defn ^async ^generator async-gen [n]
   (for [i (range n)]
@@ -53,32 +51,20 @@
     (.append results x))
   (vec results))
 
-(def result4 (asyncio.run (test-async-gen)))
-(print "Result:" result4)
-(assert (= result4 [0 1 2]))
-(print "PASS: ^async ^generator works\n")
+(deftest ^async async-generator-with-async-generator
+  (def result (await (test-async-gen)))
+  (assert (= result [0 1 2])))
+
 
 ; Test 5: Multi-arity generator
-(print "Test 5: Multi-arity generator")
 (defn ^generator multi-gen
   ([x] (yield x))
   ([x y] (yield x) (yield y)))
 
-(def result5a (vec (multi-gen 42)))
-(def result5b (vec (multi-gen 1 2)))
-(print "Result (1 arg):" result5a)
-(print "Result (2 args):" result5b)
-(assert (= result5a [42]))
-(assert (= result5b [1 2]))
-(print "PASS: Multi-arity generator works\n")
+(deftest multi-arity-generator
+  (def result5a (vec (multi-gen 42)))
+  (def result5b (vec (multi-gen 1 2)))
+  (assert (= result5a [42]))
+  (assert (= result5b [1 2]))
 
-(print "=== All generator annotation tests passed! ===")
-(print "")
-(print "Note: Functions containing yield/yield-from without ^generator")
-(print "will now raise a SyntaxError at compile time:")
-(print "  'Function X contains yield but is not marked with ^generator.'")
-(print "")
-(print "Examples of correct usage:")
-(print "  (defn ^generator my-gen [] (yield 1))")
-(print "  (fn ^generator [] (yield 1))")
-(print "  (defn ^async ^generator my-async-gen [] (yield 1))")
+)

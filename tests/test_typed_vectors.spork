@@ -4,140 +4,138 @@
 (ns test-typed-vectors
   (:import [collections.abc :as abc]))
 
-(print "\n=== Type-Specialized Vector Tests ===\n")
 
 ;; === Phase 3: Factory Functions ===
-(print "--- Factory Functions (vec_f64, vec_i64) ---")
 
 ;; Test vec_f64
 (def doubles (vec_f64 1.0 2.0 3.0 4.0 5.0))
-(print "doubles:" doubles)
-(print "type:" (type doubles))
-(assert (= (type doubles) DoubleVector))
-(assert (= (len doubles) 5))
-(assert (= (nth doubles 0) 1.0))
-(assert (= (nth doubles 4) 5.0))
+(deftest test-vec-f64
+  (assert (= (type doubles) DoubleVector))
+  (assert (= (len doubles) 5))
+  (assert (= (nth doubles 0) 1.0))
+  (assert (= (nth doubles 4) 5.0))
+)
+
 
 ;; Test vec_i64
 (def longs (vec_i64 10 20 30 40 50))
-(print "longs:" longs)
-(print "type:" (type longs))
-(assert (= (type longs) IntVector))
-(assert (= (len longs) 5))
-(assert (= (nth longs 1) 20))
+(deftest test-vec-i64
+  (assert (= (type longs) IntVector))
+  (assert (= (len longs) 5))
+  (assert (= (nth longs 1) 20))
+)
+
 
 ;; Test empty vectors
-(def empty-doubles (vec_f64))
-(assert (= (len empty-doubles) 0))
-(print "Empty vec_f64 works")
+(deftest test-empty-vectors
+  (def empty-doubles (vec_f64))
+  (assert (= (len empty-doubles) 0))
 
-(def empty-longs (vec_i64))
-(assert (= (len empty-longs) 0))
-(print "Empty vec_i64 works")
+  (def empty-longs (vec_i64))
+  (assert (= (len empty-longs) 0))
+)
+
 
 ;; === Immutability Tests ===
-(print "\n--- Immutability ---")
+(deftest immutability
 
-(def original (vec_f64 1.0 2.0 3.0))
-(def with-new (.conj original 4.0))
-(print "original after conj:" original)
-(print "with-new:" with-new)
-(assert (= (len original) 3) "Original should be unchanged")
-(assert (= (len with-new) 4) "New vector should have 4 elements")
-(assert (= (nth with-new 3) 4.0))
+  (def original (vec_f64 1.0 2.0 3.0))
+  (def with-new (.conj original 4.0))
+  (assert (= (len original) 3) "Original should be unchanged")
+  (assert (= (len with-new) 4) "New vector should have 4 elements")
+  (assert (= (nth with-new 3) 4.0))
+)
+
 
 ;; === Iteration Tests ===
-(print "\n--- Iteration ---")
+(deftest iteration
 
-(def sum 0.0)
-(for [x doubles]
-  (set! sum (+ sum x)))
-(print "Sum of doubles:" sum)
-(assert (= sum 15.0))
+  (def sum 0.0)
+  (for [x doubles]
+    (set! sum (+ sum x)))
+  (assert (= sum 15.0))
 
-(print "List from iteration:" (list doubles))
-;; Note: [1.0 2.0 ...] creates a Vector, so compare with list()
-(assert (= (list doubles) (list [1.0 2.0 3.0 4.0 5.0])))
+  ;; Note: [1.0 2.0 ...] creates a Vector, so compare with list()
+  (assert (= (list doubles) (list [1.0 2.0 3.0 4.0 5.0])))
+)
+
 
 ;; === Phase 4: Compiler Integration ===
-(print "\n--- Compiler Integration (^(Vector float/int) annotation) ---")
+(deftest compiler-integration-vector-float-int-annotation
 
-;; This should automatically use vec_f64 due to the type annotation
-(def ^(Vector float) annotated-floats [1.0 2.0 3.0 4.0])
-(print "annotated-floats:" annotated-floats)
-(print "type:" (type annotated-floats))
-(assert (= (type annotated-floats) DoubleVector)
-        "^(Vector float) should produce DoubleVector")
+  ;; This should automatically use vec_f64 due to the type annotation
+  (def ^(Vector float) annotated-floats [1.0 2.0 3.0 4.0])
+  (assert (= (type annotated-floats) DoubleVector)
+          "^(Vector float) should produce DoubleVector")
 
-;; This should automatically use vec_i64 due to the type annotation
-(def ^(Vector int) annotated-ints [10 20 30 40])
-(print "annotated-ints:" annotated-ints)
-(print "type:" (type annotated-ints))
-(assert (= (type annotated-ints) IntVector)
-        "^(Vector int) should produce IntVector")
+  ;; This should automatically use vec_i64 due to the type annotation
+  (def ^(Vector int) annotated-ints [10 20 30 40])
+  (assert (= (type annotated-ints) IntVector)
+          "^(Vector int) should produce IntVector")
 
-;; Verify values are correct
-(assert (= (len annotated-floats) 4))
-(assert (= (nth annotated-floats 0) 1.0))
-(assert (= (nth annotated-floats 3) 4.0))
+  ;; Verify values are correct
+  (assert (= (len annotated-floats) 4))
+  (assert (= (nth annotated-floats 0) 1.0))
+  (assert (= (nth annotated-floats 3) 4.0))
 
-(assert (= (len annotated-ints) 4))
-(assert (= (nth annotated-ints 0) 10))
-(assert (= (nth annotated-ints 3) 40))
+  (assert (= (len annotated-ints) 4))
+  (assert (= (nth annotated-ints 0) 10))
+  (assert (= (nth annotated-ints 3) 40))
+)
+
 
 ;; === Large Vector Tests ===
-(print "\n--- Large Vectors (>32 elements, tests trie structure) ---")
+(deftest large-vectors-32-elements-tests-trie-structure
 
-;; Create a large double vector (tests trie structure beyond single tail)
-(def large-floats (apply vec_f64 (map float (range 100))))
-(print "Large float vector length:" (len large-floats))
-(assert (= (len large-floats) 100))
-(assert (= (nth large-floats 0) 0.0))
-(assert (= (nth large-floats 50) 50.0))
-(assert (= (nth large-floats 99) 99.0))
+  ;; Create a large double vector (tests trie structure beyond single tail)
+  (def large-floats (apply vec_f64 (map float (range 100))))
+  (assert (= (len large-floats) 100))
+  (assert (= (nth large-floats 0) 0.0))
+  (assert (= (nth large-floats 50) 50.0))
+  (assert (= (nth large-floats 99) 99.0))
 
-;; Sum should be 0+1+2+...+99 = 4950
-(def large-sum 0.0)
-(for [x large-floats]
-  (set! large-sum (+ large-sum x)))
-(print "Sum of large-floats:" large-sum)
-(assert (= large-sum 4950.0))
+  ;; Sum should be 0+1+2+...+99 = 4950
+  (def large-sum 0.0)
+  (for [x large-floats]
+    (set! large-sum (+ large-sum x)))
+  (assert (= large-sum 4950.0))
+)
+
 
 ;; === Hash Tests ===
-(print "\n--- Hashing ---")
+(deftest hashing
 
-(def v1 (vec_f64 1.0 2.0 3.0))
-(def v2 (vec_f64 1.0 2.0 3.0))
-(def v3 (vec_f64 1.0 2.0 4.0))
+  (def v1 (vec_f64 1.0 2.0 3.0))
+  (def v2 (vec_f64 1.0 2.0 3.0))
+  (def v3 (vec_f64 1.0 2.0 4.0))
 
-(print "hash(v1):" (hash v1))
-(print "hash(v2):" (hash v2))
-(print "hash(v3):" (hash v3))
-(assert (= (hash v1) (hash v2)) "Equal vectors should have equal hashes")
+  (assert (= (hash v1) (hash v2)) "Equal vectors should have equal hashes")
+)
+
 
 ;; === Type Registration Tests ===
-(print "\n--- Type Registration (Sequence ABC) ---")
+(deftest type-registration-sequence-abc
 
-(assert (isinstance doubles abc.Sequence) "DoubleVector should be a Sequence")
-(assert (isinstance longs abc.Sequence) "IntVector should be a Sequence")
-(print "ABC registration: PASSED")
+  (assert (isinstance doubles abc.Sequence) "DoubleVector should be a Sequence")
+  (assert (isinstance longs abc.Sequence) "IntVector should be a Sequence")
+)
+
 
 ;; === Edge Cases ===
-(print "\n--- Edge Cases ---")
+(deftest edge-cases
 
-;; Single element
-(def single-f (vec_f64 42.0))
-(assert (= (len single-f) 1))
-(assert (= (nth single-f 0) 42.0))
+  ;; Single element
+  (def single-f (vec_f64 42.0))
+  (assert (= (len single-f) 1))
+  (assert (= (nth single-f 0) 42.0))
 
-;; Negative indexing
-(def neg-test (vec_i64 1 2 3 4 5))
-(assert (= (nth neg-test -1) 5))
-(assert (= (nth neg-test -2) 4))
+  ;; Negative indexing
+  (def neg-test (vec_i64 1 2 3 4 5))
+  (assert (= (nth neg-test -1) 5))
+  (assert (= (nth neg-test -2) 4))
 
-;; Conversion from int to float
-(def mixed (vec_f64 1 2 3))  ;; ints should be converted to floats
-(assert (= (nth mixed 0) 1.0))
-(print "Int to float conversion: PASSED")
+  ;; Conversion from int to float
+  (def mixed (vec_f64 1 2 3))  ;; ints should be converted to floats
+  (assert (= (nth mixed 0) 1.0))
 
-(print "\n=== All Type-Specialized Vector Tests Passed! ===\n")
+)

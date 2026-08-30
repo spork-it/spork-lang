@@ -23,12 +23,42 @@ def flatten_stmts(stmts):
 
 
 def contains_yield(nodes) -> bool:
-    """Return whether AST nodes contain ``yield`` or ``yield from``."""
+    """Return whether AST nodes yield in the current function scope.
+
+    Yields owned by nested functions do not make the enclosing function a
+    generator. This distinction matters for tests and other functions that
+    define a local generator helper.
+    """
+
+    class YieldFinder(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.found = False
+
+        def visit_Yield(self, node: ast.Yield) -> None:
+            self.found = True
+
+        def visit_YieldFrom(self, node: ast.YieldFrom) -> None:
+            self.found = True
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            return
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            return
+
+        def visit_Lambda(self, node: ast.Lambda) -> None:
+            return
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            return
+
     if not isinstance(nodes, list):
         nodes = [nodes]
+    finder = YieldFinder()
     for node in nodes:
         if isinstance(node, (ast.Yield, ast.YieldFrom)):
             return True
-        if any(isinstance(child, (ast.Yield, ast.YieldFrom)) for child in ast.walk(node)):
+        finder.visit(node)
+        if finder.found:
             return True
     return False

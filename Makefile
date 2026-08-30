@@ -62,29 +62,7 @@ install-dev: $(VENV)
 # ============================================================================
 
 test: $(VENV)
-	@echo "Running all tests..."
-	@failed=0; \
-	passed=0; \
-	for test in tests/test_*.spork; do \
-		echo ""; \
-		echo "=== Running $$test ==="; \
-		if $(PYTHON) -m spork "$$test"; then \
-			passed=$$((passed + 1)); \
-		else \
-			failed=$$((failed + 1)); \
-			echo "FAILED: $$test"; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "=== Test Summary ==="; \
-	echo "Passed: $$passed"; \
-	echo "Failed: $$failed"; \
-	if [ $$failed -gt 0 ]; then \
-		echo "Some tests failed!"; \
-		exit 1; \
-	else \
-		echo "All tests passed!"; \
-	fi
+	@$(PYTHON) tools/run_spork_tests.py
 
 verify-docs: $(VENV)
 	@$(PYTHON) tools/verify_docs.py
@@ -94,8 +72,7 @@ test-one: $(VENV)
 		echo "Usage: make test-one TEST=tests/test_pds.spork"; \
 		exit 1; \
 	fi
-	@echo "Running $(TEST)..."
-	$(PYTHON) -m spork "$(TEST)"
+	@$(PYTHON) tools/run_spork_tests.py "$(TEST)"
 
 repl: $(VENV)
 	$(PYTHON) -m spork

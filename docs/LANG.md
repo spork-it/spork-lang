@@ -205,7 +205,7 @@ Persistent collections participate in Spork's sequence operations. See [Sequence
   (assert (= result 42)))
 ```
 
-A test passes when its body returns normally and fails when it raises an uncaught exception. Return values are ignored. `^async` is the only supported test metadata. Names must be valid unqualified symbols, duplicate normalized names in one file are invalid, and `deftest` cannot be nested in a function or expression. Discovery and legacy test-file conventions are documented under [Testing](PROJECTS.md#testing).
+A test passes when its body returns normally and fails when it raises an uncaught exception. Return values are ignored. `^async` is the only supported test metadata. Names must be valid unqualified symbols, duplicate normalized names in one file are invalid, and `deftest` cannot be nested in a function or expression. Discovery is documented under [Testing](PROJECTS.md#testing).
 
 ### Let Bindings
 

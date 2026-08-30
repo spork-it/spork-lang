@@ -41,7 +41,6 @@
   (fn []
     (let [x 1
           y 2]
-      (print "calculating...")
       (+ x y))))
 
 ;; Let with empty body
@@ -73,8 +72,8 @@
 ;; Let with side effects
 (def test-let-with-side-effects
   (fn []
-    (let [x (do (print "computing x") 42)
-          y (do (print "computing y") 8)]
+    (let [x (do nil 42)
+          y (do nil 8)]
       (+ x y))))
 
 ;; Let with control flow in body
@@ -103,23 +102,44 @@
         (catch Exception e
           0)))))
 
-;; Run all tests
-(def run-tests
-  (fn []
-    (print "test-simple-let:" (test-simple-let))
-    (print "test-multiple-bindings:" (test-multiple-bindings))
-    (print "test-sequential-bindings:" (test-sequential-bindings))
-    (print "test-nested-fn-in-binding:" (test-nested-fn-in-binding))
-    (print "test-nested-fn-in-body:" (test-nested-fn-in-body))
-    (print "test-multiple-body-forms:" (test-multiple-body-forms))
-    (print "test-empty-body:" (test-empty-body))
-    (print "test-nested-lets:" (test-nested-lets))
-    (print "test-let-as-argument:" (test-let-as-argument))
-    (print "test-let-with-side-effects:" (test-let-with-side-effects))
-    (print "test-let-with-if:" (test-let-with-if))
-    (print "test-let-with-while:" (test-let-with-while))
-    (print "test-let-with-try:" (test-let-with-try))
-    (print "All tests completed!")))
+(deftest simple-let
+  (assert (= (test-simple-let) 10)))
 
-;; Run the tests
-(run-tests)
+(deftest multiple-bindings
+  (assert (= (test-multiple-bindings) 6)))
+
+(deftest sequential-bindings
+  (assert (= (test-sequential-bindings) 12)))
+
+(deftest nested-function-in-binding
+  (assert (= (test-nested-fn-in-binding) 42)))
+
+(deftest nested-function-in-body
+  (assert (= (test-nested-fn-in-body) 42)))
+
+(deftest multiple-body-forms
+  (assert (= (test-multiple-body-forms) 3)))
+
+(deftest empty-let-body
+  (assert (= (test-empty-body) nil)))
+
+(deftest nested-lets
+  (assert (= (test-nested-lets) 6)))
+
+(deftest complex-expressions
+  (assert (= (test-complex-expressions) 30)))
+
+(deftest let-as-function-argument
+  (assert (= (test-let-as-argument) 18)))
+
+(deftest let-binding-side-effects
+  (assert (= (test-let-with-side-effects) 50)))
+
+(deftest let-with-conditional
+  (assert (= (test-let-with-if) 20)))
+
+(deftest let-with-while
+  (assert (= (test-let-with-while) 5)))
+
+(deftest let-with-try
+  (assert (= (test-let-with-try) 5)))

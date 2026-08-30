@@ -7,30 +7,21 @@
 ; === Test helpers ===
 
 (defn assert-eq [expected actual msg]
-  (if (= expected actual)
-    (do
-      (print (fmt "✓ {}" msg))
-      true)
-    (do
-      (print (fmt "✗ {} - expected: {} got: {}" msg expected actual))
-      false)))
+  (assert (= expected actual)
+          (fmt "{} - expected: {} got: {}" msg expected actual))
+  true)
 
 (defn assert-true [val msg]
   (assert-eq true val msg))
 
 (defn assert-contains [s substr msg]
-  (if (in substr s)
-    (do
-      (print (fmt "✓ {}" msg))
-      true)
-    (do
-      (print (fmt "✗ {} - '{}' not found in '{}'" msg substr s))
-      false)))
+  (assert (in substr s)
+          (fmt "{} - '{}' not found in '{}'" msg substr s))
+  true)
 
 ; === Basic Map serialization ===
 
-(defn test-simple-map []
-  (print "\n--- Testing simple map serialization ---")
+(deftest test-simple-map
   (let [m {:name "Spork" :version 1}
         result (json.dumps m)]
     [(assert-contains result "\"name\"" "Map key serialized")
@@ -38,8 +29,7 @@
      (assert-contains result "\"version\"" "Map key 'version' serialized")
      (assert-contains result "1" "Map integer value serialized")]))
 
-(defn test-nested-map []
-  (print "\n--- Testing nested map serialization ---")
+(deftest test-nested-map
   (let [m {:outer {:inner "value"}}
         result (json.dumps m)]
     [(assert-contains result "\"outer\"" "Outer key serialized")
@@ -48,28 +38,24 @@
 
 ; === Vector serialization ===
 
-(defn test-simple-vector []
-  (print "\n--- Testing simple vector serialization ---")
+(deftest test-simple-vector
   (let [v [1 2 3]
         result (json.dumps v)]
     [(assert-eq "[1, 2, 3]" result "Vector serialized to JSON array")]))
 
-(defn test-nested-vector []
-  (print "\n--- Testing nested vector serialization ---")
+(deftest test-nested-vector
   (let [v [[1 2] [3 4]]
         result (json.dumps v)]
     [(assert-eq "[[1, 2], [3, 4]]" result "Nested vector serialized")]))
 
-(defn test-mixed-vector []
-  (print "\n--- Testing mixed type vector serialization ---")
+(deftest test-mixed-vector
   (let [v [1 "two" 3.0 true nil]
         result (json.dumps v)]
     [(assert-eq "[1, \"two\", 3.0, true, null]" result "Mixed vector serialized")]))
 
 ; === Set serialization ===
 
-(defn test-set-serialization []
-  (print "\n--- Testing set serialization ---")
+(deftest test-set-serialization
   (let [s #{1 2 3}
         result (json.dumps s)
         ; Sets become arrays but order may vary
@@ -81,14 +67,12 @@
 
 ; === Keyword serialization ===
 
-(defn test-keyword-as-value []
-  (print "\n--- Testing keyword as value ---")
+(deftest test-keyword-as-value
   (let [m {:status :active}
         result (json.dumps m)]
     [(assert-contains result ":active" "Keyword value includes colon")]))
 
-(defn test-keyword-as-key []
-  (print "\n--- Testing keyword as key ---")
+(deftest test-keyword-as-key
   (let [m {:name "test"}
         result (json.dumps m)]
     ; Keywords as keys should NOT have colon (cleaner JSON)
@@ -96,8 +80,7 @@
 
 ; === Complex nested structures ===
 
-(defn test-complex-structure []
-  (print "\n--- Testing complex nested structure ---")
+(deftest test-complex-structure
   (let [data {:users [{:name "Alice" :age 30}
                       {:name "Bob" :age 25}]
               :meta {:version 1 :active true}}
@@ -111,8 +94,7 @@
 
 ; === Pretty printing ===
 
-(defn test-dumps-pretty []
-  (print "\n--- Testing pretty printing ---")
+(deftest test-dumps-pretty
   (let [m {:a 1}
         result (json.dumps-pretty m)]
     [(assert-contains result "\n" "Pretty output contains newlines")
@@ -120,8 +102,7 @@
 
 ; === Round-trip (dumps then loads) ===
 
-(defn test-roundtrip []
-  (print "\n--- Testing round-trip serialization ---")
+(deftest test-roundtrip
   (let [original {"name" "test" "value" 42 "items" [1 2 3]}
         json-str (json.dumps original)
         parsed (json.loads json-str)]
@@ -131,8 +112,7 @@
 
 ; === loads returns Spork types ===
 
-(defn test-loads-returns-spork-types []
-  (print "\n--- Testing loads returns Spork types ---")
+(deftest test-loads-returns-spork-types
   (let [result (json.loads "{\"x\": 1, \"items\": [1, 2, 3]}")]
     ; Check that we get Spork Map and Vector, not Python dict and list
     [(assert-eq "Map" (. (type result) __name__) "loads returns Spork Map")
@@ -140,129 +120,50 @@
      (assert-eq 1 (get result "x") "Can access map values")
      (assert-eq 3 (len (get result "items")) "Vector has correct length")]))
 
-(defn test-loads-keywordize-keys []
-  (print "\n--- Testing loads with keywordize-keys ---")
+(deftest test-loads-keywordize-keys
   (let [result (json.loads "{\"name\": \"Alice\", \"age\": 30}" true)]
     [(assert-eq "Alice" (get result :name) "Keyword key :name works")
      (assert-eq 30 (get result :age) "Keyword key :age works")]))
 
 ; === loads/parse ===
 
-(defn test-loads []
-  (print "\n--- Testing JSON parsing ---")
+(deftest test-loads
   (let [result (json.loads "{\"x\": 1, \"y\": 2}")]
     [(assert-eq 1 (get result "x") "Parsed x value")
      (assert-eq 2 (get result "y") "Parsed y value")]))
 
-(defn test-parse-alias []
-  (print "\n--- Testing parse alias ---")
+(deftest test-parse-alias
   (let [result (json.parse "[1, 2, 3]")]
     [(assert-eq 3 (len result) "Parse alias works")]))
 
 ; === generate alias ===
 
-(defn test-generate-alias []
-  (print "\n--- Testing generate alias ---")
+(deftest test-generate-alias
   (let [result (json.generate {:key "value"})]
     [(assert-contains result "\"key\"" "Generate alias works")]))
 
 ; === Edge cases ===
 
-(defn test-empty-structures []
-  (print "\n--- Testing empty structures ---")
+(deftest test-empty-structures
   [(assert-eq "{}" (json.dumps {}) "Empty map")
    (assert-eq "[]" (json.dumps []) "Empty vector")])
 
-(defn test-special-characters []
-  (print "\n--- Testing special characters in strings ---")
+(deftest test-special-characters
   (let [m {:text "hello\nworld"}
         result (json.dumps m)]
     [(assert-contains result "\\n" "Newline escaped in JSON")]))
 
-(defn test-unicode []
-  (print "\n--- Testing unicode ---")
+(deftest test-unicode
   (let [m {:emoji "👍" :japanese "こんにちは"}
         result (json.dumps m)]
     ; With ensure_ascii=True (default), unicode gets escaped
     ; Just verify it serializes without error
     [(assert-true (> (len result) 0) "Unicode map serializes")]))
 
-(defn test-numeric-types []
-  (print "\n--- Testing numeric types ---")
+(deftest test-numeric-types
   (let [m {:int 42 :float 3.14 :neg -10 :zero 0}
         result (json.dumps m)]
     [(assert-contains result "42" "Integer serialized")
      (assert-contains result "3.14" "Float serialized")
      (assert-contains result "-10" "Negative serialized")
      (assert-contains result "0" "Zero serialized")]))
-
-; === Count results helper ===
-
-(defn count-results [results]
-  (reduce (fn [acc r]
-            (if r
-              (assoc acc :passed (+ 1 (get acc :passed)))
-              (assoc acc :failed (+ 1 (get acc :failed)))))
-          {:passed 0 :failed 0}
-          (flatten results)))
-
-; === Run all tests ===
-
-(defn run-tests []
-  (print "=== std.json Test Suite ===")
-
-  (let [results
-        (concat
-          ; Map tests
-          (test-simple-map)
-          (test-nested-map)
-
-          ; Vector tests
-          (test-simple-vector)
-          (test-nested-vector)
-          (test-mixed-vector)
-
-          ; Set tests
-          (test-set-serialization)
-
-          ; Keyword tests
-          (test-keyword-as-value)
-          (test-keyword-as-key)
-
-          ; Complex structure tests
-          (test-complex-structure)
-
-          ; Pretty printing
-          (test-dumps-pretty)
-
-          ; Round-trip
-          (test-roundtrip)
-
-          ; Spork type returns
-          (test-loads-returns-spork-types)
-          (test-loads-keywordize-keys)
-
-          ; Parsing
-          (test-loads)
-          (test-parse-alias)
-          (test-generate-alias)
-
-          ; Edge cases
-          (test-empty-structures)
-          (test-special-characters)
-          (test-unicode)
-          (test-numeric-types))
-
-        counts (count-results results)
-        passed (get counts :passed)
-        failed (get counts :failed)
-        total (+ passed failed)]
-
-    ; Summary
-    (print (fmt "\n=== Test Summary ===" ))
-    (print (fmt "Passed: {}/{}" passed total))
-    (if (= failed 0)
-      (print "All tests passed!")
-      (print (fmt "{} tests failed!" failed)))))
-
-(run-tests)

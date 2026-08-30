@@ -169,7 +169,7 @@ spork run --main other.namespace:start one two
 | `spork remove <package...>` | Removes runtime requirements from the nearest `spork.it`. |
 | `spork sync` | Creates `.venv` and installs the manifest dependencies and Spork runtime. |
 | `spork run [args...]` | Loads and calls the configured entry point. Creates the environment if it is missing. |
-| `spork test` | Discovers and runs declared and legacy Spork tests. |
+| `spork test` | Discovers and runs declared Spork tests. |
 | `spork check` | Checks project structure, imports, exports, and compilation without writing build output. |
 | `spork build` | Compiles all `.spork` files under `:source-paths` into `.spork-out/`. |
 | `spork dist` | Builds compiled output, then creates a wheel and source distribution in `dist/`. |
@@ -200,7 +200,7 @@ The command reads every `.spork` file below `:source-paths` and `:test-paths`, b
 - generated `:api` source exports, normalized names, and hand-written-file conflicts; and
 - both ordinary and generated package-level Spork namespaces.
 
-Test namespaces normally match their path. A mirrored test such as `tests/acme/core.spork` may also declare `acme.core-test`; legacy test files without an `ns` form remain valid. Exclude all configured test paths when checking only distributable sources:
+Test namespaces normally match their path. A mirrored test such as `tests/acme/core.spork` may also declare `acme.core-test`; test files without an `ns` form remain valid. Exclude all configured test paths when checking only distributable sources:
 
 ```bash
 spork check --no-tests
@@ -256,12 +256,9 @@ Declare a test with the top-level `deftest` form. Test bodies are registered whe
   (assert (= (greet "Spork") "Hello, Spork!")))
 ```
 
-`spork test` discovers:
+`spork test` discovers any `.spork` file containing a direct top-level `deftest` below either `:source-paths` or `:test-paths`. File names do not affect discovery, and files without declarations are ignored.
 
-- `test_*.spork` and `*_test.spork` recursively below `:test-paths`, preserving support for existing script-style test files; and
-- any `.spork` file containing a direct top-level `deftest` below either `:source-paths` or `:test-paths`.
-
-Each declared test runs independently, and an uncaught exception marks only that declaration as failed. Async declarations written as `(deftest ^async name ...)` are awaited by the runner. Files are isolated in separate processes. A convention-named legacy file with no declarations remains one test: its top-level forms run as before, and any uncaught exception fails the file.
+Each declared test runs independently, and an uncaught exception marks only that declaration as failed. Async declarations written as `(deftest ^async name ...)` are awaited by the runner. Files are isolated in separate processes.
 
 A `deftest` name must be a valid unqualified symbol, declarations take no parameters, `^async` is the only supported test metadata, and duplicate normalized names in one file are rejected. Test files should not mix declarations with top-level assertions because top-level code runs while the file is being loaded, before declared tests begin.
 

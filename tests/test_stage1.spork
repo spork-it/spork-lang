@@ -5,115 +5,113 @@
   (:import [builtins :refer [range]]
            [types :refer [SimpleNamespace]]))
 
-(print "=== Testing let (statement context) ===")
 
 (defn test-let-stmt []
   (let [x 10
         y 20]
-    (print "x =" x)
-    (print "y =" y)
-    (print "x + y =" (+ x y))))
+    (+ x y)))
 
-(test-let-stmt)
+(deftest let-in-statement-context
+  (assert (= (test-let-stmt) 30)))
+
 
 ; Sequential bindings
 (defn test-sequential-bindings []
   (let [a 5
         b (+ a 3)
         c (* b 2)]
-    (print "a =" a "b =" b "c =" c)))
+    c))
 
-(test-sequential-bindings)
+(deftest case-2
+  (assert (= (test-sequential-bindings) 16))
 
-(print "\n=== Testing let (expression context) ===")
 
-(def result1 (let [x 100
-                   y 200]
-               (+ x y)))
+  (def result1 (let [x 100
+                     y 200]
+                 (+ x y)))
 
-(print "let expr result:" result1)
 
-; Nested let
-(def result2 (let [a 1]
-               (let [b 2]
-                 (+ a b))))
+  ; Nested let
+  (def result2 (let [a 1]
+                 (let [b 2]
+                   (+ a b))))
 
-(print "nested let result:" result2)
 
-; Let with sequential binding in expression context
-(def result3 (let [x 10
-                   y (+ x 5)
-                   z (* y 2)]
-               z))
+  ; Let with sequential binding in expression context
+  (def result3 (let [x 10
+                     y (+ x 5)
+                     z (* y 2)]
+                 z))
 
-(print "sequential let expr:" result3)
+  (assert (= result1 300))
+  (assert (= result2 3))
+  (assert (= result3 30))
+)
 
-(print "\n=== Testing fn literals ===")
 
 ; Simple lambda
 (def add (fn [x y] (+ x y)))
-(print "add 3 4 =" (add 3 4))
 
 ; Lambda with no args
 (def get-42 (fn [] 42))
-(print "get-42 =" (get-42))
 
 ; Lambda with multiple body forms
 (def verbose-add (fn [x y]
-                   (print "Adding" x "and" y)
                    (+ x y)))
 
-(print "verbose-add result:" (verbose-add 10 20))
 
 ; Higher-order function
 (def apply-twice (fn [f x]
                    (f (f x))))
 
 (def inc (fn [n] (+ n 1)))
-(print "apply-twice inc 5 =" (apply-twice inc 5))
 
 ; Closure
 (def make-adder (fn [n]
                   (fn [x] (+ x n))))
 
-(def add10 (make-adder 10))
-(print "add10 5 =" (add10 5))
+(deftest function-literals-and-closures
+  (assert (= (add 3 4) 7))
+  (assert (= (get-42) 42))
+  (assert (= (verbose-add 10 20) 30))
+  (assert (= (apply-twice inc 5) 7))
+  (def add10 (make-adder 10))
+  (assert (= (add10 5) 15)))
 
-(print "\n=== Testing while loops ===")
 
 (defn test-while []
   (let [i 0]
     (while (< i 5)
-      (print "i =" i)
       (set! i (+ i 1)))))
 
-(test-while)
+(deftest while-loop
+  (assert (= (test-while) nil)))
+
 
 ; While with multiple statements
 (defn count-down [n]
   (while (> n 0)
-    (print "Countdown:" n)
     (set! n (- n 1)))
-  (print "Blastoff!")
   nil)
 
-(count-down 3)
+(deftest for-and-while-statements
+  (assert (= (count-down 3) nil))
 
-(print "\n=== Testing for loops ===")
+  (def values (list))
+  (for [x [1 2 3 4 5]]
+    (.append values x))
+  (assert (= (vec values) [1 2 3 4 5]))
 
-(for [x [1 2 3 4 5]]
-  (print "x =" x))
+  (def indexes (list))
+  (for [i (range 3)]
+    (.append indexes i))
+  (assert (= (vec indexes) [0 1 2]))
 
-; For with range
-(for [i (range 3)]
-  (print "i =" i))
+  (def lengths (list))
+  (for [item ["apple" "banana" "cherry"]]
+    (.append lengths (len item)))
+  (assert (= (vec lengths) [5 6 6])))
 
-; For with multiple statements
-(for [item ["apple" "banana" "cherry"]]
-  (print "Processing:" item)
-  (print "Length:" (len item)))
-
-(print "\n=== Testing return ===")
 
 (defn early-return [x]
   (if (< x 0)
@@ -124,26 +122,25 @@
     nil)
   "just right")
 
-(print "early-return -5:" (early-return -5))
-(print "early-return 200:" (early-return 200))
-(print "early-return 50:" (early-return 50))
 
 ; Return with no value
-(defn print-and-return [msg]
-  (print msg)
+(defn return-without-value []
   (return))
 
-(print "return value:" (print-and-return "Hello!"))
+(deftest return-and-variable-assignment
+  (assert (= (early-return -5) "negative"))
+  (assert (= (early-return 200) "too large"))
+  (assert (= (early-return 50) "just right"))
+  (assert (= (return-without-value) nil))
 
-(print "\n=== Testing set! ===")
 
-; Simple variable mutation
-(def counter 0)
-(print "counter initial:" counter)
-(set! counter 10)
-(print "counter after set!:" counter)
-(set! counter (+ counter 5))
-(print "counter after increment:" counter)
+  ; Simple variable mutation
+  (def counter 0)
+  (set! counter 10)
+  (set! counter (+ counter 5))
+  (assert (= counter 15))
+)
+
 
 ; Mutation in loops
 (defn sum-range [n]
@@ -154,24 +151,29 @@
       (set! i (+ i 1)))
     (return total)))
 
-(print "sum-range 10 =" (sum-range 10))
+(deftest case-7
 
-; Attribute mutation
-(def obj (SimpleNamespace))
-(set! (. obj x) 100)
-(set! (. obj y) 200)
-(print "obj.x =" (. obj x))
-(print "obj.y =" (. obj y))
+  ; Attribute mutation
+  (def obj (SimpleNamespace))
+  (set! (. obj x) 100)
+  (set! (. obj y) 200)
+  (assert (= (sum-range 10) 45))
+  (assert (= obj.x 100))
+  (assert (= obj.y 200))
+)
 
-(print "\n=== Testing combinations ===")
 
 ; For + let + fn
 (defn process-list [items]
-  (for [item items]
-    (let [result ((fn [x] (* x x)) item)]
-      (print "Square of" item "is" result))))
+  (let [results (list)]
+    (for [item items]
+      (let [result ((fn [x] (* x x)) item)]
+        (.append results result)))
+    (vec results)))
 
-(process-list [1 2 3 4 5])
+(deftest for-let-and-function-composition
+  (assert (= (process-list [1 2 3 4 5]) [1 4 9 16 25])))
+
 
 ; While + return
 (defn find-first [pred lst]
@@ -186,36 +188,42 @@
     (return nil)))
 
 (def is-even (fn [x] (= (% x 2) 0)))
-(print "First even in [1 3 5 6 7 8]:" (find-first is-even [1 3 5 6 7 8]))
+(deftest case-9
 
-; Nested let with fn
-(def result4 (let [x 10]
-               (let [f (fn [y] (+ x y))]
-                 (let [z (f 20)]
-                   z))))
+  ; Nested let with fn
+  (def result4 (let [x 10]
+                 (let [f (fn [y] (+ x y))]
+                   (let [z (f 20)]
+                     z))))
 
-(print "nested let with fn:" result4)
 
-(print "\n=== Testing edge cases ===")
 
-; Empty let
-(def empty-let-result (let [] 42))
-(print "empty let:" empty-let-result)
+  ; Empty let
+  (def empty-let-result (let [] 42))
 
-; Let with side effects
-(def let-side-effects
-  (let [x (do (print "Evaluating x") 1)
-        y (do (print "Evaluating y") 2)]
-    (+ x y)))
+  ; Let bindings evaluate in order and preserve side effects
+  (def events (list))
+  (def let-side-effects
+    (let [x (do (.append events :x) 1)
+          y (do (.append events :y) 2)]
+      (+ x y)))
 
-(print "let with side effects result:" let-side-effects)
+  (assert (= (find-first is-even [1 3 5 6 7 8]) 6))
+  (assert (= result4 30))
+  (assert (= empty-let-result 42))
+  (assert (= let-side-effects 3))
+  (assert (= (vec events) [:x :y]))
+)
+
 
 ; Fn returning fn
 (def make-multiplier (fn [factor]
                        (fn [x] (* x factor))))
 
-(def times3 (make-multiplier 3))
-(print "times3 7 =" (times3 7))
+(deftest functions-can-return-functions
+  (def times3 (make-multiplier 3))
+  (assert (= (times3 7) 21)))
+
 
 ; While with break condition via return
 (defn search [target lst]
@@ -227,7 +235,6 @@
       (set! i (+ i 1)))
     (return -1)))
 
-(print "search 30 in [10 20 30 40]:" (search 30 [10 20 30 40]))
-(print "search 99 in [10 20 30 40]:" (search 99 [10 20 30 40]))
-
-(print "\n=== All Stage 1 tests complete! ===")
+(deftest loop-can-return-early
+  (assert (= (search 30 [10 20 30 40]) 2))
+  (assert (= (search 99 [10 20 30 40]) -1)))

@@ -2,56 +2,52 @@
 ; Tests the (defn name [positional * keyword-only] ...) pattern
 ; Uses explicit *{:key value} syntax for passing keyword arguments
 
-(print "=== Testing Keyword-Only Arguments ===\n")
 
 ; ============================================================================
 ; 1. Basic keyword-only arguments
 ; ============================================================================
 
-(print "--- 1. Basic keyword-only arguments ---")
 
 (defn create-user [name * age email]
   {:name name :age age :email email})
 
-(def user1 (create-user "Alice" *{:age 30 :email "alice@example.com"}))
-(print "user1:" user1)
-(assert (= (get user1 :name) "Alice"))
-(assert (= (get user1 :age) 30))
-(assert (= (get user1 :email) "alice@example.com"))
-(print "✓ Basic keyword-only args work\n")
+(deftest case-1-basic-keyword-only-arguments
+  (def user1 (create-user "Alice" *{:age 30 :email "alice@example.com"}))
+  (assert (= (get user1 :name) "Alice"))
+  (assert (= (get user1 :age) 30))
+  (assert (= (get user1 :email) "alice@example.com"))
+)
+
 
 ; ============================================================================
 ; 2. Keyword-only with defaults
 ; ============================================================================
 
-(print "--- 2. Keyword-only with defaults ---")
 
 (defn config [host * (port 8080) (debug false)]
   {:host host :port port :debug debug})
 
-(def cfg1 (config "localhost"))
-(print "cfg1 (defaults):" cfg1)
-(assert (= (get cfg1 :host) "localhost"))
-(assert (= (get cfg1 :port) 8080))
-(assert (= (get cfg1 :debug) false))
+(deftest case-2-keyword-only-with-defaults
+  (def cfg1 (config "localhost"))
+  (assert (= (get cfg1 :host) "localhost"))
+  (assert (= (get cfg1 :port) 8080))
+  (assert (= (get cfg1 :debug) false))
 
-(def cfg2 (config "example.com" *{:port 3000 :debug true}))
-(print "cfg2 (custom):" cfg2)
-(assert (= (get cfg2 :host) "example.com"))
-(assert (= (get cfg2 :port) 3000))
-(assert (= (get cfg2 :debug) true))
+  (def cfg2 (config "example.com" *{:port 3000 :debug true}))
+  (assert (= (get cfg2 :host) "example.com"))
+  (assert (= (get cfg2 :port) 3000))
+  (assert (= (get cfg2 :debug) true))
 
-(def cfg3 (config "test.com" *{:debug true}))
-(print "cfg3 (partial override):" cfg3)
-(assert (= (get cfg3 :port) 8080))
-(assert (= (get cfg3 :debug) true))
-(print "✓ Keyword-only with defaults work\n")
+  (def cfg3 (config "test.com" *{:debug true}))
+  (assert (= (get cfg3 :port) 8080))
+  (assert (= (get cfg3 :debug) true))
+)
+
 
 ; ============================================================================
 ; 3. Multiple positional and keyword-only
 ; ============================================================================
 
-(print "--- 3. Multiple positional and keyword-only ---")
 
 (defn make-request [method url * (headers {}) (body nil) (timeout 30)]
   {:method method
@@ -60,25 +56,24 @@
    :body body
    :timeout timeout})
 
-(def req1 (make-request "GET" "/api/users"))
-(print "req1:" req1)
-(assert (= (get req1 :method) "GET"))
-(assert (= (get req1 :url) "/api/users"))
-(assert (= (get req1 :timeout) 30))
+(deftest case-3-multiple-positional-and-keyword-only
+  (def req1 (make-request "GET" "/api/users"))
+  (assert (= (get req1 :method) "GET"))
+  (assert (= (get req1 :url) "/api/users"))
+  (assert (= (get req1 :timeout) 30))
 
-(def req2 (make-request "POST" "/api/users"
-                        *{:body "{\"name\": \"Bob\"}"
-                          :headers {:content-type "application/json"}}))
-(print "req2:" req2)
-(assert (= (get req2 :method) "POST"))
-(assert (= (get req2 :body) "{\"name\": \"Bob\"}"))
-(print "✓ Multiple positional and keyword-only work\n")
+  (def req2 (make-request "POST" "/api/users"
+                          *{:body "{\"name\": \"Bob\"}"
+                            :headers {:content-type "application/json"}}))
+  (assert (= (get req2 :method) "POST"))
+  (assert (= (get req2 :body) "{\"name\": \"Bob\"}"))
+)
+
 
 ; ============================================================================
 ; 4. Keyword-only with varargs
 ; ============================================================================
 
-(print "--- 4. Positional + varargs + keyword-only ---")
 
 (defn log-message [level & messages * (timestamp true) (prefix "")]
   (let [msg-str (.join "" messages)]
@@ -86,125 +81,111 @@
      :message (+ prefix msg-str)
      :timestamp timestamp}))
 
-(def log1 (log-message "INFO" "Hello " "World"))
-(print "log1:" log1)
-(assert (= (get log1 :level) "INFO"))
-(assert (= (get log1 :message) "Hello World"))
-(assert (= (get log1 :timestamp) true))
+(deftest case-4-positional-varargs-keyword-only
+  (def log1 (log-message "INFO" "Hello " "World"))
+  (assert (= (get log1 :level) "INFO"))
+  (assert (= (get log1 :message) "Hello World"))
+  (assert (= (get log1 :timestamp) true))
 
-(def log2 (log-message "ERROR" "Something " "went " "wrong" *{:prefix "[APP] " :timestamp false}))
-(print "log2:" log2)
-(assert (= (get log2 :message) "[APP] Something went wrong"))
-(assert (= (get log2 :timestamp) false))
-(print "✓ Varargs with keyword-only work\n")
+  (def log2 (log-message "ERROR" "Something " "went " "wrong" *{:prefix "[APP] " :timestamp false}))
+  (assert (= (get log2 :message) "[APP] Something went wrong"))
+  (assert (= (get log2 :timestamp) false))
+)
+
 
 ; ============================================================================
 ; 5. Using ** for collecting all keyword args
 ; ============================================================================
 
-(print "--- 5. Collecting keyword args with ** ---")
 
 (defn flexible-func [required ** opts]
   {:required required :opts opts})
 
-(def flex1 (flexible-func "value" *{:a 1 :b 2 :c 3}))
-(print "flex1:" flex1)
-(assert (= (get flex1 :required) "value"))
-(assert (= (get (get flex1 :opts) :a) 1))
-(assert (= (get (get flex1 :opts) :b) 2))
-(assert (= (get (get flex1 :opts) :c) 3))
-(print "✓ ** kwargs collection works\n")
+(deftest case-5-collecting-keyword-args-with
+  (def flex1 (flexible-func "value" *{:a 1 :b 2 :c 3}))
+  (assert (= (get flex1 :required) "value"))
+  (assert (= (get (get flex1 :opts) :a) 1))
+  (assert (= (get (get flex1 :opts) :b) 2))
+  (assert (= (get (get flex1 :opts) :c) 3))
+)
+
 
 ; ============================================================================
 ; 6. Keyword-only in anonymous functions
 ; ============================================================================
 
-(print "--- 6. Keyword-only in anonymous functions ---")
 
 (def make-point (fn [* x y (z 0)]
                   [x y z]))
 
-(def p1 (make-point *{:x 10 :y 20}))
-(print "p1:" p1)
-(assert (= (nth p1 0) 10))
-(assert (= (nth p1 1) 20))
-(assert (= (nth p1 2) 0))
+(deftest case-6-keyword-only-in-anonymous-functions
+  (def p1 (make-point *{:x 10 :y 20}))
+  (assert (= (nth p1 0) 10))
+  (assert (= (nth p1 1) 20))
+  (assert (= (nth p1 2) 0))
 
-(def p2 (make-point *{:x 1 :y 2 :z 3}))
-(print "p2:" p2)
-(assert (= (nth p2 2) 3))
-(print "✓ Keyword-only in fn works\n")
+  (def p2 (make-point *{:x 1 :y 2 :z 3}))
+  (assert (= (nth p2 2) 3))
+)
+
 
 ; ============================================================================
 ; 7. Error handling - missing required keyword arg
 ; ============================================================================
 
-(print "--- 7. Error on missing required keyword arg ---")
 
 (defn strict-func [* required-kw]
   required-kw)
 
-(try
-  (strict-func)  ; Should fail - missing required keyword arg
-  (print "ERROR: Should have raised TypeError!")
-  (assert false)
-  (catch TypeError e
-    (print "✓ Correctly raised TypeError for missing required kwarg")))
+(deftest case-7-error-on-missing-required-keyword-arg
+  (try
+    (strict-func)  ; Should fail - missing required keyword arg
+    (assert false)
+    (catch TypeError e
+      nil))
 
-(print "")
+)
+
 
 ; ============================================================================
 ; 8. * separator syntax for inline kwargs at call sites
 ; ============================================================================
 
-(print "--- 8. New * separator syntax ---")
 
 (defn greet [name * (greeting "Hello") (punctuation "!")]
   (+ greeting " " name punctuation))
 
 ; Using * separator instead of *{...}
-(def g1 (greet "Alice" * :greeting "Hi" :punctuation "?"))
-(print "g1:" g1)
-(assert (= g1 "Hi Alice?"))
+(deftest case-8-new-separator-syntax
+  (def g1 (greet "Alice" * :greeting "Hi" :punctuation "?"))
+  (assert (= g1 "Hi Alice?"))
 
-; Mix of * separator and *{...}
-(def defaults {:punctuation "..."})
-(def g2 (greet "Bob" * :greeting "Hey" *{defaults}))
-(print "g2:" g2)
-(assert (= g2 "Hey Bob..."))
+  ; Mix of * separator and *{...}
+  (def defaults {:punctuation "..."})
+  (def g2 (greet "Bob" * :greeting "Hey" *{defaults}))
+  (assert (= g2 "Hey Bob..."))
 
-(print "✓ * separator syntax works\n")
+)
+
 
 ; ============================================================================
 ; 9. *{variable} splatting
 ; ============================================================================
 
-(print "--- 9. *{variable} splatting ---")
+(deftest case-9-variable-splatting
 
-(def opts {:greeting "Howdy" :punctuation "!!"})
-(def g3 (greet "Charlie" *{opts}))
-(print "g3:" g3)
-(assert (= g3 "Howdy Charlie!!"))
+  (def opts {:greeting "Howdy" :punctuation "!!"})
+  (def g3 (greet "Charlie" *{opts}))
+  (assert (= g3 "Howdy Charlie!!"))
 
-; Mixed inline and splat in same *{...}
-(def partial-opts {:punctuation "~"})
-(def g4 (greet "Dave" *{:greeting "Yo" partial-opts}))
-(print "g4:" g4)
-(assert (= g4 "Yo Dave~"))
+  ; Mixed inline and splat in same *{...}
+  (def partial-opts {:punctuation "~"})
+  (def g4 (greet "Dave" *{:greeting "Yo" partial-opts}))
+  (assert (= g4 "Yo Dave~"))
 
-(print "✓ *{variable} splatting works\n")
 
-; ============================================================================
-; Summary
-; ============================================================================
+  ; ============================================================================
+  ; Summary
+  ; ============================================================================
 
-(print "=== All Keyword-Only Argument Tests Passed! ===")
-(print "✓ Basic keyword-only arguments")
-(print "✓ Keyword-only with defaults")
-(print "✓ Multiple positional and keyword-only")
-(print "✓ Varargs with keyword-only")
-(print "✓ ** kwargs collection")
-(print "✓ Keyword-only in anonymous functions")
-(print "✓ Error handling for missing required kwargs")
-(print "✓ New * separator syntax")
-(print "✓ *{variable} splatting")
+)

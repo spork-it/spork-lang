@@ -1,83 +1,71 @@
-;; Test nested let expressions and closures
+;; Tests for nested let expressions and closures.
 
-(print "=== Testing Nested Let Expressions ===\n")
+(defn nested-read []
+  (let [x 10]
+    (let [y 20]
+      (+ x y))))
 
-;; Test 1: Simple nested let - inner can read outer
-(def test-nested-read
-  (fn []
-    (let [x 10]
-      (let [y 20]
-        (+ x y)))))
+(defn nested-sequential []
+  (let [a 5]
+    (let [b (* a 2)
+          c (+ b a)]
+      c)))
 
-(print "test-nested-read:" (test-nested-read))
+(defn triple-nested []
+  (let [x 1]
+    (let [y 2]
+      (let [z 3]
+        (+ x y z)))))
 
-;; Test 2: Nested let with sequential bindings using outer value
-(def test-nested-sequential
-  (fn []
-    (let [a 5]
-      (let [b (* a 2)
-            c (+ b a)]
-        c))))
+(defn nested-closure []
+  (let [multiplier 3]
+    (let [adder 10
+          function (fn [x] (+ (* x multiplier) adder))]
+      (function 5))))
 
-(print "test-nested-sequential:" (test-nested-sequential))
+(defn outer-mutation []
+  (let [x 0]
+    (set! x 5)
+    (let [y (* x 2)]
+      (+ x y))))
 
-;; Test 3: Multiple levels of nesting
-(def test-triple-nested
-  (fn []
-    (let [x 1]
-      (let [y 2]
-        (let [z 3]
-          (+ x y z))))))
+(defn inner-mutation []
+  (let [x 10]
+    (let [y 0]
+      (set! y 20)
+      (+ x y))))
 
-(print "test-triple-nested:" (test-triple-nested))
+(defn sibling-lets []
+  (let [a 1
+        b (let [x 10 y 20] (+ x y))
+        c (let [m 5 n 3] (* m n))]
+    (+ a b c)))
 
-;; Test 4: Nested let with function that closes over outer variables
-(def test-nested-closure
-  (fn []
-    (let [multiplier 3]
-      (let [adder 10
-            f (fn [x] (+ (* x multiplier) adder))]
-        (f 5)))))
+(defn let-in-binding []
+  (let [outer 100
+        inner (let [x 10 y 20] (+ x y outer))]
+    inner))
 
-(print "test-nested-closure:" (test-nested-closure))
+(deftest inner-let-can-read-outer-binding
+  (assert (= (nested-read) 30)))
 
-;; Test 5: Outer let with mutation, inner let reads (no mutation of outer)
-(def test-outer-mutation
-  (fn []
-    (let [x 0]
-      (set! x 5)
-      (let [y (* x 2)]
-        (+ x y)))))
+(deftest nested-bindings-are-sequential
+  (assert (= (nested-sequential) 15)))
 
-(print "test-outer-mutation:" (test-outer-mutation))
+(deftest multiple-levels-of-nesting
+  (assert (= (triple-nested) 6)))
 
-;; Test 6: Inner let with its own mutations (doesn't affect outer)
-(def test-inner-mutation
-  (fn []
-    (let [x 10]
-      (let [y 0]
-        (set! y 20)
-        (+ x y)))))
+(deftest nested-function-closes-over-bindings
+  (assert (= (nested-closure) 25)))
 
-(print "test-inner-mutation:" (test-inner-mutation))
+(deftest inner-let-observes-outer-mutation
+  (assert (= (outer-mutation) 15)))
 
-;; Test 7: Sibling lets (sequential, not nested)
-(def test-sibling-lets
-  (fn []
-    (let [a 1
-          b (let [x 10 y 20] (+ x y))
-          c (let [m 5 n 3] (* m n))]
-      (+ a b c))))
+(deftest inner-binding-can-be-mutated
+  (assert (= (inner-mutation) 30)))
 
-(print "test-sibling-lets:" (test-sibling-lets))
+(deftest sibling-let-expressions-return-values
+  (assert (= (sibling-lets) 46)))
 
-;; Test 8: Let in let binding value
-(def test-let-in-binding
-  (fn []
-    (let [outer 100
-          inner (let [x 10 y 20] (+ x y outer))]
-      inner)))
-
-(print "test-let-in-binding:" (test-let-in-binding))
-
-(print "\n=== All Nested Let Tests Passed! ===")
+(deftest let-can-be-used-in-a-binding-value
+  (assert (= (let-in-binding) 130)))

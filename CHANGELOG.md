@@ -14,6 +14,12 @@ This history was backfilled from release tags, commit history, and published rel
 ### Changed
 
 - Enforced a one-way compiler-to-runtime dependency by moving Spork source namespace loading behind a compiler-installed runtime provider.
+- `spork test` now discovers only files containing top-level `deftest` declarations; convention-named script-style test files are no longer supported.
+- Converted the language suite to granular declared tests and a cross-platform native test harness.
+
+### Fixed
+
+- Ignore yields owned by nested generator helpers when validating whether an enclosing function requires `^generator`.
 
 ## [0.4.4] - 2026-08-29
 

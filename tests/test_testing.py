@@ -61,6 +61,17 @@ def test_deftest_can_pass_multiple_inline_anonymous_functions():
     aot_env["__spork_tests__"][0].function()
 
 
+def test_deftest_can_define_a_local_generator_without_becoming_a_generator():
+    env = eval_str(
+        """(deftest local-generator
+  (def generate (fn ^generator [] (yield 1) (yield 2)))
+  (assert (= (vec (generate)) [1 2])))
+"""
+    )
+
+    env["__spork_tests__"][0].function()
+
+
 def test_deftest_is_private_in_aot_output():
     python_source, _ = compile_file_to_python(
         """(ns sample.aot)
@@ -103,7 +114,7 @@ def test_deftest_rejects_invalid_placement_and_duplicate_normalized_names():
         compile_forms_to_code('(deftest empty "docs only")')
 
 
-def test_discovery_finds_inline_declared_and_legacy_files(tmp_path: Path):
+def test_discovery_finds_only_files_with_declared_tests(tmp_path: Path):
     source_root = tmp_path / "src"
     test_root = tmp_path / "tests"
     source_root.mkdir()
@@ -115,8 +126,8 @@ def test_discovery_finds_inline_declared_and_legacy_files(tmp_path: Path):
         '; (deftest commented-out true)\n(def text "(deftest in-a-string)")\n',
         encoding="utf-8",
     )
-    legacy = test_root / "test_legacy.spork"
-    legacy.write_text("(assert true)\n", encoding="utf-8")
+    undeclared = test_root / "test_undeclared.spork"
+    undeclared.write_text("(assert true)\n", encoding="utf-8")
     declared = test_root / "arbitrary_name.spork"
     declared.write_text("(deftest declared (assert true))\n", encoding="utf-8")
     (test_root / "helper.spork").write_text("(def helper 1)\n", encoding="utf-8")
@@ -124,14 +135,7 @@ def test_discovery_finds_inline_declared_and_legacy_files(tmp_path: Path):
     discovered = discover_test_files([source_root], [test_root])
     by_name = {item.path.name: item for item in discovered}
 
-    assert list(sorted(by_name)) == [
-        "arbitrary_name.spork",
-        "core.spork",
-        "test_legacy.spork",
-    ]
-    assert by_name["core.spork"].has_declarations
-    assert by_name["arbitrary_name.spork"].has_declarations
-    assert by_name["test_legacy.spork"].legacy
+    assert list(sorted(by_name)) == ["arbitrary_name.spork", "core.spork"]
 
 
 def test_discovery_reports_invalid_source(tmp_path: Path):
@@ -178,15 +182,15 @@ def test_native_runner_continues_after_failure_and_awaits_async_tests(
     assert "AssertionError: intentional" in output
 
 
-def test_native_runner_preserves_legacy_script_tests(tmp_path: Path, capsys):
-    test_file = tmp_path / "test_legacy.spork"
-    test_file.write_text("(assert (= (+ 1 1) 2))\n", encoding="utf-8")
+def test_native_runner_rejects_files_without_declarations(tmp_path: Path, capsys):
+    test_file = tmp_path / "test_undeclared.spork"
+    test_file.write_text("(def value 42)\n", encoding="utf-8")
 
-    summary = run_test_file(test_file, legacy=True)
+    summary = run_test_file(test_file)
 
-    assert summary.passed == 1
-    assert summary.failed == 0
-    assert "[pass] legacy file" in capsys.readouterr().out
+    assert summary.passed == 0
+    assert summary.failed == 1
+    assert "[error] no declared tests found" in capsys.readouterr().out
 
 
 class _FakeConfig:
@@ -209,7 +213,7 @@ def _configure_cli_project(monkeypatch, root: Path) -> None:
     monkeypatch.setattr(ProjectManager, "inject_venv_paths", lambda self: None)
 
 
-def test_spork_test_runs_inline_and_legacy_tests_but_ignores_python_tests(
+def test_spork_test_runs_declared_tests_but_ignores_python_tests(
     tmp_path: Path, monkeypatch, capsys
 ):
     source_root = tmp_path / "src"
@@ -221,7 +225,7 @@ def test_spork_test_runs_inline_and_legacy_tests_but_ignores_python_tests(
         encoding="utf-8",
     )
     (test_root / "core_test.spork").write_text(
-        "(assert (= 3 3))\n", encoding="utf-8"
+        "(deftest test-path-declaration (assert (= 3 3)))\n", encoding="utf-8"
     )
     (test_root / "test_ignored.py").write_text(
         "def test_failure():\n    assert False\n", encoding="utf-8"

@@ -4,54 +4,43 @@
 (ns tests.test-require-refer-all
   (:require [tests.test-macros :refer :all]))
 
-(print "=== Testing :refer :all with macros ===\n")
 
 ; ============================================================================
 ; 1. Test that macros from test-macros are available via :refer :all
 ; ============================================================================
 
-(print "--- 1. Macros imported via :refer :all ---")
+(deftest case-1-macros-imported-via-refer-all
 
-; 'when' macro from test-macros
-(def result1 (when true "when-works"))
-(print "when true 'when-works':" result1)
-(assert (= result1 "when-works"))
+  ; 'when' macro from test-macros
+  (def result1 (when true "when-works"))
+  (assert (= result1 "when-works"))
 
-; 'unless' macro from test-macros
-(def result2 (unless false "unless-works"))
-(print "unless false 'unless-works':" result2)
-(assert (= result2 "unless-works"))
+  ; 'unless' macro from test-macros
+  (def result2 (unless false "unless-works"))
+  (assert (= result2 "unless-works"))
 
-; '->' threading macro from test-macros
-(def result3 (-> 10 (+ 5)))
-(print "-> 10 (+ 5):" result3)
-(assert (= result3 15))
+  ; '->' threading macro from test-macros
+  (def result3 (-> 10 (+ 5)))
+  (assert (= result3 15))
 
-(print "✓ All macros imported via :refer :all work\n")
+)
+
 
 ; ============================================================================
 ; 2. Test combined usage of :refer :all macros
 ; ============================================================================
 
-(print "--- 2. Combined macro usage ---")
+(deftest case-2-combined-macro-usage
 
-(def result4 (when true (-> 3 (* 7))))
-(print "when true (-> 3 (* 7)):" result4)
-(assert (= result4 21))
+  (def result4 (when true (-> 3 (* 7))))
+  (assert (= result4 21))
 
-(def result5 (unless false (-> 100 (- 58))))
-(print "unless false (-> 100 (- 58)):" result5)
-(assert (= result5 42))
+  (def result5 (unless false (-> 100 (- 58))))
+  (assert (= result5 42))
 
-(print "✓ Combined macros work\n")
 
-; ============================================================================
-; Summary
-; ============================================================================
+  ; ============================================================================
+  ; Summary
+  ; ============================================================================
 
-(print "=== All :refer :all Tests Passed! ===")
-(print "✓ when macro imported via :refer :all")
-(print "✓ unless macro imported via :refer :all")
-(print "✓ -> threading macro imported via :refer :all")
-(print "✓ Combined usage works")
-(print "")
+)

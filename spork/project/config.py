@@ -20,7 +20,8 @@ The spork.it file uses Spork map syntax:
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
@@ -83,6 +84,19 @@ def spork_to_python(value: Any) -> Any:
         return {spork_to_python(k): spork_to_python(v) for k, v in value.items()}
     else:
         return value
+
+
+def _freeze_manifest_value(value: Any) -> Any:
+    """Recursively expose parsed manifest values through immutable containers."""
+    if isinstance(value, dict):
+        return MappingProxyType(
+            {key: _freeze_manifest_value(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_manifest_value(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(_freeze_manifest_value(item) for item in value)
+    return value
 
 
 def find_project_root(start_path: Optional[str] = None) -> Optional[str]:
@@ -163,8 +177,27 @@ class ProjectConfig:
     spork_version: Optional[str] = None
     api: Optional[APIConfig] = None
 
-    # Store the raw config for any additional fields
+    # Store the raw config for internal tooling and expose an immutable view.
     _raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    _manifest: Mapping[str, Any] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        self._manifest = _freeze_manifest_value(self._raw)
+
+    @property
+    def manifest(self) -> Mapping[str, Any]:
+        """Return the complete parsed manifest through a read-only view."""
+        return self._manifest
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return a read-only manifest value, including package-specific data."""
+        return self._manifest.get(key, default)
+
+    def get_plugin_config(self, name: str, default: Any = None) -> Any:
+        """Return read-only configuration owned by a command-provider package."""
+        if not isinstance(name, str) or not name:
+            raise ValueError("plugin configuration name must be a non-empty string")
+        return self._manifest.get(name, default)
 
     @property
     def venv_path(self) -> str:

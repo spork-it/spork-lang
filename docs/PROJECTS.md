@@ -70,8 +70,9 @@ Paths are relative to the directory containing `spork.it`.
 | `:authors` | no | `[]` | Author maps containing `:name` and/or `:email`. |
 | `:keywords` / `:classifiers` | no | `[]` | PyPI search terms and trove classifiers. |
 | `:urls` | no | `{}` | Labeled project links included in package metadata. |
+| package-specific keys | no | none | Configuration owned by an installed tool, such as `:site`. |
 
-Unknown keys are preserved by the configuration loader but are not interpreted by the current project commands.
+Unknown keys are preserved without being interpreted by core project commands. Tool providers can read them through the recursive read-only `ProjectConfig.manifest` mapping, `ProjectConfig.get(...)`, or `ProjectConfig.get_plugin_config(...)`; nested maps and vectors are exposed as immutable mappings and tuples.
 
 ### Dependencies
 
@@ -161,6 +162,26 @@ Arguments arrive as strings. If the entry point returns an integer, Spork uses i
 ```bash
 spork run --main other.namespace:start one two
 ```
+
+### Reusable source project runtime
+
+`ProjectRuntime` provides the same source loading path used by `spork run`. It resolves configured source roots and installed Spork namespaces without requiring `.spork-out/` or a Python-importable adapter:
+
+```python
+from spork.project import ProjectConfig, ProjectRuntime
+
+
+def load_project_entries():
+    config = ProjectConfig.load()
+    runtime = ProjectRuntime(config)
+    site = runtime.load_entry("hello-spork.site:make-site")
+    status = runtime.invoke_entry("hello-spork.core:main", ["one", "two"])
+    return site, status
+```
+
+`load_entry` returns any exported value without calling it. `invoke_entry` requires a callable, passes string arguments positionally, uses an integer result as the process status, and treats other results as success. A target containing only a namespace defaults to its `main` function. The runtime preserves source filenames and locations in exceptions.
+
+Command providers receive the same operations through `CommandContext.load_entry(...)` and `CommandContext.invoke_entry(...)`. `CommandContext.require_project()` returns the selected `ProjectConfig` or raises an actionable error when the command is outside a project. Its `project_root`, provider provenance, and context fields are read-only.
 
 ## Project commands
 

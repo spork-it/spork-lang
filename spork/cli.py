@@ -204,31 +204,19 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run the project's main entry point."""
-    from spork.compiler import exec_file
-    from spork.project import ProjectConfig, ProjectManager
-    from spork.runtime.ns import (
-        NamespaceProxy,
-        add_source_root,
-        find_spork_file_for_ns,
-        get_namespace,
-        init_source_roots,
-        register_namespace,
-    )
-    from spork.runtime.types import normalize_name
+    """Run the project's main entry point through the reusable runtime."""
+    from spork.project import ProjectConfig, ProjectRuntime, ProjectRuntimeError
 
     try:
         config = ProjectConfig.load()
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except FileNotFoundError as error:
+        print(f"Error: {error}", file=sys.stderr)
         return 1
-    except ValueError as e:
-        print(f"Error in spork.it: {e}", file=sys.stderr)
+    except ValueError as error:
+        print(f"Error in spork.it: {error}", file=sys.stderr)
         return 1
 
-    # Determine what to run
     main_entry = args.main or config.main
-
     if not main_entry:
         print(
             "Error: No main entry point specified. Use --main or set :main in spork.it",
@@ -236,96 +224,21 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # Parse main entry (format: namespace:function)
-    if ":" in main_entry:
-        ns_name, fn_name = main_entry.rsplit(":", 1)
-    else:
-        # Assume it's just a namespace, call main function
-        ns_name = main_entry
-        fn_name = "main"
-
-    # Normalize function name (hyphens to underscores for Python)
-    fn_name_py = normalize_name(fn_name)
-
-    # Setup environment - ensure venv exists and has dependencies
-    manager = ProjectManager(config)
-    if not manager.has_venv():
+    runtime = ProjectRuntime(config)
+    environment_missing = runtime.environment_missing
+    if environment_missing:
         print("Project venv not found, initializing...")
-        try:
-            success = manager.install_dependencies(quiet=False)
-            if not success:
-                print(
-                    "Error: Failed to initialize project environment", file=sys.stderr
-                )
-                return 1
-            print()  # Blank line after setup output
-        except Exception as e:
-            print(f"Error initializing project environment: {e}", file=sys.stderr)
-            return 1
 
-    # Inject venv paths for imports
-    manager.inject_venv_paths()
-
-    init_source_roots(include_cwd=True)
-
-    # Add project source paths
-    for source_path in config.get_absolute_source_paths():
-        if os.path.isdir(source_path):
-            add_source_root(source_path, prepend=True)
-
-    # Load the namespace and run the function
     try:
-        # Find and load the namespace file
-        spork_file = find_spork_file_for_ns(ns_name)
-        if spork_file is None:
-            print(f"Error: Namespace '{ns_name}' not found", file=sys.stderr)
-            print(f"Searched in: {config.get_absolute_source_paths()}", file=sys.stderr)
-            return 1
-
-        # Execute the file to load the namespace
-        env = exec_file(spork_file)
-
-        # Get the namespace info
-        ns_info = get_namespace(ns_name)
-        if ns_info is None:
-            # Register it ourselves if the file didn't declare the namespace
-            register_namespace(
-                name=ns_name,
-                file=os.path.abspath(spork_file),
-                env=env,
-                macros=env.get("__spork_macros__", {}),
-            )
-            ns_info = get_namespace(ns_name)
-
-        if ns_info is None:
-            print(f"Error: Failed to load namespace '{ns_name}'", file=sys.stderr)
-            return 1
-
-        ns_proxy = NamespaceProxy(ns_info.env, ns_name)
-
-        # Get the function
-        try:
-            fn = getattr(ns_proxy, fn_name_py)
-        except AttributeError:
-            try:
-                fn = getattr(ns_proxy, fn_name)
-            except AttributeError:
-                print(
-                    f"Error: Function '{fn_name}' not found in namespace '{ns_name}'",
-                    file=sys.stderr,
-                )
-                return 1
-
-        # Call the function with any additional arguments
-        result = fn(*args.args)
-
-        # If result is an integer, use as exit code
-        if isinstance(result, int):
-            return result
-        return 0
-
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        runtime.prepare()
+        if environment_missing:
+            print()
+        return runtime.invoke_entry(main_entry, args.args)
+    except ProjectRuntimeError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    except Exception as error:
+        print(f"Error: {error}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         return 1
 

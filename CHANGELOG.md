@@ -10,10 +10,14 @@ This history was backfilled from release tags, commit history, and published rel
 
 - Added immutable command provider, context, and specification primitives with a shared raw-argument invocation contract for core and future extension commands.
 - Added a static core command registry and isolated parser construction for each core command.
+- Added `ProjectRuntime` for loading values and invoking functions directly from unbuilt project source or installed Spork namespaces.
+- Added project-aware `CommandContext.load_entry`, `invoke_entry`, and `require_project` operations.
+- Added recursive read-only access to package-specific manifest configuration.
 
 ### Changed
 
 - Separated top-level legacy/file dispatch from core command parsing while preserving existing command syntax and project-toolchain delegation.
+- Refactored `spork run` to use the shared project runtime while retaining environment bootstrap, normalized entry names, process statuses, and source tracebacks.
 
 ## [0.5.3] - 2026-08-30
 

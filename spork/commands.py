@@ -1,20 +1,28 @@
 """Shared command definitions for the Spork CLI.
 
 Core commands and future package-provided commands use the same immutable
-provider, context, descriptor, and invocation contract.  Discovery and project
-runtime services are added by later command-system phases; this module keeps
-the foundational contract independent from either mechanism.
+provider, context, descriptor, and invocation contract. Project runtime
+services are exposed through the context while provider discovery remains a
+separate concern for later command-system phases.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Literal, Optional, TypeAlias
+from typing import TYPE_CHECKING, Callable, Literal, Optional, TypeAlias
+
+if TYPE_CHECKING:
+    from spork.project.config import ProjectConfig
+    from spork.project.runtime import ProjectRuntime
 
 COMMAND_API_VERSION = 1
 
 CommandScope: TypeAlias = Literal["core", "project", "active", "global"]
+
+
+class ProjectRequiredError(RuntimeError):
+    """Raised when a command needs project services outside a project."""
 
 
 @dataclass(frozen=True)
@@ -35,9 +43,8 @@ class CommandProvider:
 class CommandContext:
     """Read-only context supplied to every selected command handler.
 
-    Project loading and source-entry operations intentionally arrive in the
-    next command-system phase.  Defining their shared context now lets core and
-    extension handlers use one stable invocation boundary from the start.
+    Project-backed contexts expose reusable source loading without leaking
+    mutable compiler state into the provider contract.
     """
 
     command: str
@@ -45,14 +52,44 @@ class CommandContext:
     cwd: Path
     provider: CommandProvider
     api_version: int = COMMAND_API_VERSION
-    project: object | None = None
+    project: ProjectConfig | None = None
     project_root: Path | None = None
+    _runtime: ProjectRuntime | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if not self.command:
             raise ValueError("command name must not be empty")
         if self.scope != self.provider.scope:
             raise ValueError("command context scope must match its provider")
+        if self.project is None and self.project_root is not None:
+            raise ValueError("command context project root requires a project")
+        if self._runtime is not None and self.project is not self._runtime.config:
+            raise ValueError("command context runtime must match its project")
+
+    def require_project(self) -> ProjectConfig:
+        """Return the current project or raise an actionable command error."""
+        if self.project is None:
+            raise ProjectRequiredError(
+                f"command {self.command!r} requires a Spork project; "
+                "run it below a directory containing spork.it"
+            )
+        return self.project
+
+    def _project_runtime(self) -> ProjectRuntime:
+        if self._runtime is not None:
+            return self._runtime
+
+        from spork.project.runtime import ProjectRuntime
+
+        return ProjectRuntime(self.require_project())
+
+    def load_entry(self, target: str) -> object:
+        """Load a value from an unbuilt source project namespace."""
+        return self._project_runtime().load_entry(target)
+
+    def invoke_entry(self, target: str, args: list[str]) -> int:
+        """Invoke a function from an unbuilt source project namespace."""
+        return self._project_runtime().invoke_entry(target, args)
 
 
 CommandHandler: TypeAlias = Callable[[CommandContext, list[str]], Optional[int]]
@@ -99,17 +136,37 @@ def create_command_context(
     spec: CommandSpec,
     *,
     cwd: Path | None = None,
-    project: object | None = None,
+    project: ProjectConfig | None = None,
     project_root: Path | None = None,
+    runtime: ProjectRuntime | None = None,
 ) -> CommandContext:
     """Create the standard immutable context for a selected command."""
+    if runtime is not None:
+        if project is not None and project is not runtime.config:
+            raise ValueError("command runtime must match the selected project")
+        project = runtime.config
+    elif project is not None:
+        from spork.project.runtime import ProjectRuntime
+
+        runtime = ProjectRuntime(project)
+
+    resolved_root = project_root.resolve() if project_root is not None else None
+    if project is not None:
+        configured_root = Path(project.project_root).resolve()
+        if resolved_root is not None and resolved_root != configured_root:
+            raise ValueError("command project root must match the selected project")
+        resolved_root = configured_root
+    elif resolved_root is not None:
+        raise ValueError("command project root requires a project")
+
     return CommandContext(
         command=spec.name,
         scope=spec.provider.scope,
         cwd=(cwd or Path.cwd()).resolve(),
         provider=spec.provider,
         project=project,
-        project_root=project_root.resolve() if project_root is not None else None,
+        project_root=resolved_root,
+        _runtime=runtime,
     )
 
 

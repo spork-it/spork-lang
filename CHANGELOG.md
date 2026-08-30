@@ -6,6 +6,8 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-30
+
 ### Fixed
 
 - Preserve preconfigured project source roots when executing an entrypoint, so `spork run` can resolve required sibling namespaces under configured `:source-paths`.
@@ -275,7 +277,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/spork-it/spork-lang/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/spork-it/spork-lang/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/spork-it/spork-lang/compare/v0.4.4...v0.5.0
 [0.4.4]: https://github.com/spork-it/spork-lang/compare/v0.4.3...v0.4.4

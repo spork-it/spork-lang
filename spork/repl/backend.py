@@ -886,25 +886,16 @@ class TerminalRepl(ReplFrontend):
         return f"{self.backend.state.namespace}> "
 
     def setup_readline(self):
-        """Setup readline for better line editing."""
+        """Set up readline line editing and completion."""
         try:
             import readline
 
             self.readline = readline
 
-            # Set up completion
+            # Set up completion. Readline keeps session history in memory, but
+            # the REPL intentionally does not persist it to the working directory.
             readline.set_completer(self.complete)
             readline.parse_and_bind("tab: complete")
-
-            # Set up history
-            try:
-                readline.read_history_file(".spork_history")
-            except FileNotFoundError:
-                pass
-
-            import atexit
-
-            atexit.register(lambda: readline.write_history_file(".spork_history"))
 
         except ImportError:
             self.readline = None

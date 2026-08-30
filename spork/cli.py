@@ -23,6 +23,7 @@ Legacy flags are still supported for backwards compatibility:
 import argparse
 import os
 import platform
+import subprocess
 import sys
 import traceback
 from typing import Optional
@@ -763,6 +764,106 @@ SUBCOMMANDS = {
     "version",
 }
 
+# These commands must remain available when the project environment is absent,
+# stale, or being removed. Other commands require a compatible toolchain.
+_TOOLCHAIN_OPTIONAL_COMMANDS = {"add", "remove", "sync", "version"}
+_NEVER_DELEGATE_COMMANDS = {"new", "clean"}
+
+
+def _project_command(argv: list[str]) -> Optional[str]:
+    """Return the explicit project subcommand, if one was supplied."""
+    if argv and argv[0] in SUBCOMMANDS:
+        return argv[0]
+    return None
+
+
+def _delegate_to_project_toolchain(argv: list[str]) -> Optional[int]:
+    """Run the CLI with the synchronized project toolchain when available.
+
+    ``spork sync`` remains a bootstrap operation when the environment is
+    missing or incompatible. Once a compatible ``spork-lang`` is installed in
+    ``.venv``, project-aware invocations are delegated to that interpreter.
+    """
+    command = _project_command(argv)
+    if command in _NEVER_DELEGATE_COMMANDS:
+        return None
+
+    from spork.project import ProjectConfig, ProjectManager
+
+    try:
+        config = ProjectConfig.load()
+    except FileNotFoundError:
+        return None
+    except ValueError as error:
+        if command in _TOOLCHAIN_OPTIONAL_COMMANDS:
+            return None
+        print(f"Error in spork.it: {error}", file=sys.stderr)
+        return 1
+
+    manager = ProjectManager(config)
+    active_version = manager.active_spork_version()
+
+    if manager.is_running_in_project_venv():
+        if manager.spork_version_satisfies_project(active_version):
+            return None
+        if command in _TOOLCHAIN_OPTIONAL_COMMANDS:
+            return None
+        print(
+            f"Error: project requires spork-lang{config.spork_version}, but its "
+            f"environment is running spork-lang=={active_version}.",
+            file=sys.stderr,
+        )
+        print("Run `spork sync` to update the project toolchain.", file=sys.stderr)
+        return 1
+
+    installed_version = manager.get_project_spork_version()
+    if installed_version is not None and manager.spork_version_satisfies_project(
+        installed_version
+    ):
+        try:
+            result = subprocess.run(
+                [config.venv_python, "-m", "spork", *argv],
+                cwd=os.getcwd(),
+                check=False,
+            )
+        except OSError as error:
+            print(
+                f"Error: could not run the project Spork toolchain: {error}",
+                file=sys.stderr,
+            )
+            return 1
+        return result.returncode
+
+    if command in _TOOLCHAIN_OPTIONAL_COMMANDS or any(
+        argument in {"-h", "--help"} for argument in argv
+    ):
+        return None
+
+    if not manager.has_venv() and manager.active_spork_satisfies_project():
+        return None
+
+    requirement = config.spork_version
+    if installed_version is not None:
+        print(
+            f"Error: project environment has spork-lang=={installed_version}, "
+            f"but spork.it requires spork-lang{requirement}.",
+            file=sys.stderr,
+        )
+    elif manager.has_venv():
+        print(
+            "Error: project environment does not contain a usable spork-lang "
+            "toolchain.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"Error: project requires spork-lang{requirement}, but the active "
+            f"CLI is spork-lang=={active_version}.",
+            file=sys.stderr,
+        )
+    print("Run `spork sync` to synchronize the project toolchain.", file=sys.stderr)
+    return 1
+
 
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser with all subcommands."""
@@ -1012,6 +1113,10 @@ def _main(argv: Optional[list[str]] = None) -> int:
     """Internal main that returns exit code."""
     if argv is None:
         argv = sys.argv[1:]
+
+    delegated_result = _delegate_to_project_toolchain(argv)
+    if delegated_result is not None:
+        return delegated_result
 
     # Pre-parse to detect if first arg is a file (not a subcommand or flag)
     # This allows `spork myfile.spork` to work without a subcommand

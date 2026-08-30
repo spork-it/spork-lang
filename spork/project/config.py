@@ -10,7 +10,7 @@ The spork.it file uses Spork map syntax:
      :version "0.1.0"
      :description "A sample project"
      :requires-python ">=3.10"
-     :spork-version ">=0.5.0,<0.6"
+     :spork-version ">=0.5.1,<0.6"
      :dependencies ["requests" "numpy>=1.20"]
      :dev-dependencies ["mypy>=1.11"]
      :source-paths ["src"]
@@ -21,6 +21,8 @@ The spork.it file uses Spork map syntax:
 import os
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
 from spork.compiler.reader import read_str
 from spork.runtime.types import Keyword, MapLiteral, VectorLiteral
@@ -358,6 +360,15 @@ class ProjectConfig:
                 raise ValueError(
                     f":{field_name} must be a string, got {type(value).__name__}"
                 )
+
+        if spork_version is not None:
+            try:
+                SpecifierSet(spork_version)
+            except InvalidSpecifier as error:
+                raise ValueError(
+                    ":spork-version must be a version specifier such as "
+                    '\">=0.5.1,<0.6\"'
+                ) from error
 
         if not isinstance(authors, list) or not all(
             isinstance(author, dict)

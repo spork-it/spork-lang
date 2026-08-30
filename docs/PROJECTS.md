@@ -41,7 +41,7 @@ A manifest is a Spork map containing project metadata and tooling settings:
  :version "0.1.0"
  :description "A small Spork application"
  :requires-python ">=3.10"
- :spork-version ">=0.5.0,<0.6"
+ :spork-version ">=0.5.1,<0.6"
  :dependencies ["httpx>=0.27" "rich"]
  :dev-dependencies []
  :source-paths ["src"]
@@ -57,7 +57,7 @@ Paths are relative to the directory containing `spork.it`.
 | `:version` | yes | — | Project version string. |
 | `:description` | no | none | Distribution description. |
 | `:requires-python` | no | `">=3.10"` | Python compatibility written to package metadata. |
-| `:spork-version` | no | build version | Compatible `spork-lang` compiler version, checked when building distributions. |
+| `:spork-version` | no | active version | Compatible `spork-lang` toolchain range used by synchronization, CLI delegation, and distribution builds. |
 | `:api` | no | none | Generate public Spork and Python package APIs from one canonical namespace. |
 | `:dependencies` | no | `[]` | Runtime package requirements accepted by `pip`. |
 | `:dev-dependencies` | no | `[]` | Local tools installed by `spork sync --dev`. |
@@ -97,13 +97,15 @@ After changing dependencies, run:
 spork sync
 ```
 
-This creates an isolated `.venv/` when needed and installs the dependencies and the Spork runtime. Include development tools when working on the project with:
+This creates an isolated `.venv/` when needed and installs the dependencies and a compatible `spork-lang` toolchain, which brings in `spork-runtime`. When the active CLI satisfies `:spork-version`, synchronization pins that exact release (or its editable source checkout). Otherwise, pip resolves a release from the declared range. Include development tools when working on the project with:
 
 ```bash
 spork sync --dev
 ```
 
-An existing environment is not automatically resynchronized on every `spork run`.
+After synchronization, project-aware CLI invocations delegate to the compatible `spork-lang` installed in `.venv`, even when the launcher on `PATH` is a different version. `spork sync` bootstraps a missing or incompatible project toolchain; `spork clean` deliberately remains with the launcher so it can remove `.venv`. An existing environment is not automatically upgraded within its compatible range on every command.
+
+A launcher release that predates project-toolchain delegation cannot bootstrap a newer compiler retroactively. Upgrade that launcher once, run `spork sync`, and subsequent commands will use the project-local toolchain.
 
 ### Source paths and namespaces
 
@@ -167,7 +169,7 @@ spork run --main other.namespace:start one two
 | `spork repl` | Starts a REPL with project source paths and `.venv` packages available. Creates the environment if it is missing. |
 | `spork add <package...>` | Adds or updates runtime requirements in the nearest `spork.it`. |
 | `spork remove <package...>` | Removes runtime requirements from the nearest `spork.it`. |
-| `spork sync` | Creates `.venv` and installs the manifest dependencies and Spork runtime. |
+| `spork sync` | Creates `.venv` and installs manifest dependencies plus a toolchain satisfying `:spork-version`. |
 | `spork run [args...]` | Loads and calls the configured entry point. Creates the environment if it is missing. |
 | `spork test` | Discovers and runs declared Spork tests. |
 | `spork check` | Checks project structure, imports, exports, and compilation without writing build output. |
@@ -336,7 +338,7 @@ The generated package files are build artifacts: do not add source `__init__.spo
 spork dist --clean
 ```
 
-By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The configured `:spork-version` is checked against the active compiler at build time. Generated package metadata directly requires `spork-runtime`—not `spork-lang`—alongside the project dependencies, optional extras, README, license, authors, classifiers, and project URLs from `spork.it`. `--clean` removes stale build and distribution output before rebuilding.
+By default this rebuilds `.spork-out/` and creates both a wheel and source distribution in `dist/`. The configured `:spork-version` is checked against the delegated project compiler at build time. Generated package metadata directly requires `spork-runtime`—not `spork-lang`—alongside the project dependencies, optional extras, README, license, authors, classifiers, and project URLs from `spork.it`. `--clean` removes stale build and distribution output before rebuilding.
 
 Useful variants:
 

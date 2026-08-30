@@ -6,6 +6,16 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-29
+
+### Added
+
+- Added project-local CLI delegation so synchronized projects consistently run with the compatible `spork-lang` installed in `.venv`.
+
+### Changed
+
+- `spork sync` now resolves `:spork-version` when the active launcher is incompatible while preserving an exact compatible active or editable toolchain.
+
 ## [0.5.0] - 2026-08-29
 
 ### Added
@@ -261,7 +271,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/spork-it/spork-lang/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/spork-it/spork-lang/compare/v0.4.4...v0.5.0
 [0.4.4]: https://github.com/spork-it/spork-lang/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/spork-it/spork-lang/compare/v0.4.2...v0.4.3

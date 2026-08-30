@@ -121,7 +121,7 @@ spork check
 spork run
 ```
 
-A `spork.it` manifest defines metadata, dependencies, source paths, and the entry point. Libraries can also declare a unified `:api`; Spork then generates idiomatic package-level Spork and Python APIs, version metadata, generic `.pyi` stubs, and `py.typed` from one annotated implementation namespace.
+A `spork.it` manifest defines metadata, dependencies, source paths, the compatible `spork-lang` range, and the entry point. `spork sync` installs a compatible toolchain into `.venv`; later project commands automatically delegate to that project-local version. Libraries can also declare a unified `:api`; Spork then generates idiomatic package-level Spork and Python APIs, version metadata, generic `.pyi` stubs, and `py.typed` from one annotated implementation namespace.
 
 Common commands include:
 
@@ -129,7 +129,7 @@ Common commands include:
 | --- | --- |
 | `spork repl` | Start a project-aware REPL |
 | `spork add` / `spork remove` | Edit dependencies in the nearest `spork.it` |
-| `spork sync` | Create the project environment and install dependencies |
+| `spork sync` | Install dependencies and a compatible project toolchain |
 | `spork run` | Run the configured entry point |
 | `spork test` | Discover and run Spork tests |
 | `spork check` | Validate project namespaces, imports, exports, and compilation |

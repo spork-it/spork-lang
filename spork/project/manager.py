@@ -6,8 +6,8 @@ This module provides the ProjectManager class which handles:
 - Dependency installation via pip
 - Toolchain injection (bringing in spork-runtime transitively)
 
-The manager ensures that user projects run in isolated environments
-while the Spork toolchain itself runs globally.
+The manager ensures that user projects run in isolated environments with a
+compatible project-local Spork toolchain.
 """
 
 import os
@@ -15,6 +15,9 @@ import subprocess
 import sys
 import venv
 from typing import Optional
+
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
 
 from spork.project.config import ProjectConfig
 
@@ -374,21 +377,87 @@ class ProjectManager:
             print(f"  [error] Failed to install spork-lang: {e}")
             return False
 
-    def _get_spork_install_spec(self) -> Optional[str]:
-        """Get the pip requirement used to install the active toolchain.
+    def _project_spork_specifier(self) -> Optional[SpecifierSet]:
+        """Return the project's declared compiler constraint, when present."""
+        requirement = self.config.spork_version
+        if requirement is None:
+            return None
+        try:
+            return SpecifierSet(requirement)
+        except InvalidSpecifier as error:
+            raise ValueError(
+                f"invalid :spork-version requirement {requirement!r}"
+            ) from error
 
-        Source checkouts remain editable. Installed releases are installed from
-        their exact published version so pip also installs spork-runtime and its
-        transitive spork-pds dependency. Copying only the ``spork`` directory
-        would leave a new project environment incomplete.
-        """
-        spork_source_dir = self._find_spork_source_dir()
-        if spork_source_dir:
-            return f"-e {spork_source_dir}"
+    def spork_version_satisfies_project(self, version: str) -> bool:
+        """Return whether *version* satisfies the project's compiler constraint."""
+        specifier = self._project_spork_specifier()
+        if specifier is None:
+            return True
+        try:
+            return Version(version) in specifier
+        except InvalidVersion:
+            return False
 
+    def active_spork_version(self) -> str:
+        """Return the version of the toolchain running this process."""
         import spork
 
-        return f"spork-lang=={spork.__version__}"
+        return spork.__version__
+
+    def active_spork_satisfies_project(self) -> bool:
+        """Return whether the running toolchain is compatible with the project."""
+        return self.spork_version_satisfies_project(self.active_spork_version())
+
+    def get_project_spork_version(self) -> Optional[str]:
+        """Return the spork-lang version installed in the project environment."""
+        if not self.has_venv():
+            return None
+
+        probe = (
+            "import spork\n"
+            "from importlib.metadata import version\n"
+            "print(version('spork-lang'))\n"
+        )
+        try:
+            result = subprocess.run(
+                [self.venv_python, "-c", probe],
+                cwd=self.config.project_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            return None
+        if result.returncode != 0:
+            return None
+        installed_version = result.stdout.strip()
+        return installed_version or None
+
+    def is_running_in_project_venv(self) -> bool:
+        """Return whether this process already uses the project environment."""
+        current_prefix = os.path.normcase(os.path.abspath(sys.prefix))
+        project_prefix = os.path.normcase(os.path.abspath(self.venv_path))
+        return current_prefix == project_prefix
+
+    def _get_spork_install_spec(self) -> Optional[str]:
+        """Get the pip requirement used to install the project toolchain.
+
+        A compatible active toolchain remains pinned (or editable for source
+        checkouts), making synchronization reproducible. If the active
+        toolchain does not satisfy ``:spork-version``, pip resolves a compatible
+        release from the manifest constraint instead.
+        """
+        active_version = self.active_spork_version()
+        active_is_compatible = self.spork_version_satisfies_project(active_version)
+        spork_source_dir = self._find_spork_source_dir()
+        if spork_source_dir and active_is_compatible:
+            return f"-e {spork_source_dir}"
+
+        if not active_is_compatible and self.config.spork_version is not None:
+            return f"spork-lang{self.config.spork_version}"
+
+        return f"spork-lang=={active_version}"
 
     def get_installed_packages(self) -> list[str]:
         """

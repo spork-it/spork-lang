@@ -28,7 +28,7 @@ python3 -m venv "$VENV_DIR"
 # Install Spork
 echo "   Downloading spork-lang from PyPI..."
 "$VENV_DIR/bin/pip" install -q --upgrade pip
-"$VENV_DIR/bin/pip" install -q spork-lang
+"$VENV_DIR/bin/pip" install -q --no-cache-dir spork-lang
 
 # Symlink
 mkdir -p "$BIN_DIR"

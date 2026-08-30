@@ -6,10 +6,6 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
-### Fixed
-
-- Render missing-namespace source search paths without representation escaping on Windows.
-
 ## [0.6.0] - 2026-08-30
 
 ### Added
@@ -32,6 +28,10 @@ This history was backfilled from release tags, commit history, and published rel
 - Separated top-level legacy/file dispatch from core command parsing while preserving existing command syntax and project-toolchain delegation.
 - Refactored `spork run` to use the shared project runtime while retaining environment bootstrap, normalized entry names, process statuses, and source tracebacks.
 - Generalized project-toolchain delegation to preserve extension commands and raw arguments, while keeping explicit file forms and the `plugin` bootstrap name non-delegated.
+
+### Fixed
+
+- Render missing-namespace source search paths without representation escaping on Windows.
 
 ## [0.5.3] - 2026-08-30
 

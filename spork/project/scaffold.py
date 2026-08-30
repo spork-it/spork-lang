@@ -256,6 +256,9 @@ spork repl
 # Run the main function
 spork run
 
+# Check all project sources
+spork check
+
 # Run project tests
 spork test
 

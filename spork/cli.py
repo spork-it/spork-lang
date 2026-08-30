@@ -10,6 +10,7 @@ This module provides the main CLI entry point for Spork with subcommand support:
 - spork sync          Sync project dependencies
 - spork run           Run the project's main entry point
 - spork test          Run project Spork tests
+- spork check         Check all project sources without executing them
 - spork build         Build project to .spork-out/ with Python + source maps
 - spork <file>        Execute a Spork file directly
 
@@ -436,6 +437,68 @@ def cmd_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check(args: argparse.Namespace) -> int:
+    """Check project namespaces, imports, exports, and compilation."""
+    import json
+    from pathlib import Path
+
+    from spork.project import (
+        ProjectConfig,
+        check_project,
+        find_project_root,
+        format_human_result,
+    )
+
+    output_format = getattr(args, "format", "human")
+    try:
+        config = ProjectConfig.load()
+        result = check_project(
+            config,
+            include_tests=not getattr(args, "no_tests", False),
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        if output_format == "json":
+            detected_root = find_project_root() or str(Path.cwd())
+            print(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "project": None,
+                        "projectRoot": str(Path(detected_root).resolve()),
+                        "filesChecked": 0,
+                        "namespacesChecked": 0,
+                        "errors": 1,
+                        "warnings": 0,
+                        "success": False,
+                        "diagnostics": [
+                            {
+                                "path": "spork.it",
+                                "line": 1,
+                                "column": 1,
+                                "endLine": 1,
+                                "endColumn": 2,
+                                "severity": "error",
+                                "code": "SPK001",
+                                "message": str(exc),
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if output_format == "json":
+        print(result.to_json())
+    else:
+        print(format_human_result(result))
+
+    warnings_fail = getattr(args, "warnings_as_errors", False) and result.warning_count
+    return 0 if result.success and not warnings_fail else 1
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     """Build the project to .spork-out/ with Python source and source maps."""
     from pathlib import Path
@@ -695,6 +758,7 @@ SUBCOMMANDS = {
     "sync",
     "run",
     "test",
+    "check",
     "build",
     "dist",
     "clean",
@@ -718,6 +782,7 @@ examples:
   spork remove httpx            Remove a project dependency
   spork sync                    Install project dependencies
   spork run                     Run project's main function
+  spork check                   Check project sources and namespaces
   spork script.spork            Execute a Spork file
   spork -c "(+ 1 2 3)"          Evaluate Spork code directly
   spork -e script.spork         Export Spork file to Python code
@@ -830,6 +895,34 @@ examples:
 
     # test subcommand
     subparsers.add_parser("test", help="Discover and run project Spork tests")
+
+    # check subcommand
+    check_parser = subparsers.add_parser(
+        "check", help="Check project sources without producing build artifacts"
+    )
+    check_parser.add_argument(
+        "--format",
+        choices=("human", "json"),
+        default="human",
+        help="Diagnostic output format (default: human)",
+    )
+    check_parser.add_argument(
+        "--json",
+        dest="format",
+        action="store_const",
+        const="json",
+        help="Shortcut for --format json",
+    )
+    check_parser.add_argument(
+        "--no-tests",
+        action="store_true",
+        help="Check only :source-paths, excluding :test-paths",
+    )
+    check_parser.add_argument(
+        "--warnings-as-errors",
+        action="store_true",
+        help="Return a failure status when warnings are reported",
+    )
 
     # build subcommand
     build_parser = subparsers.add_parser(
@@ -949,6 +1042,8 @@ def _main(argv: Optional[list[str]] = None) -> int:
         return cmd_run(args)
     elif args.subcommand == "test":
         return cmd_test(args)
+    elif args.subcommand == "check":
+        return cmd_check(args)
     elif args.subcommand == "build":
         return cmd_build(args)
     elif args.subcommand == "dist":

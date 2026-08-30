@@ -449,6 +449,53 @@ def process_defmacros(forms, macro_env, compile_defn_fn, normalize_name_fn):
     return remaining_forms
 
 
+def _load_namespace_macros_only(req_ns, current_file=None):
+    """Load only compile-time declarations from a required namespace.
+
+    ``spork check`` must expand user macros to validate the resulting program,
+    but it must not execute ordinary module forms.  A provisional namespace is
+    registered before recursively processing macro imports so cycles terminate.
+    """
+    from spork.compiler.context import get_compile_context
+    from spork.compiler.functions import compile_defn
+    from spork.compiler.reader import read_str
+    from spork.runtime.ns import (
+        get_namespace,
+        register_namespace,
+        resolve_require,
+    )
+    from spork.runtime.types import normalize_name
+
+    existing = get_namespace(req_ns)
+    if existing is not None:
+        return existing
+
+    _, path = resolve_require(req_ns, current_file)
+    with open(path, encoding="utf-8") as source_file:
+        forms = read_str(source_file.read())
+
+    local_macro_env = dict(MACRO_ENV)
+    remaining = process_defmacros(
+        forms,
+        local_macro_env,
+        compile_defn,
+        normalize_name,
+    )
+    info = register_namespace(
+        name=req_ns,
+        file=os.path.abspath(path),
+        env={},
+        macros=local_macro_env,
+    )
+
+    # Recursive imports see the provisional namespace above.  The active
+    # check-only compilation context makes this call use the same safe loader.
+    if get_compile_context().check_only:
+        process_ns_macros(remaining, local_macro_env, path)
+    info.macros = local_macro_env
+    return info
+
+
 def process_ns_macros(forms, macro_env, current_file=None):
     """
     Process (ns ...) forms to load macros at compile-time from :require clauses.
@@ -498,12 +545,20 @@ def process_ns_macros(forms, macro_env, current_file=None):
                     # Not found - compile_ns will report the syntax error.
                     continue
 
-                # Load the Spork module at compile-time to get its macros
+                # Load the Spork module at compile-time to get its macros. A
+                # check-only compilation evaluates macro declarations but not
+                # ordinary top-level forms from required modules.
                 if not namespace_loaded(req_ns):
                     try:
-                        __spork_require__(req_ns, current_file)
+                        from spork.compiler.context import get_compile_context
+
+                        if get_compile_context().check_only:
+                            _load_namespace_macros_only(req_ns, current_file)
+                        else:
+                            __spork_require__(req_ns, current_file)
                     except Exception:
-                        # Loading failed - will error later in compile_ns
+                        # Loading failed - the required file's own compilation
+                        # or compile_ns resolution will report the error.
                         continue
 
                 ns_info = get_namespace(req_ns)

@@ -23,6 +23,7 @@ class CompilationContext:
         self.test_names: set[str] = set()
         self.test_counter: int = 0
         self.aot_imports: bool = False
+        self.check_only: bool = False
 
     def add_function(self, func_def):
         """Add a nested function definition to be injected later."""
@@ -127,10 +128,11 @@ def get_compile_context() -> CompilationContext:
 
 
 @contextmanager
-def compilation_context(*, aot_imports: bool = False):
+def compilation_context(*, aot_imports: bool = False, check_only: bool = False):
     """Use an isolated context for one possibly-recursive compilation."""
     ctx = CompilationContext()
     ctx.aot_imports = aot_imports
+    ctx.check_only = check_only
     token = _compile_context_var.set(ctx)
     try:
         yield ctx

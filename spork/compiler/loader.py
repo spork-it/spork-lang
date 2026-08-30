@@ -188,7 +188,11 @@ def install_import_hook():
 
 
 def compile_file_to_python(
-    src: str, src_path: str, *, aot: bool = True
+    src: str,
+    src_path: str,
+    *,
+    aot: bool = True,
+    check_only: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     """Compile Spork source to importable Python and a source map.
 
@@ -211,7 +215,7 @@ def compile_file_to_python(
     )
     from spork.compiler.reader import read_str
 
-    with compilation_context(aot_imports=aot) as ctx:
+    with compilation_context(aot_imports=aot, check_only=check_only) as ctx:
         ctx.current_file = src_path if src_path != "<string>" else None
         forms = read_str(src)
         local_macro_env = dict(MACRO_ENV)

@@ -116,6 +116,7 @@ Create and run a project:
 spork new my-project
 cd my-project
 spork sync
+spork check
 spork run
 ```
 
@@ -130,6 +131,7 @@ Common commands include:
 | `spork sync` | Create the project environment and install dependencies |
 | `spork run` | Run the configured entry point |
 | `spork test` | Discover and run Spork tests |
+| `spork check` | Validate project namespaces, imports, exports, and compilation |
 | `spork build` | Compile sources to Python in `.spork-out/` |
 | `spork dist` | Build a wheel and source distribution |
 | `spork lsp` | Start the language server |

@@ -35,6 +35,17 @@ from spork.project.build import (
     module_name_to_path,
     path_to_module_name,
 )
+from spork.project.check import (
+    CheckDiagnostic,
+    CheckResult,
+    Definition,
+    IndexedDocument,
+    ProjectIndex,
+    SourceRange,
+    check_project,
+    expected_namespace_for_path,
+    format_human_result,
+)
 from spork.project.config import (
     DEFAULT_REQUIRES_PYTHON,
     DEFAULT_SOURCE_PATHS,
@@ -74,6 +85,16 @@ from spork.project.scaffold import (
 )
 
 __all__ = [
+    # Check
+    "check_project",
+    "format_human_result",
+    "expected_namespace_for_path",
+    "CheckDiagnostic",
+    "CheckResult",
+    "Definition",
+    "IndexedDocument",
+    "ProjectIndex",
+    "SourceRange",
     # Build
     "build_project",
     "BuildResult",

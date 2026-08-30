@@ -8,6 +8,7 @@ This guide covers `spork.it`, project-aware commands, dependency environments, c
 spork new hello-spork
 cd hello-spork
 spork sync
+spork check
 spork test
 spork run
 ```
@@ -169,6 +170,7 @@ spork run --main other.namespace:start one two
 | `spork sync` | Creates `.venv` and installs the manifest dependencies and Spork runtime. |
 | `spork run [args...]` | Loads and calls the configured entry point. Creates the environment if it is missing. |
 | `spork test` | Discovers and runs declared and legacy Spork tests. |
+| `spork check` | Checks project structure, imports, exports, and compilation without writing build output. |
 | `spork build` | Compiles all `.spork` files under `:source-paths` into `.spork-out/`. |
 | `spork dist` | Builds compiled output, then creates a wheel and source distribution in `dist/`. |
 | `spork clean` | Removes `.venv/`. |
@@ -177,6 +179,68 @@ spork run --main other.namespace:start one two
 | `spork version` | Prints the Spork, Python, and platform versions. |
 
 Use `spork <command> --help` for command-specific options. Install any project-specific development dependencies before testing with `spork sync --dev`.
+
+## Project checks
+
+Run a complete project check from anywhere below the directory containing `spork.it`:
+
+```bash
+spork check
+```
+
+The command reads every `.spork` file below `:source-paths` and `:test-paths`, builds a project namespace and symbol index, and reports all diagnostics it can find in one run. It checks:
+
+- reader and compiler errors;
+- missing source roots and missing namespace declarations in source files;
+- namespace names against their source-relative paths, including the conventional `_`-to-`-` mapping and package `__init__.spork` files;
+- duplicate namespace declarations;
+- unresolved Spork namespaces and Python modules;
+- names requested through `:refer` that the target namespace does not export;
+- the configured `:main` namespace and function;
+- generated `:api` source exports, normalized names, and hand-written-file conflicts; and
+- both ordinary and generated package-level Spork namespaces.
+
+Test namespaces normally match their path. A mirrored test such as `tests/acme/core.spork` may also declare `acme.core-test`; legacy test files without an `ns` form remain valid. Exclude all configured test paths when checking only distributable sources:
+
+```bash
+spork check --no-tests
+```
+
+`spork check` does not create `.spork-out/`, create a virtual environment, install dependencies, or run ordinary top-level forms. If a project environment already exists, its site-packages are used. A missing Python dependency is reported with a suggestion to run `spork sync`. User-defined macros must execute at compile time so their expansions can be checked; macros and read-time evaluation therefore remain trusted code, as they are during a build.
+
+The human format uses compiler-style, 1-based locations and stable diagnostic codes:
+
+```text
+src/acme/core.spork:3:14: error SPK007: Namespace 'acme.util' does not export 'missing'
+Checked 4 files; 1 error, 0 warnings
+```
+
+For editor, CI, or other machine consumers, request versioned JSON:
+
+```bash
+spork check --format json
+spork check --json             # equivalent shorthand
+```
+
+The top-level object contains `version`, `project`, `projectRoot`, `filesChecked`, `namespacesChecked`, `errors`, `warnings`, `success`, and `diagnostics`. Each diagnostic contains `path`, `line`, `column`, `endLine`, `endColumn`, `severity`, `code`, and `message`. JSON line and column values are 1-based. Paths inside the project are project-relative and use `/` separators.
+
+| Code | Meaning |
+| --- | --- |
+| `SPK001` | Source parse/read error or manifest loading error. |
+| `SPK002` | Missing namespace declaration in a source file. |
+| `SPK003` | Declared namespace does not match the source path. |
+| `SPK004` | Namespace is declared by multiple project files. |
+| `SPK005` | Invalid namespace clause or require specification. |
+| `SPK006` | Required Spork namespace cannot be resolved. |
+| `SPK007` | A referred symbol is not exported by its namespace. |
+| `SPK008` | Imported Python module cannot be resolved. |
+| `SPK009` | Compilation failed after structural checks. |
+| `SPK010` | The configured `:main` target is invalid. |
+| `SPK011` | The generated `:api` configuration is invalid. |
+| `SPK012` | A configured source root does not exist. |
+| `SPK013` | No Spork source files were found. |
+
+The command exits with status zero when no errors are present and status one otherwise. `--warnings-as-errors` also makes warnings fail the command while preserving their warning severity in output.
 
 ## Testing
 

@@ -6,6 +6,11 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+### Added
+
+- Added `spork check` for project-wide reader/compiler validation, namespace-path and duplicate checks, Spork/Python import resolution, referred-export validation, `:main` and generated `:api` validation, and versioned JSON diagnostics with stable codes.
+- Added a reusable project namespace and symbol index that checks configured source and test paths without producing build artifacts or executing ordinary module forms.
+
 ## [0.4.4] - 2026-08-29
 
 ### Changed

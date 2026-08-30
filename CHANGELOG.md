@@ -6,6 +6,8 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-30
+
 ### Added
 
 - Added immutable command provider, context, and specification primitives with a shared raw-argument invocation contract for core and future extension commands.
@@ -312,7 +314,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/spork-it/spork-lang/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/spork-it/spork-lang/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/spork-it/spork-lang/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/spork-it/spork-lang/compare/v0.5.0...v0.5.1

@@ -30,7 +30,7 @@ def create_library_project(root: Path) -> Path:
  :version "1.2.3"
  :description "A \\"quoted\\" fixture"
  :requires-python ">=3.10"
- :spork-version ">=0.5.2,<0.6"
+ :spork-version ">=0.6,<0.7"
  :readme "README.md"
  :license "MIT"
  :license-file "LICENSE"
@@ -363,7 +363,7 @@ def test_project_config_loads_distribution_and_development_metadata(tmp_path: Pa
     assert config.authors == [
         {"name": "Spork Tester", "email": "test@example.com"}
     ]
-    assert config.spork_version == ">=0.5.2,<0.6"
+    assert config.spork_version == ">=0.6,<0.7"
     assert config.api is not None
     assert config.api.source_module == "fixture-lib.core"
     assert config.api.spork is not None

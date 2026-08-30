@@ -41,7 +41,7 @@ A manifest is a Spork map containing project metadata and tooling settings:
  :version "0.1.0"
  :description "A small Spork application"
  :requires-python ">=3.10"
- :spork-version ">=0.5.3,<0.6"
+ :spork-version ">=0.6,<0.7"
  :dependencies ["httpx>=0.27" "rich"]
  :dev-dependencies []
  :source-paths ["src"]

@@ -101,7 +101,7 @@ def generate_dist_pyproject(
     except InvalidSpecifier as error:
         raise ValueError(
             ":spork-version must be a version specifier such as "
-            '\">=0.5.3,<0.6\"'
+            '\">=0.6,<0.7\"'
         ) from error
     if Version(spork.__version__) not in supported_compilers:
         raise ValueError(

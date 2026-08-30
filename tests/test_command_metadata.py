@@ -42,7 +42,7 @@ def write_provider_project(
  :version "1.2.3"
  :description "Command provider fixture"
  :requires-python ">=3.10"
- :spork-version ">=0.5.3,<0.6"
+ :spork-version ">=0.6,<0.7"
  :dependencies []
  :source-paths ["src"]
  :test-paths []

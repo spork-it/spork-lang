@@ -1,7 +1,7 @@
 {:name "command-consumer"
  :version "0.1.0"
  :description "Consumes a project-local Spork command provider"
- :spork-version ">=0.5.3,<0.6"
+ :spork-version ">=0.6,<0.7"
  :dependencies ["spork-greeter==0.1.0"]
  :source-paths []
  :test-paths []}

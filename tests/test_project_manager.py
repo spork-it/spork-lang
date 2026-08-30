@@ -71,7 +71,7 @@ def test_compatible_active_toolchain_is_pinned_during_sync(
         name="environment-fixture",
         version="0.1.0",
         project_root=str(tmp_path),
-        spork_version=">=0.5,<0.6",
+        spork_version=">=0.6,<0.7",
     )
     manager = ProjectManager(config)
 

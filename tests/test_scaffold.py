@@ -11,7 +11,7 @@ def test_hyphenated_project_uses_normalized_namespace_directory(tmp_path: Path):
     assert (project / "tests" / "hello_spork" / "core_test.spork").is_file()
     manifest = (project / "spork.it").read_text()
     assert ':main "hello-spork.core:main"' in manifest
-    assert ':spork-version ">=0.5.3,<0.6"' in manifest
+    assert ':spork-version ">=0.6.0,<0.7"' in manifest
     assert ":dev-dependencies []" in manifest
     generated_test = (
         project / "tests" / "hello_spork" / "core_test.spork"

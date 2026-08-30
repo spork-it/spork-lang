@@ -33,6 +33,7 @@ from spork.compiler.loader import (
     compile_with_cache,
     get_cached_code,
     install_import_hook,
+    load_source_namespace,
 )
 
 # Re-export macros
@@ -87,7 +88,9 @@ def _initialize():
     from spork.compiler.functions import compile_defn
     from spork.compiler.macros import init_stdlib_macros
     from spork.runtime.types import normalize_name
+    from spork.runtime.utils import install_namespace_loader
 
+    install_namespace_loader(load_source_namespace)
     init_stdlib_macros(compile_defn, normalize_name)
 
 

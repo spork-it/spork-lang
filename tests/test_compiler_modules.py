@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import spork.compiler
+import spork.runtime
 from spork.compiler.arity import is_multi_arity, parse_arity
 from spork.compiler.context import compilation_context, get_compile_context
 from spork.compiler.destructuring import compile_destructure
@@ -139,6 +140,27 @@ def test_parallel_compilations_keep_context_state_isolated():
             "refers": {},
             "aot_imports": aot_imports,
         }
+
+
+def test_runtime_modules_do_not_import_compiler():
+    runtime_dir = Path(spork.runtime.__file__).parent
+    offenders = []
+
+    for path in sorted(runtime_dir.glob("*.py")):
+        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(module):
+            imported_modules = []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                imported_modules.append(node.module)
+            elif isinstance(node, ast.Import):
+                imported_modules.extend(alias.name for alias in node.names)
+            if any(
+                name == "spork.compiler" or name.startswith("spork.compiler.")
+                for name in imported_modules
+            ):
+                offenders.append(f"{path.name}:{node.lineno}")
+
+    assert offenders == []
 
 
 def test_feature_modules_do_not_import_codegen():

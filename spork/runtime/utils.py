@@ -11,8 +11,7 @@ at runtime. These include:
 - Namespace helpers: __spork_require__, __spork_ns_env__, etc.
 """
 
-import os
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 # Import runtime components
 from spork.runtime.core import (
@@ -257,56 +256,28 @@ def spork_kwargs_dict(m):
 # =============================================================================
 
 
-def __spork_require__(ns_name: str, current_file: Optional[str] = None) -> None:
-    """
-    Load a Spork namespace (if not already loaded).
+NamespaceLoader = Callable[[str, Optional[str]], None]
+_namespace_loader: Optional[NamespaceLoader] = None
 
-    This is called by generated code for (require ...) forms.
-    """
-    from spork.runtime.ns import (
-        namespace_loaded,
-        register_namespace,
-        resolve_require,
-    )
+
+def install_namespace_loader(loader: NamespaceLoader) -> None:
+    """Install the source namespace loader supplied by the compiler."""
+    global _namespace_loader
+    _namespace_loader = loader
+
+
+def __spork_require__(ns_name: str, current_file: Optional[str] = None) -> None:
+    """Load a source namespace through the installed compiler provider."""
+    from spork.runtime.ns import namespace_loaded
 
     if namespace_loaded(ns_name):
         return
-
-    _, path = resolve_require(ns_name, current_file)
-
-    # Load the Spork namespace file.
-
-    # Import here to avoid circular imports. Namespace compilation gets an
-    # isolated context because it can happen recursively while compiling the
-    # requiring module.
-    from spork.compiler.context import compilation_context
-    from spork.compiler.pipeline import compile_forms_to_code
-
-    with open(path, encoding="utf-8") as f:
-        src = f.read()
-
-    env: dict[str, Any] = {
-        "__name__": ns_name,
-        "__file__": path,
-    }
-    setup_runtime_env(env)
-
-    with compilation_context() as ctx:
-        ctx.current_file = path
-        code, macro_env = compile_forms_to_code(src, path)
-        env["__spork_macros__"] = macro_env
-        exec(code, env, env)
-
-        # Register the namespace while its context is still active so aliases
-        # and referred symbols describe this module rather than its caller.
-        register_namespace(
-            name=ns_name,
-            file=os.path.abspath(path),
-            env=env,
-            macros=macro_env,
-            refers=ctx.ns_refers,
-            aliases=ctx.ns_aliases,
+    if _namespace_loader is None:
+        raise RuntimeError(
+            "Loading .spork source requires the Spork compiler; "
+            "no namespace loader is installed"
         )
+    _namespace_loader(ns_name, current_file)
 
 
 def __spork_ns_env__(ns_name: str):
@@ -617,6 +588,7 @@ __all__ = [
     "spork_raise",
     "spork_setattr",
     "register_spork_test",
+    "install_namespace_loader",
     # Environment setup
     "setup_runtime_env",
     # Namespace helpers

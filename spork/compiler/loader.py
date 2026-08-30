@@ -102,6 +102,52 @@ def compile_with_cache(src: str, path: str) -> tuple[CodeType, dict[str, Any]]:
 
 
 # =============================================================================
+# Source Namespace Loading
+# =============================================================================
+
+
+def load_source_namespace(
+    ns_name: str, current_file: Optional[str] = None
+) -> None:
+    """Compile, execute, and register a required Spork source namespace."""
+    from spork.compiler.context import compilation_context
+    from spork.compiler.pipeline import compile_forms_to_code
+    from spork.runtime import setup_runtime_env
+    from spork.runtime.ns import (
+        namespace_loaded,
+        register_namespace,
+        resolve_require,
+    )
+
+    if namespace_loaded(ns_name):
+        return
+
+    _, path = resolve_require(ns_name, current_file)
+    with open(path, encoding="utf-8") as source_file:
+        source = source_file.read()
+
+    env: dict[str, Any] = {
+        "__name__": ns_name,
+        "__file__": path,
+    }
+    setup_runtime_env(env)
+
+    with compilation_context() as ctx:
+        ctx.current_file = path
+        code, macro_env = compile_forms_to_code(source, path)
+        env["__spork_macros__"] = macro_env
+        exec(code, env, env)
+        register_namespace(
+            name=ns_name,
+            file=os.path.abspath(path),
+            env=env,
+            macros=macro_env,
+            refers=ctx.ns_refers,
+            aliases=ctx.ns_aliases,
+        )
+
+
+# =============================================================================
 # Import Hooks
 # =============================================================================
 

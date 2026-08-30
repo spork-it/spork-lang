@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from spork.runtime.types import normalize_name
+from spork.runtime.types import Keyword, Symbol, VectorLiteral, normalize_name
 
 
 class NamespaceProxy:
@@ -468,9 +468,6 @@ def parse_require_spec(spec) -> dict[str, Any]:
         - "alias": alias name or None
         - "refer": list of symbol names, ":all", or None
     """
-    # Import here to avoid circular imports
-    from spork.compiler import Keyword, Symbol, VectorLiteral
-
     result: dict[str, Any] = {"ns": None, "alias": None, "refer": None}
 
     # Handle bare symbol

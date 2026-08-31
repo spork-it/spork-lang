@@ -34,4 +34,4 @@ GitHub fetch took 0.42s
 - [`spork.it`](spork.it) declares `requests` and the `stars.core:main` entry point.
 - [`src/stars/core.spork`](src/stars/core.spork) contains the macro and application.
 
-See [Projects and CLI](../../docs/PROJECTS.md) for manifest and dependency details. The [Language Reference](../../docs/LANG.md) covers [macros](../../docs/LANG.md#11-macros), [pattern matching](../../docs/LANG.md#7-pattern-matching), and [sorted iteration expressions](../../docs/LANG.md#sorted-for-expression).
+See the canonical [projects and CLI reference](https://spork.sh/docs/reference/tooling/) for manifest and dependency details. The language reference covers [macros](https://spork.sh/docs/reference/language/macros/), [pattern matching](https://spork.sh/docs/reference/language/pattern-matching/), and [sorted iteration](https://spork.sh/docs/reference/language/forms-and-control-flow/#sorted-for-expression).

@@ -31,4 +31,4 @@ The exact response is controlled by the remote service.
 - [`spork.it`](spork.it) declares `aiohttp` and the `async.core:main` entry point.
 - [`src/async/core.spork`](src/async/core.spork) contains the program.
 
-See [Projects and CLI](../../docs/PROJECTS.md) for manifest and environment details, and [Async & Generators](../../docs/LANG.md#12-async--generators) for the language forms.
+See the canonical [projects and CLI reference](https://spork.sh/docs/reference/tooling/) for manifest and environment details, and [async and generators](https://spork.sh/docs/reference/language/async-and-generators/) for the language forms.

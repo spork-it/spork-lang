@@ -2,7 +2,7 @@
 
 This document records exploratory designs. Nothing here is part of the supported language, CLI, or project-manifest format, and the syntax may change or never be implemented.
 
-For implemented behavior, use the [Language Reference](LANG.md), [Standard Library Reference](STDLIB.md), and [Projects and CLI](PROJECTS.md).
+For implemented behavior, use the canonical documentation at [spork.sh/docs](https://spork.sh/docs/).
 
 ## Dynamic module loading
 

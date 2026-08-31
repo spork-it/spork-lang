@@ -1,5 +1,5 @@
 ;; Spork Project Manifest
-;; See ../../docs/PROJECTS.md for manifest documentation
+;; See https://spork.sh/docs/reference/tooling/ for manifest documentation
 
 {:name "async"
  :version "0.1.0"

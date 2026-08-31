@@ -1,6 +1,6 @@
 # spork.nvim
 
-Neovim support for [Spork](https://github.com/spork-it/spork-lang), a Lisp hosted on CPython. The plugin provides filetype, syntax, indentation, and LSP setup from this repository's `editors/nvim` directory.
+Neovim support for [Spork](https://spork.sh/docs/packages/spork-lang/), a Lisp hosted on CPython. The plugin provides filetype, syntax, indentation, and LSP setup from this repository's `editors/nvim` directory.
 
 ## Features
 

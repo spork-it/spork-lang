@@ -108,7 +108,7 @@ def generate_spork_it(name: str, version: str = "0.1.0", description: str = "") 
         desc_line = f'\n :description "{description}"'
 
     return f""";; Spork Project Manifest
-;; See https://github.com/spork-it/spork-lang/blob/main/docs/PROJECTS.md
+;; See https://spork.sh/docs/reference/tooling/
 
 {{:name "{name}"
  :version "{version}"{desc_line}

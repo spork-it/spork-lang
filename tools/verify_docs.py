@@ -220,23 +220,6 @@ def examples() -> list[Example]:
     return result
 
 
-def module_prelude(example: Example) -> str:
-    if example.path.name != "STDLIB.md":
-        return ""
-    preceding = "\n".join(
-        example.path.read_text(encoding="utf-8").splitlines()[: example.line]
-    )
-    sections = {
-        preceding.rfind("### std.string"): "[std.string :as str]",
-        preceding.rfind("### std.map"): "[std.map :as m]",
-        preceding.rfind("### std.json"): "[std.json :as json]",
-    }
-    position = max(sections)
-    if position < 0:
-        return ""
-    return f"(ns docs.verify (:require {sections[position]}))\n"
-
-
 def _form_span(source: str, start_line: int) -> tuple[int, int]:
     """Find the source span of a top-level form whose first token is known."""
     line_offsets = [0]
@@ -567,7 +550,7 @@ def verify_spork(example: Example) -> tuple[bool, str]:
             if expected
             else instrument_expected_values(example)
         )
-        source = FIXTURES + module_prelude(example) + checked_source
+        source = FIXTURES + checked_source
         script = temp / "example.spork"
         script.write_text(source, encoding="utf-8")
         result = subprocess.run(

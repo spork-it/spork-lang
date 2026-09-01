@@ -190,6 +190,13 @@ def compile_loop_expr(args, form_loc=None):
     if len(items) % 2 != 0:
         raise SyntaxError("loop bindings must have even number of forms")
 
+    # Preserve helpers that belong to an enclosing expression. Only helpers
+    # created while lowering this loop may be moved into the loop wrapper.
+    # Clearing the whole context here can strand an enclosing binding's helper
+    # inside this function even though that helper is called outside it.
+    ctx = get_compile_context()
+    saved_funcs_count = len(ctx.nested_functions)
+
     # Generate result variable name
     result_var = gensym("__loop_result_")
 
@@ -240,9 +247,11 @@ def compile_loop_expr(args, form_loc=None):
     # Create the function that contains our loop and returns the result
     fn_name = gensym("__loop_fn_")
 
-    # Inject any nested function definitions (from inner loops) AFTER variable initialization
-    # so that nested functions can reference the loop variables
-    nested_funcs = get_compile_context().get_and_clear_functions()
+    # Inject only functions created by this loop after variable initialization
+    # so they can reference loop variables. Helpers already pending in the
+    # enclosing context must remain there, before the call sites that own them.
+    nested_funcs = ctx.nested_functions[saved_funcs_count:]
+    ctx.nested_functions = ctx.nested_functions[:saved_funcs_count]
 
     fn_body: list[ast.stmt] = []
     fn_body.extend(cast(list[ast.stmt], init_stmts))

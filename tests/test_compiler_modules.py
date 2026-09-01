@@ -143,6 +143,24 @@ def test_pipeline_cold_import_initializes_recursive_lowering(tmp_path):
     assert completed.returncode == 0, completed.stderr
 
 
+def test_loop_expression_does_not_steal_enclosing_binding_helpers():
+    source = """
+    (defn choose [present]
+      (let [prior 0]
+        (let [workspace
+              (if present
+                (let [existing 41] (+ existing 1))
+                0)]
+          (loop [attempt 1]
+            workspace))))
+    (def result (choose true))
+    """
+
+    from spork.compiler.pipeline import eval_str
+
+    assert eval_str(source)["result"] == 42
+
+
 def test_parallel_compilations_keep_context_state_isolated():
     jobs = [(index, index % 2 == 0) for index in range(24)]
 

@@ -235,7 +235,9 @@ def test_same_scope_collision_is_deterministic_error(tmp_path: Path, monkeypatch
     assert message.index("provider-a") < message.index("provider-z")
 
 
-def test_catalog_precedence_prefers_project_over_active(tmp_path: Path):
+def test_catalog_precedence_prefers_project_then_active_then_global(
+    tmp_path: Path,
+):
     project = discovered_command(
         tmp_path,
         lambda context, argv: 1,
@@ -248,12 +250,29 @@ def test_catalog_precedence_prefers_project_over_active(tmp_path: Path):
         scope="active",
         provider="active-provider",
     )
+    global_command = discovered_command(
+        tmp_path,
+        lambda context, argv: 3,
+        scope="global",
+        provider="global-provider",
+    )
 
     catalog = combine_command_catalogs(
-        [CommandCatalog({"greet": project}), CommandCatalog({"greet": active})]
+        [
+            CommandCatalog({"greet": project}),
+            CommandCatalog({"greet": active}),
+            CommandCatalog({"greet": global_command}),
+        ]
+    )
+    without_project = combine_command_catalogs(
+        [
+            CommandCatalog({"greet": active}),
+            CommandCatalog({"greet": global_command}),
+        ]
     )
 
     assert catalog.commands["greet"] is project
+    assert without_project.commands["greet"] is active
     with pytest.raises(TypeError):
         catalog.commands["other"] = active  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import keyword
+import os
+import subprocess
 from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
+
+from packaging.utils import canonicalize_name
 
 from spork.commands import (
     COMMAND_ENTRY_POINT_GROUP,
@@ -44,6 +48,8 @@ class DiscoveredCommand:
     target: str
     provider: CommandProvider
     entry_point: metadata.EntryPoint = field(repr=False, compare=False)
+    execution_python: Path | None = field(default=None, repr=False, compare=False)
+    host_version: str | None = field(default=None, repr=False, compare=False)
 
     @property
     def summary(self) -> str:
@@ -55,6 +61,54 @@ class DiscoveredCommand:
         """Create a common command spec whose provider is loaded on invocation."""
 
         def handler(context: CommandContext, argv: list[str]) -> int | None:
+            if self.execution_python is not None:
+                if context.project is not None:
+                    from spork.project.manager import ProjectManager
+
+                    manager = ProjectManager(context.project)
+                    compatible = (
+                        self.host_version is not None
+                        and manager.spork_version_satisfies_project(
+                            self.host_version
+                        )
+                    )
+                    if not compatible:
+                        requirement = context.project.spork_version or "<unknown>"
+                        raise CommandProviderLoadError(
+                            f"managed global provider host spork-lang=="
+                            f"{self.host_version or 'unknown'} does not satisfy "
+                            f"the project requirement {requirement!r}; install "
+                            f"the provider locally with `spork add "
+                            f"{self.provider.name}` and `spork sync`"
+                        )
+
+                environment = os.environ.copy()
+                environment[MANAGED_PLUGIN_INVOCATION_ENV] = canonicalize_name(
+                    self.provider.name
+                )
+                environment[MANAGED_PLUGIN_COMMAND_ENV] = self.name
+                try:
+                    completed = subprocess.run(
+                        [
+                            str(self.execution_python),
+                            "-m",
+                            "spork",
+                            self.name,
+                            *argv,
+                        ],
+                        cwd=context.cwd,
+                        env=environment,
+                        check=False,
+                    )
+                except OSError as error:
+                    raise CommandProviderLoadError(
+                        f"could not run managed global command {self.name!r} from "
+                        f"{self.provider.name}: {error}; repair it with `spork "
+                        f"plugin remove {self.provider.name}` followed by `spork "
+                        f"plugin add {self.provider.name}`"
+                    ) from error
+                return completed.returncode
+
             if self.provider.scope == "project":
                 from spork.project.manager import ProjectManager
 
@@ -85,6 +139,10 @@ class DiscoveredCommand:
             handler=handler,
             provider=self.provider,
         )
+
+
+MANAGED_PLUGIN_INVOCATION_ENV = "SPORK_MANAGED_PLUGIN_INVOCATION"
+MANAGED_PLUGIN_COMMAND_ENV = "SPORK_MANAGED_PLUGIN_COMMAND"
 
 
 @dataclass(frozen=True)
@@ -176,14 +234,25 @@ def discover_commands(
     scope: CommandScope,
     *,
     paths: Sequence[str | Path] | None = None,
+    provider_names: Iterable[str] | None = None,
 ) -> CommandCatalog:
-    """Discover one scope from entry-point metadata without importing providers."""
+    """Discover one scope from entry-point metadata without importing providers.
+
+    ``provider_names`` restricts discovery to named distributions. Managed
+    plugin environments use this to ignore command providers pulled in only as
+    dependencies of the explicitly installed provider.
+    """
     if scope not in {"project", "active", "global"}:
         raise ValueError(f"cannot discover command providers in {scope!r} scope")
 
     diagnostics: list[CommandDiscoveryDiagnostic] = []
     candidates: dict[str, list[DiscoveredCommand]] = {}
     distribution_paths = None if paths is None else [str(Path(path)) for path in paths]
+    selected_providers = (
+        None
+        if provider_names is None
+        else {canonicalize_name(name) for name in provider_names}
+    )
 
     try:
         if distribution_paths is None:
@@ -203,6 +272,11 @@ def discover_commands(
         provider: CommandProvider | None = None
         try:
             provider = _distribution_provider(distribution, scope)
+            if (
+                selected_providers is not None
+                and canonicalize_name(provider.name) not in selected_providers
+            ):
+                continue
             entry_points = distribution.entry_points
         except Exception as error:
             diagnostics.append(
@@ -315,18 +389,27 @@ def combine_command_catalogs(catalogs: Iterable[CommandCatalog]) -> CommandCatal
     return CommandCatalog(commands=commands, diagnostics=tuple(diagnostics))
 
 
-def discover_extension_commands(project: ProjectConfig | None) -> CommandCatalog:
-    """Discover project and active providers in deterministic precedence order."""
-    catalogs: list[CommandCatalog] = []
+def discover_extension_command_scopes(
+    project: ProjectConfig | None,
+) -> tuple[CommandCatalog, CommandCatalog, CommandCatalog]:
+    """Discover project, active, and managed-global scopes independently."""
     project_environment: Path | None = None
+    project_catalog = CommandCatalog()
     if project is not None and project.venv_site_packages is not None:
         project_environment = Path(project.venv_site_packages).resolve()
-        catalogs.append(
-            discover_commands("project", paths=[project_environment])
+        project_catalog = discover_commands(
+            "project", paths=[project_environment]
         )
 
     active = discover_commands("active")
     if project_environment is not None:
         active = _without_location(active, project_environment)
-    catalogs.append(active)
-    return combine_command_catalogs(catalogs)
+
+    from spork.plugins import discover_global_commands
+
+    return project_catalog, active, discover_global_commands()
+
+
+def discover_extension_commands(project: ProjectConfig | None) -> CommandCatalog:
+    """Discover extensions in project, active, then global precedence order."""
+    return combine_command_catalogs(discover_extension_command_scopes(project))

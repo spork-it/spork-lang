@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spork-lang"
-version = "0.6.0"
+version = "0.6.1"
 description = "A Lisp to Python transpiler with persistent data structures"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,6 +42,7 @@ classifiers = [
 dependencies = [
     "build>=1",
     "packaging>=24",
+    "platformdirs>=4",
     "setuptools>=77",
     "spork-runtime>=0.1.1,<0.2.0",
 ]
@@ -55,7 +56,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://spork.sh/"
-Documentation = "https://spork.sh/docs/packages/spork-lang/"
+Documentation = "https://spork.sh/docs/"
 Repository = "https://github.com/spork-it/spork-lang"
 Issues = "https://github.com/spork-it/spork-lang/issues"
 Changelog = "https://github.com/spork-it/spork-lang/blob/main/CHANGELOG.md"

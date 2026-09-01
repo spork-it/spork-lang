@@ -31,6 +31,7 @@ EXPECTED_CORE_COMMANDS = (
     "clean",
     "lsp",
     "version",
+    "plugin",
 )
 
 
@@ -137,6 +138,10 @@ def test_each_core_command_has_an_isolated_parser():
     assert cli.create_command_parser("repl").parse_args([]) is not None
     assert cli.create_command_parser("test").parse_args([]) is not None
     assert cli.create_command_parser("version").parse_args([]) is not None
+
+    plugin = cli.create_command_parser("plugin").parse_args(["which", "site"])
+    assert plugin.plugin_action == "which"
+    assert plugin.command == "site"
 
     new = cli.create_command_parser("new").parse_args(["demo", "--path", "parent"])
     assert (new.name, new.path) == ("demo", "parent")

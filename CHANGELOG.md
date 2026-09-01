@@ -6,6 +6,14 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-31
+
+### Added
+
+- Added `spork plugin add`, `remove`, `list`, and `which` for explicitly managed global command providers.
+- Added isolated per-provider environments, platform-specific storage with `SPORK_HOME` overrides, and a locked atomic plugin registry.
+- Added managed-global command fallback, project/active shadowing, host compatibility checks, staged-install rollback, and corruption diagnostics.
+
 ## [0.6.0] - 2026-08-30
 
 ### Added
@@ -318,7 +326,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/spork-it/spork-lang/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/spork-it/spork-lang/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/spork-it/spork-lang/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/spork-it/spork-lang/compare/v0.5.1...v0.5.2

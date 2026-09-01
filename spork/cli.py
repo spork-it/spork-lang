@@ -12,7 +12,8 @@ This module provides the main CLI entry point for Spork with subcommand support:
 - spork test          Run project Spork tests
 - spork check         Check all project sources without executing them
 - spork build         Build project to .spork-out/ with Python + source maps
-- spork <provider>    Run a project-local or active extension command
+- spork plugin ...    Manage isolated global command providers
+- spork <provider>    Run a project, active, or global extension command
 - spork <file>        Execute an explicit Spork file path
 
 Legacy flags are still supported for backwards compatibility:
@@ -34,7 +35,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Callable, Mapping, Optional
 
 from spork.command_discovery import (
+    MANAGED_PLUGIN_COMMAND_ENV,
+    MANAGED_PLUGIN_INVOCATION_ENV,
     CommandCatalog,
+    CommandDiscoveryDiagnostic,
     CommandProviderLoadError,
     DiscoveredCommand,
     discover_extension_commands,
@@ -526,6 +530,167 @@ def cmd_clean(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def _plugin_list() -> int:
+    from packaging.utils import canonicalize_name
+
+    from spork.plugins import PluginManager, discover_global_commands
+
+    manager = PluginManager()
+    records = manager.records()
+    if not records:
+        print("No managed global plugins installed.")
+        return 0
+
+    catalog = discover_global_commands(manager)
+    rows = []
+    for record in records:
+        broken = any(
+            catalog.diagnostics_for(command) for command in record.commands
+        )
+        complete = all(
+            command in catalog.commands
+            and canonicalize_name(
+                catalog.commands[command].provider.name
+            )
+            == record.distribution
+            for command in record.commands
+        )
+        rows.append(
+            (
+                record.display_name,
+                record.version,
+                ", ".join(record.commands),
+                "broken" if broken or not complete else "ready",
+            )
+        )
+
+    headers = ("PACKAGE", "VERSION", "COMMANDS", "STATUS")
+    widths = [
+        max(len(headers[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headers))
+    ]
+    print(
+        "  ".join(
+            header.ljust(widths[index])
+            for index, header in enumerate(headers)
+        )
+    )
+    for row in rows:
+        print("  ".join(value.ljust(widths[index]) for index, value in enumerate(row)))
+    for diagnostic in catalog.diagnostics:
+        if diagnostic.command is not None:
+            _print_discovery_diagnostic(diagnostic.message, warning=True)
+    return 0
+
+
+def _provider_display(command: DiscoveredCommand) -> str:
+    provider = command.provider
+    version = f" {provider.version}" if provider.version else ""
+    return f"{provider.name}{version} ({provider.scope})"
+
+
+def _plugin_which(command_name: str) -> int:
+    from spork.command_discovery import discover_extension_command_scopes
+    from spork.project.config import ProjectConfig
+
+    project = None
+    try:
+        project = ProjectConfig.load()
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError) as error:
+        _print_discovery_diagnostic(
+            f"could not load project configuration: {error}"
+        )
+        return 1
+
+    project_catalog, active_catalog, global_catalog = (
+        discover_extension_command_scopes(project)
+    )
+    scoped_catalogs = (project_catalog, active_catalog, global_catalog)
+    selected: CommandSpec | DiscoveredCommand | None = CORE_COMMANDS.get(command_name)
+    shadowed: list[DiscoveredCommand] = []
+    blocking_diagnostics: list[CommandDiscoveryDiagnostic] = []
+    shadowed_diagnostics: list[CommandDiscoveryDiagnostic] = []
+
+    for catalog in scoped_catalogs:
+        candidate = catalog.commands.get(command_name)
+        diagnostics = catalog.diagnostics_for(command_name)
+        if selected is None and diagnostics:
+            blocking_diagnostics.extend(diagnostics)
+            break
+        if selected is not None and diagnostics:
+            shadowed_diagnostics.extend(diagnostics)
+        if candidate is None:
+            continue
+        if selected is None:
+            selected = candidate
+        else:
+            shadowed.append(candidate)
+
+    print(f"Command: {command_name}")
+    if selected is None:
+        if blocking_diagnostics:
+            print("Active:  unavailable")
+            for diagnostic in blocking_diagnostics:
+                print(f"Error:   {diagnostic.message}")
+            return 1
+        print("Active:  none")
+        print("No core or installed provider supplies this command.")
+        return 2
+
+    if isinstance(selected, CommandSpec):
+        core = selected.provider
+        version = f" {core.version}" if core.version else ""
+        print(f"Active:  {core.name}{version} (core)")
+        if core.location is not None:
+            print(f"Path:    {core.location}")
+    else:
+        print(f"Active:  {_provider_display(selected)}")
+        if selected.provider.location is not None:
+            print(f"Path:    {selected.provider.location}")
+
+    if shadowed:
+        print("Shadowed:")
+        for command in shadowed:
+            print(f"  {_provider_display(command)}")
+            if command.provider.location is not None:
+                print(f"    {command.provider.location}")
+    if shadowed_diagnostics:
+        print("Unavailable shadowed providers:")
+        for diagnostic in shadowed_diagnostics:
+            print(f"  {diagnostic.message}")
+    return 0
+
+
+def cmd_plugin(args: argparse.Namespace) -> int:
+    """Manage isolated global command-provider installations."""
+    from spork.plugins import PluginError, PluginManager
+
+    manager = PluginManager()
+    try:
+        if args.plugin_action == "add":
+            record = manager.add(args.requirement, quiet=args.quiet)
+            print(
+                f"Installed {record.display_name} {record.version} "
+                f"({', '.join(record.commands)})."
+            )
+            print(f"Environment: {record.environment}")
+            return 0
+        if args.plugin_action == "remove":
+            record = manager.remove(args.package)
+            print(f"Removed {record.display_name} {record.version}.")
+            return 0
+        if args.plugin_action == "list":
+            return _plugin_list()
+        if args.plugin_action == "which":
+            return _plugin_which(args.command)
+        raise AssertionError(f"unknown plugin action: {args.plugin_action}")
+    except (PluginError, OSError) as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+
+
 def cmd_exec_file(filepath: str, interactive: bool = False) -> int:
     """Execute a Spork file."""
     from spork.compiler import exec_file
@@ -722,6 +887,9 @@ def _delegate_to_project_toolchain(argv: list[str]) -> Optional[int]:
     missing or incompatible. Once a compatible ``spork-lang`` is installed in
     ``.venv``, project-aware invocations are delegated to that interpreter.
     """
+    if os.environ.get(MANAGED_PLUGIN_INVOCATION_ENV):
+        return None
+
     command = _project_command(argv)
     if command in _NEVER_DELEGATE_COMMANDS:
         return None
@@ -951,6 +1119,30 @@ def _configure_lsp(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _configure_plugin(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="plugin_action", required=True)
+
+    add = actions.add_parser(
+        "add", help="Install a provider in an isolated global environment"
+    )
+    add.add_argument("requirement", help="Python package requirement to install")
+    add.add_argument(
+        "--quiet", "-q", action="store_true", help="Suppress pip installation output"
+    )
+
+    remove = actions.add_parser(
+        "remove", help="Remove one managed global provider"
+    )
+    remove.add_argument("package", help="Installed provider distribution name")
+
+    actions.add_parser("list", help="List managed global providers")
+
+    which = actions.add_parser(
+        "which", help="Explain resolution and provenance for a command"
+    )
+    which.add_argument("command", help="Top-level command name to inspect")
+
+
 @dataclass(frozen=True)
 class _CoreCommandDefinition:
     name: str
@@ -1012,6 +1204,12 @@ _CORE_COMMAND_DEFINITIONS = (
     ),
     _CoreCommandDefinition(
         "version", "Print Spork version and Python host information", cmd_version
+    ),
+    _CoreCommandDefinition(
+        "plugin",
+        "Manage isolated global command providers",
+        cmd_plugin,
+        _configure_plugin,
     ),
 )
 _CORE_COMMAND_DEFINITIONS_BY_NAME = {
@@ -1112,8 +1310,31 @@ def _discover_extension_state() -> _ExtensionCommandState:
         pass
     except (OSError, ValueError) as error:
         project_error = str(error)
+
+    managed_provider = os.environ.pop(MANAGED_PLUGIN_INVOCATION_ENV, None)
+    if managed_provider:
+        from spork.command_discovery import discover_commands
+
+        catalog = discover_commands(
+            "global", provider_names=[managed_provider]
+        )
+        expected_command = os.environ.pop(MANAGED_PLUGIN_COMMAND_ENV, None)
+        if expected_command:
+            commands = {
+                name: command
+                for name, command in catalog.commands.items()
+                if name == expected_command
+            }
+            diagnostics = tuple(
+                diagnostic
+                for diagnostic in catalog.diagnostics
+                if diagnostic.command in {None, expected_command}
+            )
+            catalog = CommandCatalog(commands=commands, diagnostics=diagnostics)
+    else:
+        catalog = discover_extension_commands(project)
     return _ExtensionCommandState(
-        catalog=discover_extension_commands(project),
+        catalog=catalog,
         project=project,
         project_error=project_error,
     )
@@ -1191,6 +1412,7 @@ examples:
   spork sync                    Install project dependencies
   spork run                     Run project's main function
   spork check                   Check project sources and namespaces
+  spork plugin list             List managed global command providers
   spork script.spork            Execute a Spork file
   spork -c "(+ 1 2 3)"          Evaluate Spork code directly
   spork -e script.spork         Export Spork file to Python code

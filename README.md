@@ -49,6 +49,14 @@ spork test
 spork run
 ```
 
+Narrow a test run by file, exact test, or name substring:
+
+```bash
+spork test tests/hello_spork/core_test.spork
+spork test tests/hello_spork/core_test.spork::greet-works
+spork test --filter greet
+```
+
 A project’s `spork.it` declares dependencies, source paths, an entry point, and a compatible `spork-lang` range. Project commands automatically use the compatible toolchain synchronized into `.venv`.
 
 ## Documentation

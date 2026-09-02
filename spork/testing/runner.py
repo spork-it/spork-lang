@@ -21,6 +21,7 @@ class TestRunSummary:
 
     passed: int = 0
     failed: int = 0
+    selected: int = 0
 
     @property
     def success(self) -> bool:
@@ -45,8 +46,24 @@ def _print_test_exception(exception: Exception) -> None:
     traceback.print_exception(type(exception), exception, tb, file=sys.stdout)
 
 
-def run_test_file(path: Path) -> TestRunSummary:
-    """Load and run one test file, continuing after declared test failures."""
+def _matches_test(
+    test: SporkTest,
+    test_names: set[str],
+    filter_pattern: str | None,
+) -> bool:
+    names = (test.name, test.qualified_name)
+    if test_names and not any(name in test_names for name in names):
+        return False
+    return filter_pattern is None or any(filter_pattern in name for name in names)
+
+
+def run_test_file(
+    path: Path,
+    *,
+    test_names: set[str] | None = None,
+    filter_pattern: str | None = None,
+) -> TestRunSummary:
+    """Load and run selected tests, continuing after declared failures."""
     summary = TestRunSummary()
     clear_registry()
 
@@ -59,21 +76,27 @@ def run_test_file(path: Path) -> TestRunSummary:
         return summary
 
     tests = env.get("__spork_tests__", [])
-    if tests:
-        for test in tests:
-            try:
-                _invoke_test(test)
-            except Exception as exc:
-                print(f"[fail] {test.qualified_name}", flush=True)
-                _print_test_exception(exc)
-                summary.failed += 1
-            else:
-                print(f"[pass] {test.qualified_name}", flush=True)
-                summary.passed += 1
+    if not tests:
+        print("[error] no declared tests found", flush=True)
+        summary.failed += 1
         return summary
 
-    print("[error] no declared tests found", flush=True)
-    summary.failed += 1
+    selected_tests = [
+        test
+        for test in tests
+        if _matches_test(test, test_names or set(), filter_pattern)
+    ]
+    summary.selected = len(selected_tests)
+    for test in selected_tests:
+        try:
+            _invoke_test(test)
+        except Exception as exc:
+            print(f"[fail] {test.qualified_name}", flush=True)
+            _print_test_exception(exc)
+            summary.failed += 1
+        else:
+            print(f"[pass] {test.qualified_name}", flush=True)
+            summary.passed += 1
     return summary
 
 
@@ -86,12 +109,24 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run one Spork test file")
     parser.add_argument("file", type=Path)
     parser.add_argument("--result", type=Path)
+    parser.add_argument(
+        "--test",
+        dest="test_names",
+        action="append",
+        default=[],
+        metavar="NAME",
+    )
+    parser.add_argument("--filter", dest="filter_pattern", metavar="PATTERN")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = create_parser().parse_args(argv)
-    summary = run_test_file(args.file.resolve())
+    summary = run_test_file(
+        args.file.resolve(),
+        test_names=set(args.test_names),
+        filter_pattern=args.filter_pattern,
+    )
     if args.result is not None:
         _write_result(args.result, summary)
     return 0 if summary.success else 1

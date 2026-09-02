@@ -261,12 +261,70 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
 
+@dataclass(frozen=True)
+class _TestTarget:
+    path: Path
+    test_name: Optional[str] = None
+
+
+def _parse_test_targets(raw_targets: list[str]) -> list[_TestTarget]:
+    targets = []
+    for raw_target in raw_targets:
+        path_text, separator, test_name = raw_target.partition("::")
+        if not path_text or (separator and not test_name):
+            raise ValueError(f"invalid test target: {raw_target!r}")
+
+        path = Path(path_text).expanduser().resolve()
+        if not path.exists():
+            raise ValueError(f"test target does not exist: {path_text}")
+        if path.is_file() and path.suffix != ".spork":
+            raise ValueError(f"test target is not a Spork file: {path_text}")
+        if separator and not path.is_file():
+            raise ValueError(
+                f"an individual test target requires a Spork file: {raw_target}"
+            )
+        targets.append(_TestTarget(path, test_name if separator else None))
+    return targets
+
+
+def _test_file_selectors(
+    path: Path,
+    targets: list[_TestTarget],
+    global_test_names: set[str],
+) -> set[str]:
+    if not targets:
+        return set(global_test_names)
+
+    matching_targets = [
+        target
+        for target in targets
+        if target.path == path
+        or (target.path.is_dir() and path.is_relative_to(target.path))
+    ]
+    selects_entire_file = any(target.test_name is None for target in matching_targets)
+    if selects_entire_file:
+        return set(global_test_names)
+    return {
+        *global_test_names,
+        *(target.test_name for target in matching_targets if target.test_name),
+    }
+
+
+def _discovered_test_matches(
+    test,
+    test_names: set[str],
+    filter_pattern: Optional[str],
+) -> bool:
+    names = (test.name, test.qualified_name)
+    if test_names and not any(name in test_names for name in names):
+        return False
+    return filter_pattern is None or any(filter_pattern in name for name in names)
+
+
 def cmd_test(args: argparse.Namespace) -> int:
-    """Discover and run project Spork tests with the native test runner."""
+    """Discover and run selected project Spork tests with the native runner."""
     import json
-    import subprocess
     import tempfile
-    from pathlib import Path
 
     from spork.project import ProjectConfig, ProjectManager, build_project
     from spork.testing.discovery import TestDiscoveryError, discover_test_files
@@ -274,6 +332,21 @@ def cmd_test(args: argparse.Namespace) -> int:
     try:
         config = ProjectConfig.load()
     except (FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    raw_targets = list(getattr(args, "targets", []))
+    global_test_names = set(getattr(args, "test_names", []))
+    filter_pattern = getattr(args, "filter_pattern", None)
+    if any(not name for name in global_test_names):
+        print("Error: --test requires a non-empty name", file=sys.stderr)
+        return 1
+    if filter_pattern == "":
+        print("Error: --filter requires a non-empty pattern", file=sys.stderr)
+        return 1
+    try:
+        targets = _parse_test_targets(raw_targets)
+    except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
@@ -286,11 +359,29 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     source_roots = [Path(path) for path in config.get_absolute_source_paths()]
     test_roots = [Path(path) for path in config.get_absolute_test_paths()]
+    discovery_roots = (
+        list(dict.fromkeys(target.path for target in targets))
+        if targets
+        else [*test_roots, *source_roots]
+    )
     try:
-        test_files = discover_test_files(source_roots, test_roots)
+        discovered_files = discover_test_files([], discovery_roots)
     except TestDiscoveryError as exc:
         print(f"Test discovery failed: {exc}", file=sys.stderr)
         return 1
+
+    test_files = []
+    for discovered in discovered_files:
+        test_names = _test_file_selectors(
+            discovered.path, targets, global_test_names
+        )
+        selection_active = bool(test_names) or filter_pattern is not None
+        if selection_active and not any(
+            _discovered_test_matches(test, test_names, filter_pattern)
+            for test in discovered.tests
+        ):
+            continue
+        test_files.append((discovered, test_names))
 
     if not test_files:
         print("No matching Spork tests found.", file=sys.stderr)
@@ -321,8 +412,9 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     passed = 0
     failed = 0
+    selected = 0
     with tempfile.TemporaryDirectory(prefix="spork-tests-") as result_dir:
-        for index, discovered in enumerate(test_files):
+        for index, (discovered, test_names) in enumerate(test_files):
             try:
                 relative = discovered.path.relative_to(config.project_root)
             except ValueError:
@@ -338,6 +430,10 @@ def cmd_test(args: argparse.Namespace) -> int:
                 "--result",
                 str(result_path),
             ]
+            for test_name in sorted(test_names):
+                command.extend(("--test", test_name))
+            if filter_pattern is not None:
+                command.extend(("--filter", filter_pattern))
             completed = subprocess.run(
                 command,
                 cwd=config.project_root,
@@ -349,8 +445,14 @@ def cmd_test(args: argparse.Namespace) -> int:
             if result_path.is_file():
                 try:
                     result = json.loads(result_path.read_text(encoding="utf-8"))
-                    passed += int(result["passed"])
-                    failed += int(result["failed"])
+                    file_passed = int(result["passed"])
+                    file_failed = int(result["failed"])
+                    file_selected = int(
+                        result.get("selected", file_passed + file_failed)
+                    )
+                    passed += file_passed
+                    failed += file_failed
+                    selected += file_selected
                 except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
                     failed += 1
             else:
@@ -365,6 +467,10 @@ def cmd_test(args: argparse.Namespace) -> int:
                     represented_failure = False
                 if not represented_failure:
                     failed += 1
+
+    if not selected and not failed:
+        print("No matching Spork tests found.", file=sys.stderr)
+        return 1
 
     print("\n=== Spork Test Summary ===")
     print(f"Passed: {passed}")
@@ -1025,6 +1131,30 @@ def _configure_run(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _configure_test(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "targets",
+        nargs="*",
+        metavar="TARGET",
+        help="Spork test file, directory, or FILE::TEST target",
+    )
+    parser.add_argument(
+        "--test",
+        dest="test_names",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Run an exact test name (repeatable; qualified names are supported)",
+    )
+    parser.add_argument(
+        "--filter",
+        "-k",
+        dest="filter_pattern",
+        metavar="PATTERN",
+        help="Run tests whose name contains PATTERN",
+    )
+
+
 def _configure_check(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--format",
@@ -1177,7 +1307,12 @@ _CORE_COMMAND_DEFINITIONS = (
     _CoreCommandDefinition(
         "run", "Run the project's main function", cmd_run, _configure_run
     ),
-    _CoreCommandDefinition("test", "Discover and run project Spork tests", cmd_test),
+    _CoreCommandDefinition(
+        "test",
+        "Discover and run project Spork tests",
+        cmd_test,
+        _configure_test,
+    ),
     _CoreCommandDefinition(
         "check",
         "Check project sources without producing build artifacts",

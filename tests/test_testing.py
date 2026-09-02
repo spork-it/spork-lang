@@ -121,7 +121,10 @@ def test_discovery_finds_only_files_with_declared_tests(tmp_path: Path):
     test_root.mkdir()
 
     inline = source_root / "core.spork"
-    inline.write_text("(deftest inline-test (assert true))\n", encoding="utf-8")
+    inline.write_text(
+        "(ns sample.inline)\n(deftest inline-test (assert true))\n",
+        encoding="utf-8",
+    )
     (source_root / "plain.spork").write_text(
         '; (deftest commented-out true)\n(def text "(deftest in-a-string)")\n',
         encoding="utf-8",
@@ -136,6 +139,10 @@ def test_discovery_finds_only_files_with_declared_tests(tmp_path: Path):
     by_name = {item.path.name: item for item in discovered}
 
     assert list(sorted(by_name)) == ["arbitrary_name.spork", "core.spork"]
+    assert by_name["core.spork"].tests[0].name == "inline-test"
+    assert by_name["core.spork"].tests[0].qualified_name == (
+        "sample.inline/inline-test"
+    )
 
 
 def test_discovery_reports_invalid_source(tmp_path: Path):
@@ -180,6 +187,35 @@ def test_native_runner_continues_after_failure_and_awaits_async_tests(
     assert "runner.spork" in output
     assert "line 9" in output
     assert "AssertionError: intentional" in output
+
+
+def test_native_runner_selects_exact_names_and_substring_filters(
+    tmp_path: Path, capsys
+):
+    test_file = tmp_path / "runner_filter.spork"
+    test_file.write_text(
+        """(ns sample.filter)
+(deftest worker-starts (assert true))
+(deftest worker-stops (assert true))
+(deftest parser-starts (assert false))
+""",
+        encoding="utf-8",
+    )
+
+    exact = run_test_file(
+        test_file, test_names={"sample.filter/worker-starts"}
+    )
+    exact_output = capsys.readouterr().out
+    filtered = run_test_file(test_file, filter_pattern="worker")
+    filtered_output = capsys.readouterr().out
+
+    assert (exact.selected, exact.passed, exact.failed) == (1, 1, 0)
+    assert "worker-starts" in exact_output
+    assert "worker-stops" not in exact_output
+    assert (filtered.selected, filtered.passed, filtered.failed) == (2, 2, 0)
+    assert "worker-starts" in filtered_output
+    assert "worker-stops" in filtered_output
+    assert "parser-starts" not in filtered_output
 
 
 def test_native_runner_rejects_files_without_declarations(tmp_path: Path, capsys):
@@ -239,6 +275,75 @@ def test_spork_test_runs_declared_tests_but_ignores_python_tests(
     assert "Passed: 2" in output
     assert "Failed: 0" in output
     assert "Files:  2" in output
+
+
+def test_spork_test_targets_a_specific_file(
+    tmp_path: Path, monkeypatch, capsys
+):
+    (tmp_path / "src").mkdir()
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    selected = tests / "selected.spork"
+    selected.write_text("(deftest selected (assert true))\n", encoding="utf-8")
+    (tests / "not_selected.spork").write_text(
+        "(deftest not-selected (assert false))\n", encoding="utf-8"
+    )
+    _configure_cli_project(monkeypatch, tmp_path)
+
+    result = cmd_test(Namespace(targets=[str(selected)]))
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "Passed: 1" in output
+    assert "Failed: 0" in output
+    assert "Files:  1" in output
+
+
+def test_spork_test_targets_an_individual_test(
+    tmp_path: Path, monkeypatch, capsys
+):
+    (tmp_path / "src").mkdir()
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    test_file = tests / "selection.spork"
+    test_file.write_text(
+        """(ns sample.selection)
+(deftest wanted (assert true))
+(deftest unwanted (assert false))
+""",
+        encoding="utf-8",
+    )
+    _configure_cli_project(monkeypatch, tmp_path)
+
+    result = cmd_test(Namespace(targets=[f"{test_file}::wanted"]))
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "Passed: 1" in output
+    assert "Failed: 0" in output
+
+
+def test_spork_test_filters_test_names_across_files(
+    tmp_path: Path, monkeypatch, capsys
+):
+    (tmp_path / "src").mkdir()
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "worker.spork").write_text(
+        "(deftest worker-starts (assert true))\n", encoding="utf-8"
+    )
+    (tests / "parser.spork").write_text(
+        "(deftest parser-starts (assert false))\n", encoding="utf-8"
+    )
+    _configure_cli_project(monkeypatch, tmp_path)
+
+    result = cmd_test(Namespace(filter_pattern="worker"))
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "Passed: 1" in output
+    assert "Failed: 0" in output
+    assert "Files:  1" in output
 
 
 def test_spork_test_aggregates_declared_failures(

@@ -161,6 +161,13 @@ def test_each_core_command_has_an_isolated_parser():
     assert run.main == "sample.core:start"
     assert run.args == ["first", "second"]
 
+    test = cli.create_command_parser("test").parse_args(
+        ["tests/core.spork::works", "--test", "sample.core/also-works", "-k", "work"]
+    )
+    assert test.targets == ["tests/core.spork::works"]
+    assert test.test_names == ["sample.core/also-works"]
+    assert test.filter_pattern == "work"
+
     check = cli.create_command_parser("check").parse_args(
         ["--json", "--no-tests", "--warnings-as-errors"]
     )

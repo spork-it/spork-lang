@@ -9,7 +9,7 @@ Spork is pre-1.0 and supports CPython 3.10–3.14.
 
 ## Install
 
-On Linux, macOS, or WSL, use the reviewed installer hosted with the documentation:
+On Linux, macOS, or WSL, use [the installer](https://github.com/spork-it/spork.sh/blob/main/static/install) hosted with the documentation:
 
 ```bash
 curl -fsSL https://spork.sh/install | sh

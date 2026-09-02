@@ -1255,7 +1255,10 @@ def _configure_plugin(parser: argparse.ArgumentParser) -> None:
     add = actions.add_parser(
         "add", help="Install a provider in an isolated global environment"
     )
-    add.add_argument("requirement", help="Python package requirement to install")
+    add.add_argument(
+        "requirement",
+        help="Python package requirement or local Spork project path to install",
+    )
     add.add_argument(
         "--quiet", "-q", action="store_true", help="Suppress pip installation output"
     )

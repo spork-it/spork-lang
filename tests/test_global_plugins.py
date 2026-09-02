@@ -88,6 +88,35 @@ def save_records(
     manager._write_records_unlocked(records)
 
 
+def write_local_plugin_project(
+    project_root: Path,
+    *,
+    name: str = "local-provider",
+    commands: bool = True,
+) -> None:
+    project_root.mkdir(parents=True, exist_ok=True)
+    command_declaration = (
+        '\n :commands {"local" {:main "local-provider.cli:command"}}'
+        if commands
+        else ""
+    )
+    (project_root / "spork.it").write_text(
+        f'''{{:name "{name}"
+ :version "1.0.0"
+ :spork-version ">=0.6,<0.7"
+ :source-paths ["src"]
+ :test-paths []{command_declaration}}}\n''',
+        encoding="utf-8",
+    )
+    source = project_root / "src" / "local_provider" / "cli.spork"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "(ns local-provider.cli)\n"
+        "(defn ^int command [context argv] 0)\n",
+        encoding="utf-8",
+    )
+
+
 def test_plugin_home_honors_override(tmp_path: Path, monkeypatch):
     selected = tmp_path / "portable-home"
     monkeypatch.setenv("SPORK_HOME", str(selected))
@@ -297,6 +326,157 @@ def test_successful_add_moves_staged_environment_and_updates_registry(
     assert not any(
         path.name.endswith(".tmp") for path in manager.plugins_path.iterdir()
     )
+
+
+def test_local_spork_project_add_builds_temporary_wheel_and_records_source(
+    tmp_path: Path, monkeypatch
+):
+    project = tmp_path / "provider source"
+    write_local_plugin_project(project)
+    manager = PluginManager(tmp_path / "home")
+    build_calls = []
+    install_calls = []
+
+    class FakeBuilder:
+        def __init__(self, **kwargs):
+            pass
+
+        def create(self, environment):
+            selected = Path(environment)
+            site_packages = selected / "lib" / "python-test" / "site-packages"
+            site_packages.mkdir(parents=True)
+            python = plugin_environment_python(selected)
+            python.parent.mkdir(parents=True, exist_ok=True)
+            python.write_text("", encoding="utf-8")
+
+    def fake_create_dist(**kwargs):
+        build_calls.append(kwargs)
+        wheel = Path(kwargs["dist_dir"]) / "local_provider-1.0.0.whl"
+        wheel.parent.mkdir(parents=True)
+        wheel.write_bytes(b"wheel")
+        return SimpleNamespace(success=True, wheel_path=wheel, error=None)
+
+    def fake_install(environment, requirement, **kwargs):
+        selected = Path(requirement)
+        assert selected.is_file()
+        install_calls.append((Path(environment), selected, kwargs))
+
+    def fake_inspect(environment, requirement, distribution):
+        selected = Path(environment)
+        site_packages = selected / "lib" / "python-test" / "site-packages"
+        return (
+            GlobalPluginRecord(
+                requirement=requirement,
+                distribution=distribution,
+                display_name="local-provider",
+                version="1.0.0",
+                api_version=COMMAND_API_VERSION,
+                commands=("local",),
+                environment=selected,
+                site_packages=site_packages,
+                host_version="0.6.2",
+                installed_at="2026-01-01T00:00:00+00:00",
+            ),
+            site_packages.relative_to(selected),
+        )
+
+    monkeypatch.chdir(project)
+    monkeypatch.setattr("spork.plugins.venv.EnvBuilder", FakeBuilder)
+    monkeypatch.setattr("spork.project.dist.create_dist", fake_create_dist)
+    monkeypatch.setattr(manager, "_run_install", fake_install)
+    monkeypatch.setattr(manager, "_inspect_staged", fake_inspect)
+
+    installed = manager.add(".", quiet=True)
+
+    expected_requirement = f"local-provider @ {project.resolve().as_uri()}"
+    assert installed.requirement == expected_requirement
+    assert installed.distribution == "local-provider"
+    assert manager.records() == (installed,)
+    assert len(build_calls) == 1
+    build_call = build_calls[0]
+    assert build_call["project_root"] == project.resolve()
+    assert build_call["wheel"] is True
+    assert build_call["sdist"] is False
+    assert build_call["clean"] is True
+    assert build_call["verbose"] is False
+    assert not (project / ".spork-out").exists()
+    assert not (project / "dist").exists()
+    assert len(install_calls) == 1
+    _environment, temporary_wheel, install_options = install_calls[0]
+    assert install_options["display_requirement"] == expected_requirement
+    assert not temporary_wheel.exists()
+    assert sorted(path.name for path in installed.plugin_root.iterdir()) == [
+        ".venv"
+    ]
+    broken = discover_global_commands(manager)
+    repair = broken.diagnostics_for("local")[0].message
+    assert f"spork plugin add {json.dumps(expected_requirement)}" in repair
+
+
+def test_named_local_file_requirement_resolves_back_to_spork_project(
+    tmp_path: Path,
+):
+    from spork.plugins import _resolve_install_target
+
+    project = tmp_path / "provider"
+    write_local_plugin_project(project)
+    requirement = f"local-provider @ {project.resolve().as_uri()}"
+
+    target = _resolve_install_target(requirement)
+
+    assert target.requirement == requirement
+    assert target.distribution == "local-provider"
+    assert target.local_project == project.resolve()
+
+    with pytest.raises(PluginInstallationError, match="named.*not 'other-provider'"):
+        _resolve_install_target(f"other-provider @ {project.resolve().as_uri()}")
+
+
+def test_local_spork_project_without_commands_is_rejected(tmp_path: Path):
+    project = tmp_path / "plain-project"
+    write_local_plugin_project(project, commands=False)
+
+    with pytest.raises(PluginInstallationError, match="does not declare.*:commands"):
+        PluginManager(tmp_path / "home").add(str(project))
+
+
+def test_local_build_failure_preserves_previous_installation(
+    tmp_path: Path, monkeypatch
+):
+    project = tmp_path / "provider"
+    write_local_plugin_project(project)
+    manager = PluginManager(tmp_path / "home")
+    previous = plugin_record(manager, "local-provider", commands=("local",))
+    marker = previous.plugin_root / "previous.txt"
+    marker.write_text("kept", encoding="utf-8")
+    save_records(manager, {previous.distribution: previous})
+    original_registry = manager.registry_path.read_bytes()
+
+    monkeypatch.setattr(
+        "spork.project.dist.create_dist",
+        lambda **kwargs: SimpleNamespace(
+            success=False,
+            wheel_path=None,
+            error="source compilation failed",
+        ),
+    )
+
+    with pytest.raises(PluginInstallationError, match="source compilation failed"):
+        manager.add(str(project), quiet=True)
+
+    assert manager.registry_path.read_bytes() == original_registry
+    assert marker.read_text(encoding="utf-8") == "kept"
+    assert manager.records() == (previous,)
+    assert not any(
+        path.name.endswith(".tmp") for path in manager.plugins_path.iterdir()
+    )
+    assert not (project / ".spork-out").exists()
+    assert not (project / "dist").exists()
+
+
+def test_explicit_non_project_path_has_actionable_error(tmp_path: Path):
+    with pytest.raises(PluginInstallationError, match="has no spork.it"):
+        PluginManager(tmp_path / "home").add(str(tmp_path))
 
 
 def test_global_collision_rejects_new_plugin_and_preserves_owner(

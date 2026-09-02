@@ -8,6 +8,7 @@ This history was backfilled from release tags, commit history, and published rel
 
 ### Added
 
+- Added local Spork command-provider installation with `spork plugin add .` and other project paths, using isolated temporary wheel builds and the existing atomic managed-plugin replacement flow.
 - Added `spork test` targeting for specific files and directories, exact individual tests, `FILE::TEST` selectors, and substring filtering with `--filter`/`-k`.
 
 ## [0.6.2] - 2026-08-31

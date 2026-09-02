@@ -142,6 +142,12 @@ def test_each_core_command_has_an_isolated_parser():
     plugin = cli.create_command_parser("plugin").parse_args(["which", "site"])
     assert plugin.plugin_action == "which"
     assert plugin.command == "site"
+    plugin_add = cli.create_command_parser("plugin").parse_args(
+        ["add", ".", "--quiet"]
+    )
+    assert plugin_add.plugin_action == "add"
+    assert plugin_add.requirement == "."
+    assert plugin_add.quiet
 
     new = cli.create_command_parser("new").parse_args(["demo", "--path", "parent"])
     assert (new.name, new.path) == ("demo", "parent")

@@ -26,6 +26,8 @@ from importlib import metadata
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Mapping
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
@@ -60,6 +62,15 @@ class PluginRegistryError(PluginError):
 
 class PluginInstallationError(PluginError):
     """Raised when a staged provider installation cannot be validated."""
+
+
+@dataclass(frozen=True)
+class PluginInstallTarget:
+    """A package requirement or local Spork project selected for installation."""
+
+    requirement: str
+    distribution: str
+    local_project: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -186,25 +197,176 @@ def plugin_environment_python(environment: str | Path) -> Path:
     return root / "bin" / "python"
 
 
-def _clean_requirement(value: str) -> tuple[str, Requirement, str]:
+def _clean_install_value(value: str) -> str:
     if not isinstance(value, str):
-        raise PluginInstallationError("plugin requirement must be a string")
+        raise PluginInstallationError(
+            "plugin requirement or project path must be a string"
+        )
     cleaned = value.strip()
     if not cleaned:
-        raise PluginInstallationError("plugin requirement must not be empty")
+        raise PluginInstallationError(
+            "plugin requirement or project path must not be empty"
+        )
     if cleaned != value or any(ord(character) < 32 for character in cleaned):
         raise PluginInstallationError(
-            "plugin requirement must not contain surrounding whitespace or "
-            "control characters"
+            "plugin requirement or project path must not contain surrounding "
+            "whitespace or control characters"
         )
+    return cleaned
+
+
+def _looks_like_local_path(value: str) -> bool:
+    separators = {os.sep}
+    if os.altsep:
+        separators.add(os.altsep)
+    try:
+        expanded = Path(value).expanduser()
+    except (OSError, RuntimeError):
+        expanded = Path(value)
+    return (
+        value in {".", "..", "~"}
+        or value.startswith("~")
+        or expanded.is_absolute()
+        or any(separator in value for separator in separators)
+    )
+
+
+def _file_url_path(url: str) -> Path | None:
+    """Return a local path for a simple file URL, otherwise ``None``."""
+    try:
+        selected = urlsplit(url)
+    except ValueError:
+        return None
+    if selected.scheme.casefold() != "file":
+        return None
+    if selected.netloc in {"", "localhost"}:
+        url_path = selected.path
+    elif os.name == "nt":
+        url_path = f"//{selected.netloc}{selected.path}"
+    else:
+        return None
+    try:
+        return Path(url2pathname(url_path)).expanduser()
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _local_project_target(
+    path: Path,
+    *,
+    requested: Requirement | None = None,
+) -> PluginInstallTarget:
+    """Resolve and validate a source Spork command-provider project."""
+    try:
+        selected = path.expanduser().resolve()
+    except (OSError, RuntimeError) as error:
+        raise PluginInstallationError(
+            f"could not resolve local plugin project path {path}: {error}"
+        ) from error
+    if not selected.exists():
+        raise PluginInstallationError(
+            f"local plugin project path does not exist: {selected}"
+        )
+    if selected.is_file():
+        if selected.name != "spork.it":
+            raise PluginInstallationError(
+                f"local plugin project path must be a directory or spork.it: "
+                f"{selected}"
+            )
+        selected = selected.parent
+    if not selected.is_dir():
+        raise PluginInstallationError(
+            f"local plugin project path is not a directory: {selected}"
+        )
+    manifest = selected / "spork.it"
+    if not manifest.is_file():
+        raise PluginInstallationError(
+            f"local plugin project {selected} has no spork.it manifest; "
+            "Python projects must use a named direct reference such as "
+            f"`package @ {selected.as_uri()}`"
+        )
+
+    from spork.project.config import ProjectConfig
+
+    try:
+        config = ProjectConfig.load(str(selected))
+    except (OSError, ValueError) as error:
+        raise PluginInstallationError(
+            f"could not load local plugin project {selected}: {error}"
+        ) from error
+    if not config.commands:
+        raise PluginInstallationError(
+            f"local Spork project {selected} does not declare any :commands"
+        )
+
+    try:
+        identity = Requirement(config.name)
+    except InvalidRequirement as error:
+        raise PluginInstallationError(
+            f"local Spork project :name {config.name!r} is not a valid "
+            f"distribution name: {error}"
+        ) from error
+    if identity.extras or identity.specifier or identity.url or identity.marker:
+        raise PluginInstallationError(
+            f"local Spork project :name {config.name!r} must be a plain "
+            "distribution name"
+        )
+    normalized = canonicalize_name(identity.name)
+    if requested is not None:
+        if requested.extras or requested.marker:
+            raise PluginInstallationError(
+                "local Spork project direct references do not support extras "
+                "or environment markers"
+            )
+        if canonicalize_name(requested.name) != normalized:
+            raise PluginInstallationError(
+                f"local Spork project at {selected} is named {config.name!r}, not "
+                f"{requested.name!r}"
+            )
+
+    requirement = f"{config.name} @ {selected.as_uri()}"
+    # Keep registry requirements PEP 508-valid so existing registry validation
+    # and repair diagnostics continue to work without a schema migration.
+    try:
+        Requirement(requirement)
+    except InvalidRequirement as error:  # pragma: no cover - defensive
+        raise PluginInstallationError(
+            f"could not represent local plugin project as a requirement: {error}"
+        ) from error
+    return PluginInstallTarget(
+        requirement=requirement,
+        distribution=normalized,
+        local_project=selected,
+    )
+
+
+def _resolve_install_target(value: str) -> PluginInstallTarget:
+    """Resolve a package requirement or an explicit local Spork project path."""
+    cleaned = _clean_install_value(value)
     try:
         parsed = Requirement(cleaned)
     except InvalidRequirement as error:
+        if _looks_like_local_path(cleaned):
+            return _local_project_target(Path(cleaned))
         raise PluginInstallationError(
             f"invalid plugin requirement {cleaned!r}: {error}"
         ) from error
-    normalized = canonicalize_name(parsed.name)
-    return cleaned, parsed, normalized
+
+    if parsed.url:
+        local_path = _file_url_path(parsed.url)
+        if local_path is not None:
+            manifest = (
+                local_path
+                if local_path.name == "spork.it"
+                else local_path / "spork.it"
+            )
+            if manifest.is_file():
+                return _local_project_target(local_path, requested=parsed)
+
+    return PluginInstallTarget(
+        requirement=cleaned,
+        distribution=canonicalize_name(parsed.name),
+    )
 
 
 def _clean_distribution_name(value: str) -> str:
@@ -449,6 +611,43 @@ def _installation_host() -> dict[str, str]:
     }
 
 
+def _build_local_project_wheel(
+    project_root: Path,
+    build_root: Path,
+    *,
+    quiet: bool,
+) -> Path:
+    """Compile one local Spork provider into an isolated temporary wheel."""
+    from spork.project.dist import create_dist
+
+    try:
+        result = create_dist(
+            project_root=project_root,
+            out_dir=build_root / "compiled",
+            dist_dir=build_root / "dist",
+            build_first=True,
+            clean=True,
+            wheel=True,
+            sdist=False,
+            verbose=not quiet,
+        )
+    except Exception as error:
+        raise PluginInstallationError(
+            f"could not build local Spork plugin {project_root}: {error}"
+        ) from error
+    if not result.success or result.wheel_path is None:
+        detail = result.error or "wheel creation failed"
+        raise PluginInstallationError(
+            f"could not build local Spork plugin {project_root}: {detail}"
+        )
+    wheel = result.wheel_path.resolve()
+    if not wheel.is_file():
+        raise PluginInstallationError(
+            f"local Spork plugin build did not create wheel {wheel}"
+        )
+    return wheel
+
+
 class PluginManager:
     """Install, inspect, and remove isolated global command providers."""
 
@@ -533,7 +732,12 @@ class PluginManager:
                     pass
 
     def _run_install(
-        self, environment: Path, requirement: str, *, quiet: bool
+        self,
+        environment: Path,
+        requirement: str,
+        *,
+        quiet: bool,
+        display_requirement: str | None = None,
     ) -> None:
         python = plugin_environment_python(environment)
         command = [
@@ -546,15 +750,16 @@ class PluginManager:
         if quiet:
             command.append("--quiet")
         command.extend([_host_install_requirement(), requirement])
+        label = display_requirement or requirement
         try:
             completed = subprocess.run(command, text=True, check=False)
         except OSError as error:
             raise PluginInstallationError(
-                f"could not install plugin requirement {requirement!r}: {error}"
+                f"could not install plugin requirement {label!r}: {error}"
             ) from error
         if completed.returncode != 0:
             raise PluginInstallationError(
-                f"pip could not install plugin requirement {requirement!r}"
+                f"pip could not install plugin requirement {label!r}"
             )
 
         try:
@@ -643,7 +848,8 @@ class PluginManager:
 
     def add(self, requirement: str, *, quiet: bool = False) -> GlobalPluginRecord:
         """Stage and atomically install or replace one global provider."""
-        cleaned, _parsed, normalized_name = _clean_requirement(requirement)
+        target = _resolve_install_target(requirement)
+        normalized_name = target.distribution
         self.plugins_path.mkdir(parents=True, exist_ok=True)
 
         with _RegistryLock(self.lock_path):
@@ -659,6 +865,17 @@ class PluginManager:
             moved_stage = False
             final_root = self.plugins_path / normalized_name
             try:
+                install_requirement = target.requirement
+                build_root = stage_root / ".local-build"
+                if target.local_project is not None:
+                    install_requirement = str(
+                        _build_local_project_wheel(
+                            target.local_project,
+                            build_root,
+                            quiet=quiet,
+                        )
+                    )
+
                 environment = stage_root / ".venv"
                 try:
                     venv.EnvBuilder(
@@ -671,10 +888,22 @@ class PluginManager:
                         f"could not create plugin environment: {error}"
                     ) from error
 
-                self._run_install(environment, cleaned, quiet=quiet)
+                self._run_install(
+                    environment,
+                    install_requirement,
+                    quiet=quiet,
+                    display_requirement=target.requirement,
+                )
+                if build_root.exists():
+                    try:
+                        shutil.rmtree(build_root)
+                    except OSError as error:
+                        raise PluginInstallationError(
+                            f"could not clean temporary local plugin build: {error}"
+                        ) from error
                 staged_record, site_relative = self._inspect_staged(
                     environment,
-                    cleaned,
+                    target.requirement,
                     normalized_name,
                 )
 
@@ -789,10 +1018,15 @@ def _broken_record_diagnostics(
         scope="global",
         location=record.site_packages,
     )
+    requirement_argument = (
+        json.dumps(record.requirement)
+        if any(character.isspace() for character in record.requirement)
+        else record.requirement
+    )
     repair = (
         f"managed global plugin {record.display_name} is broken: {message}; "
         f"repair it with `spork plugin remove {record.distribution}` followed by "
-        f"`spork plugin add {record.requirement}`"
+        f"`spork plugin add {requirement_argument}`"
     )
     return [
         CommandDiscoveryDiagnostic(

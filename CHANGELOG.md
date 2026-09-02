@@ -6,6 +6,8 @@ This history was backfilled from release tags, commit history, and published rel
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-09-01
+
 ### Added
 
 - Added local Spork command-provider installation with `spork plugin add .` and other project paths, using isolated temporary wheel builds and the existing atomic managed-plugin replacement flow.
@@ -337,7 +339,8 @@ This history was backfilled from release tags, commit history, and published rel
 - Python interoperability, type annotations, source-mapped errors, standard-library namespaces, and JSON support.
 - CLI, REPL, nREPL server, LSP server, project scaffolding, dependency management, builds, distributions, editor support, and initial documentation.
 
-[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/spork-it/spork-lang/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/spork-it/spork-lang/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/spork-it/spork-lang/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/spork-it/spork-lang/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/spork-it/spork-lang/compare/v0.5.3...v0.6.0
